@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
+import jsQR from 'jsqr';
 import { 
   Search, Plus, Minus, ShoppingBag, X, Check, 
   Phone, ArrowLeft, AlertTriangle, Sparkles, 
-  Smartphone, CreditCard, ChevronRight, RefreshCw, QrCode
+  Smartphone, CreditCard, ChevronRight, RefreshCw, QrCode, Camera
 } from 'lucide-react';
 
 // Type definitions matching database schemas
@@ -91,6 +92,75 @@ function App() {
   // PWA Install State
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  // QR Scanner State
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanSuccess, setScanSuccess] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanFrameRef = useRef<number | null>(null);
+
+  const stopScanner = useCallback(() => {
+    if (scanFrameRef.current) cancelAnimationFrame(scanFrameRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    setShowScanner(false);
+    setScanError(null);
+    setScanSuccess(false);
+  }, []);
+
+  const startScanner = useCallback(async () => {
+    setScanError(null);
+    setScanSuccess(false);
+    setShowScanner(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch {
+      setScanError('Camera access denied. Please allow camera permission and try again.');
+    }
+  }, []);
+
+  const handleVideoReady = useCallback(() => {
+    const tick = () => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas || video.readyState < 2) {
+        scanFrameRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (code?.data) {
+        // Try to extract storeId from URL like storeflow.com/store/{id} or just an id
+        const data = code.data.trim();
+        const match = data.match(/\/store\/([^/?#]+)/);
+        const extractedId = match ? match[1] : data;
+        setScanSuccess(true);
+        setTimeout(() => {
+          stopScanner();
+          window.history.pushState({}, '', `/store/${extractedId}`);
+          setStoreId(extractedId);
+        }, 700);
+        return;
+      }
+      scanFrameRef.current = requestAnimationFrame(tick);
+    };
+    scanFrameRef.current = requestAnimationFrame(tick);
+  }, [stopScanner, setStoreId]);
 
   // 1. Scan store ID from URL pathname (/store/{storeId}) or search queries
   useEffect(() => {
@@ -462,8 +532,8 @@ function App() {
           </header>
 
           {/* Search bar */}
-          <div className="search-container">
-            <div className="search-input-wrapper">
+          <div className="search-container" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div className="search-input-wrapper" style={{ flexGrow: 1 }}>
               <Search size={18} style={{ color: 'var(--color-text-muted)' }} />
               <input 
                 className="search-input" 
@@ -473,6 +543,20 @@ function App() {
               />
               {searchQuery && <X size={16} onClick={() => setSearchQuery("")} style={{ cursor: 'pointer' }} />}
             </div>
+            <button
+              id="scan-qr-btn"
+              onClick={startScanner}
+              style={{
+                width: '46px', height: '46px', borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-graphite)', color: 'var(--color-white)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, border: 'none', cursor: 'pointer',
+                boxShadow: 'var(--shadow-sm)', transition: 'var(--transition-fast)'
+              }}
+              title="Scan QR Code"
+            >
+              <Camera size={20} />
+            </button>
           </div>
 
           {/* Categories Pill list */}
@@ -1067,6 +1151,121 @@ function App() {
             <RefreshCw size={16} />
             <span>Order Again</span>
           </button>
+        </div>
+      )}
+
+      {/* QR SCANNER MODAL */}
+      {showScanner && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 999,
+          backgroundColor: 'rgba(0,0,0,0.92)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          {/* Header */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0,
+            padding: '20px', display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ color: '#fff', fontWeight: '800', fontSize: '18px' }}>Scan QR Code</span>
+              <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px' }}>Point at a StoreFlow store QR code</span>
+            </div>
+            <button
+              onClick={stopScanner}
+              style={{
+                width: '40px', height: '40px', borderRadius: '50%',
+                backgroundColor: 'rgba(255,255,255,0.15)', border: 'none',
+                color: '#fff', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Camera viewfinder */}
+          <div style={{ position: 'relative', width: '280px', height: '280px' }}>
+            {/* Animated corners */}
+            {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos, i) => (
+              <div key={i} style={{
+                position: 'absolute', width: '28px', height: '28px',
+                borderColor: scanSuccess ? '#22c55e' : 'var(--color-graphite)',
+                borderStyle: 'solid', borderWidth: 0,
+                ...(pos.top===0 ? { borderTopWidth: '3px' } : { borderBottomWidth: '3px' }),
+                ...(pos.left===0 ? { borderLeftWidth: '3px' } : { borderRightWidth: '3px' }),
+                borderRadius: pos.top===0 && pos.left===0 ? '4px 0 0 0'
+                  : pos.top===0 ? '0 4px 0 0'
+                  : pos.left===0 ? '0 0 0 4px' : '0 0 4px 0',
+                transition: 'border-color 0.3s ease',
+                ...pos,
+              }} />
+            ))}
+
+            <video
+              ref={videoRef}
+              onCanPlay={handleVideoReady}
+              playsInline
+              muted
+              style={{
+                width: '100%', height: '100%',
+                objectFit: 'cover',
+                borderRadius: '12px',
+                opacity: scanSuccess ? 0.4 : 1,
+                transition: 'opacity 0.3s ease',
+              }}
+            />
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+            {/* Success overlay */}
+            {scanSuccess && (
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                flexDirection: 'column', gap: '8px',
+              }}>
+                <div style={{
+                  width: '56px', height: '56px', borderRadius: '50%',
+                  backgroundColor: '#22c55e', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Check size={28} color="#fff" />
+                </div>
+                <span style={{ color: '#22c55e', fontWeight: '700', fontSize: '14px' }}>QR Code Detected!</span>
+              </div>
+            )}
+
+            {/* Scan line animation */}
+            {!scanSuccess && !scanError && (
+              <div style={{
+                position: 'absolute', left: 0, right: 0, height: '2px',
+                background: 'linear-gradient(90deg, transparent, var(--color-graphite), transparent)',
+                animation: 'scan-line 2s linear infinite',
+                top: '50%',
+              }} />
+            )}
+          </div>
+
+          {/* Error state */}
+          {scanError && (
+            <div style={{
+              marginTop: '24px', padding: '16px 20px',
+              backgroundColor: 'rgba(239,68,68,0.15)',
+              borderRadius: '12px', border: '1px solid rgba(239,68,68,0.3)',
+              display: 'flex', alignItems: 'flex-start', gap: '10px',
+              maxWidth: '280px',
+            }}>
+              <AlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: '1px' }} />
+              <span style={{ color: '#fca5a5', fontSize: '13px', lineHeight: '1.4' }}>{scanError}</span>
+            </div>
+          )}
+
+          {!scanError && !scanSuccess && (
+            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', marginTop: '24px', textAlign: 'center' }}>
+              Scanning automatically when a QR code is detected
+            </p>
+          )}
         </div>
       )}
     </div>

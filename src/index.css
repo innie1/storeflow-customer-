@@ -111,6 +111,13 @@ input {
   100% { background-position: 200% 0; }
 }
 
+@keyframes scan-line {
+  0%   { top: 10%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 90%; opacity: 0; }
+}
+
 .animate-fade {
   animation: fadeIn var(--transition-normal) forwards;
 }
