@@ -118,6 +118,10 @@ input {
   100% { top: 90%; opacity: 0; }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .animate-fade {
   animation: fadeIn var(--transition-normal) forwards;
 }
