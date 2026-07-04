@@ -1191,28 +1191,6 @@ function App() {
             </button>
           </div>
 
-          {/* Bottom Navigation */}
-          <nav className="fixed bottom-0 left-0 w-full z-40 flex justify-around items-center px-4 py-3 bg-surface shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] rounded-t-2xl md:hidden border-t border-outline-variant/10 text-on-surface">
-            <button onClick={() => setScreen('home')} className="flex flex-col items-center justify-center text-primary relative after:content-[''] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-primary-container after:rounded-full cursor-pointer">
-              <span className="material-symbols-outlined text-xl">home</span>
-              <span className="text-[10px] font-bold mt-1">Home</span>
-            </button>
-            <button onClick={() => setScreen('home')} className="flex flex-col items-center justify-center text-secondary cursor-pointer">
-              <span className="material-symbols-outlined text-xl">grid_view</span>
-              <span className="text-[10px] font-semibold mt-1">Explore</span>
-            </button>
-            <button onClick={() => { setScreen('history'); loadOrdersHistory(); }} className="flex flex-col items-center justify-center text-secondary cursor-pointer">
-              <span className="material-symbols-outlined text-xl">receipt_long</span>
-              <span className="text-[10px] font-semibold mt-1">Orders</span>
-            </button>
-            <button onClick={() => setIsCartOpen(true)} className="flex flex-col items-center justify-center text-secondary relative cursor-pointer">
-              <span className="material-symbols-outlined text-xl">shopping_cart</span>
-              <span className="text-[10px] font-semibold mt-1">Cart</span>
-              {totalItemsCount > 0 && (
-                <span className="absolute -top-1 -right-2 bg-primary text-on-primary text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{totalItemsCount}</span>
-              )}
-            </button>
-          </nav>
         </div>
       )}
 
@@ -1919,6 +1897,31 @@ function App() {
 
       {/* QR Scanner Modal */}
       {showScanner && renderScanner()}
+
+      {/* ─── Global Bottom Navigation ─── */}
+      {['home', 'store', 'tracking', 'profile', 'history'].includes(screen) && !isCartOpen && (
+        <nav className="fixed bottom-0 left-0 w-full z-40 flex justify-around items-center px-4 py-3 bg-surface shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] rounded-t-2xl border-t border-outline-variant/10 text-on-surface">
+          <button onClick={() => setScreen('home')} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'home' ? 'text-primary relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-primary-container after:rounded-full' : 'text-secondary'}`}>
+            <span className="material-symbols-outlined text-xl">home</span>
+            <span className={`text-[10px] mt-1 ${screen === 'home' ? 'font-bold' : 'font-semibold'}`}>Home</span>
+          </button>
+          <button onClick={() => setScreen('home')} className={`flex flex-col items-center justify-center cursor-pointer text-secondary`}>
+            <span className="material-symbols-outlined text-xl">grid_view</span>
+            <span className="text-[10px] font-semibold mt-1">Explore</span>
+          </button>
+          <button onClick={() => { setScreen('history'); loadOrdersHistory(); }} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'history' ? 'text-primary relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-primary-container after:rounded-full' : 'text-secondary'}`}>
+            <span className="material-symbols-outlined text-xl">receipt_long</span>
+            <span className={`text-[10px] mt-1 ${screen === 'history' ? 'font-bold' : 'font-semibold'}`}>Orders</span>
+          </button>
+          <button onClick={() => setIsCartOpen(true)} className="flex flex-col items-center justify-center text-secondary relative cursor-pointer">
+            <span className="material-symbols-outlined text-xl">shopping_cart</span>
+            <span className="text-[10px] font-semibold mt-1">Cart</span>
+            {totalItemsCount > 0 && (
+              <span className="absolute -top-1 -right-2 bg-primary text-on-primary text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{totalItemsCount}</span>
+            )}
+          </button>
+        </nav>
+      )}
 
     </div>
   );
