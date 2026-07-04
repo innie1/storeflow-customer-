@@ -56,7 +56,11 @@ const isStatusAtLeast = (current: string, target: string) =>
 
 function App() {
   // Navigation & State Management
-  const [screen, setScreen] = useState<'splash' | 'onboarding' | 'login' | 'location' | 'home' | 'store' | 'tracking' | 'profile' | 'history'>('splash');
+  const [screen, setScreen] = useState<'splash' | 'onboarding' | 'login' | 'location' | 'home' | 'store' | 'tracking' | 'profile' | 'history' | 'store_not_found'>(() => {
+    const { storeId } = parseRoute();
+    if (storeId) return 'store';
+    return 'splash';
+  });
   const [_storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
   const [allStores, setAllStores] = useState<Store[]>([]);
@@ -220,6 +224,11 @@ function App() {
     }
   };
 
+  // Check user session on app mount
+  useEffect(() => {
+    checkSession();
+  }, []);
+
   // ─── Splash Screen Load Timer ──────────────────────────────────────────────
 
   useEffect(() => {
@@ -228,8 +237,7 @@ function App() {
         if (!isOnboarded) {
           setScreen('onboarding');
         } else {
-          // Check session auto login
-          checkSession();
+          setScreen('home');
         }
       }, 2000);
       return () => clearTimeout(timer);
@@ -245,10 +253,6 @@ function App() {
       setProfilePhone(session.user.phone || '');
       setCustomerName(session.user.user_metadata?.full_name || '');
       setCustomerPhone(session.user.phone || '');
-      setScreen('home');
-    } else {
-      // If remember logic is offline or no user, direct to home (as guest) or login
-      setScreen('home');
     }
     loadStoresData();
   };
@@ -272,20 +276,52 @@ function App() {
   };
 
   const loadStoreDetails = async (sid: string) => {
+    console.log(`[StoreFlow QR] Store ID received from URL/QR: "${sid}"`);
     setLoading(true);
     setErrorText(null);
     try {
-      const { data: storeData, error: storeErr } = await supabase.from('stores').select('*').eq('id', sid).maybeSingle();
-      if (storeErr) throw storeErr;
+      console.log(`[StoreFlow QR] Executing database query for store ID: "${sid}"...`);
+      const { data: storeData, error: storeErr } = await supabase
+        .from('stores')
+        .select('*')
+        .eq('id', sid)
+        .maybeSingle();
+
+      if (storeErr) {
+        console.error(`[StoreFlow QR] Database query error for store ID: "${sid}":`, storeErr);
+        throw storeErr;
+      }
+
+      console.log(`[StoreFlow QR] Query result for store:`, storeData);
 
       if (storeData) {
         setStore(storeData);
-        const { data: prodData } = await supabase.from('products').select('*').eq('store_id', sid).eq('status', 'active');
-        const { data: catData } = await supabase.from('categories').select('name').eq('store_id', sid);
+        console.log(`[StoreFlow QR] Querying active products for store ID: "${sid}"...`);
+        const { data: prodData, error: prodErr } = await supabase
+          .from('products')
+          .select('*')
+          .eq('store_id', sid)
+          .eq('status', 'active');
+
+        if (prodErr) {
+          console.error(`[StoreFlow QR] Error querying products for store ID: "${sid}":`, prodErr);
+          throw prodErr;
+        }
 
         const prods = prodData || [];
+        console.log(`[StoreFlow QR] Products loaded successfully. Count: ${prods.length}`);
         setProducts(prods);
         localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));
+
+        console.log(`[StoreFlow QR] Querying categories for store ID: "${sid}"...`);
+        const { data: catData, error: catErr } = await supabase
+          .from('categories')
+          .select('name')
+          .eq('store_id', sid);
+
+        if (catErr) {
+          console.warn(`[StoreFlow QR] Optional categories fetch error for store ID: "${sid}":`, catErr);
+        }
 
         let cats = ['All'];
         if (catData && catData.length > 0) {
@@ -297,15 +333,21 @@ function App() {
         setCategories(cats);
         localStorage.setItem('storeflow_cached_categories', JSON.stringify(cats));
       } else {
-        const matched = allStores.find(s => s.id === sid);
-        if (matched) {
-          setStore(matched);
-          setProducts([]);
-        }
+        console.warn(`[StoreFlow QR] Store ID: "${sid}" not found in database.`);
+        setScreen('store_not_found');
       }
-    } catch (err) {
-      console.error('Error loading store detail:', err);
+    } catch (err: any) {
+      console.error(`[StoreFlow QR] Critical error loading store detail for ID: "${sid}":`, err);
       setErrorText('Offline Mode: Displaying offline catalog.');
+      // Attempt local storage fallback if we have a match
+      const matched = allStores.find(s => s.id === sid);
+      if (matched) {
+        console.log(`[StoreFlow QR] Found matched store in offline cache:`, matched);
+        setStore(matched);
+        setProducts([]);
+      } else {
+        setScreen('store_not_found');
+      }
     } finally {
       setLoading(false);
     }
@@ -1445,6 +1487,13 @@ function App() {
             </div>
           </div>
 
+          {deferredPrompt && (
+            <button onClick={triggerInstall} className="w-full py-4 bg-primary text-on-primary font-bold rounded-full cursor-pointer hover:bg-primary/95 transition-all shadow-md flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-lg">download</span>
+              <span>Install App for Faster Access</span>
+            </button>
+          )}
+
           <button onClick={() => setScreen('home')} className="w-full py-4 bg-surface-container-low border border-outline-variant/30 text-on-surface font-bold rounded-full cursor-pointer hover:bg-surface-container-high transition-colors flex items-center justify-center gap-2">
             <span className="material-symbols-outlined text-lg">home</span>
             <span>Back to Home</span>
@@ -1511,6 +1560,17 @@ function App() {
                 </span>
                 <span className="material-symbols-outlined text-secondary text-lg">chevron_right</span>
               </button>
+
+              {/* PWA Installer */}
+              {deferredPrompt && (
+                <button onClick={triggerInstall} className="w-full p-4 bg-primary/10 hover:bg-primary/20 rounded-xl text-left font-semibold text-sm flex items-center justify-between cursor-pointer border border-primary/25 active-scale">
+                  <span className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-lg">download</span>
+                    <span className="text-primary font-bold">Install StoreFlow Web App</span>
+                  </span>
+                  <span className="material-symbols-outlined text-primary text-lg">chevron_right</span>
+                </button>
+              )}
             </div>
           </main>
 
@@ -1573,6 +1633,32 @@ function App() {
             )}
           </main>
         </div>
+      )}
+
+      {/* ─── 10. Store Not Found Screen ─── */}
+      {screen === 'store_not_found' && (
+        <main className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-background text-on-surface">
+          <div className="max-w-md w-full p-8 bg-surface-container rounded-3xl border border-outline-variant/10 shadow-xl space-y-6 animate-scale">
+            <div className="w-20 h-20 bg-error-container text-error rounded-[28%] flex items-center justify-center mx-auto shadow-md">
+              <span className="material-symbols-outlined text-4xl font-bold">storefront</span>
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-black tracking-tight text-on-background font-headline-xl">Store Not Found</h1>
+              <p className="text-sm text-secondary-fixed-dim leading-relaxed max-w-[280px] mx-auto">
+                The link or QR code you scanned does not correspond to an active partner merchant on StoreFlow.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                onClick={() => setScreen('home')}
+                className="w-full h-14 bg-primary text-on-primary font-bold rounded-full shadow-lg active:scale-98 hover:bg-primary/95 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-lg">home</span>
+                <span>Go to Home Page</span>
+              </button>
+            </div>
+          </div>
+        </main>
       )}
 
       {/* ─── Product Details Modal Sheet ─── */}

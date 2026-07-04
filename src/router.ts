@@ -45,8 +45,8 @@ export function parseRoute(): RouteResult {
   const path = window.location.pathname;
   const segments = path.split('/').filter(Boolean);
 
-  // Pattern: /s/{storeId}/p/{productId}
-  if (segments[0] === 's' && segments[1] && segments[2] === 'p' && segments[3]) {
+  // Pattern: /s/{storeId}/p/{productId} or /store/{storeId}/p/{productId}
+  if ((segments[0] === 's' || segments[0] === 'store') && segments[1] && segments[2] === 'p' && segments[3]) {
     const decodedStore = decodeQRData(segments[1]);
     const decodedProduct = decodeQRData(segments[3]);
     const storeId = decodedStore ? decodedStore.storeId : segments[1];
@@ -54,8 +54,8 @@ export function parseRoute(): RouteResult {
     return { storeId, productId };
   }
 
-  // Pattern: /s/{storeId}
-  if (segments[0] === 's' && segments[1]) {
+  // Pattern: /s/{storeId} or /store/{storeId}
+  if ((segments[0] === 's' || segments[0] === 'store') && segments[1]) {
     const decodedStore = decodeQRData(segments[1]);
     if (decodedStore && decodedStore.storeId) {
       const storeId = decodedStore.storeId;
@@ -65,22 +65,12 @@ export function parseRoute(): RouteResult {
     return { storeId: segments[1], productId: null };
   }
 
-  // Legacy: /store/{storeId} — redirect to canonical /s/{storeId}
-  if (segments[0] === 'store' && segments[1]) {
-    const id = segments[1];
-    const decodedStore = decodeQRData(id);
-    const storeId = decodedStore ? decodedStore.storeId : id;
-    window.history.replaceState({}, '', `/s/${storeId}`);
-    return { storeId, productId: null };
-  }
-
   // Query param fallback: ?storeId=xxx or ?store=xxx
   const params = new URLSearchParams(window.location.search);
   const qsId = params.get('storeId') || params.get('store');
   if (qsId) {
     const decodedStore = decodeQRData(qsId);
     const storeId = decodedStore ? decodedStore.storeId : qsId;
-    window.history.replaceState({}, '', `/s/${storeId}`);
     return { storeId, productId: null };
   }
 
@@ -107,16 +97,16 @@ export function parseQRCode(raw: string): RouteResult {
     const url = new URL(s.startsWith('http') ? s : `https://${s}`);
     const segments = url.pathname.split('/').filter(Boolean);
 
-    // /s/{storeId}/p/{productId}
-    if (segments[0] === 's' && segments[1] && segments[2] === 'p' && segments[3]) {
+    // /s/{storeId}/p/{productId} or /store/{storeId}/p/{productId}
+    if ((segments[0] === 's' || segments[0] === 'store') && segments[1] && segments[2] === 'p' && segments[3]) {
       const decodedStore = decodeQRData(segments[1]);
       const decodedProduct = decodeQRData(segments[3]);
       const storeId = decodedStore ? decodedStore.storeId : segments[1];
       const productId = decodedProduct ? (decodedProduct.payload?.id || decodedProduct.storeId) : segments[3];
       return { storeId, productId };
     }
-    // /s/{storeId}
-    if (segments[0] === 's' && segments[1]) {
+    // /s/{storeId} or /store/{storeId}
+    if ((segments[0] === 's' || segments[0] === 'store') && segments[1]) {
       const decodedStore = decodeQRData(segments[1]);
       if (decodedStore && decodedStore.storeId) {
         const storeId = decodedStore.storeId;
@@ -124,12 +114,6 @@ export function parseQRCode(raw: string): RouteResult {
         return { storeId, productId };
       }
       return { storeId: segments[1], productId: null };
-    }
-    // Legacy /store/{storeId}
-    if (segments[0] === 'store' && segments[1]) {
-      const decodedStore = decodeQRData(segments[1]);
-      const storeId = decodedStore ? decodedStore.storeId : segments[1];
-      return { storeId, productId: null };
     }
   } catch {
     // Not a URL — treat as bare store ID
