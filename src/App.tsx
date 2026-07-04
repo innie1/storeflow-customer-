@@ -387,6 +387,18 @@ function App() {
     }
   }, [deepLinkedProductId, products]);
 
+  useEffect(() => {
+    const isOverlayActive = isCartOpen || !!selectedProduct || showQuickOrder || showScanner;
+    if (isOverlayActive) {
+      document.body.classList.add('overflow-hidden');
+    } else {
+      document.body.classList.remove('overflow-hidden');
+    }
+    return () => {
+      document.body.classList.remove('overflow-hidden');
+    };
+  }, [isCartOpen, selectedProduct, showQuickOrder, showScanner]);
+
   // ─── QR Scanner Logic ──────────────────────────────────────────────────────
 
   const stopScanner = useCallback(() => {
@@ -1656,7 +1668,14 @@ function App() {
             {checkoutStep === 'shopping' && (
               <>
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg font-extrabold text-on-background font-headline-lg">My Cart ({totalItemsCount})</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-extrabold text-on-background font-headline-lg">My Cart ({totalItemsCount})</span>
+                    {cart.length > 0 && (
+                      <button onClick={() => setCart([])} className="text-xs text-red-500 font-bold hover:underline cursor-pointer">
+                        Clear All
+                      </button>
+                    )}
+                  </div>
                   <button onClick={() => setIsCartOpen(false)} className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer hover:bg-surface-container-high transition-colors">
                     <span className="material-symbols-outlined text-lg">close</span>
                   </button>
