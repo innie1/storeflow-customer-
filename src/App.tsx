@@ -91,10 +91,10 @@ function App() {
   const [showOTPField, setShowOTPField] = useState(false);
 
   // Location selector State
-  const [selectedAddress, setSelectedAddress] = useState(() => localStorage.getItem('storeflow_address') || 'Ikeja, Lagos');
+  const [selectedAddress, setSelectedAddress] = useState(() => localStorage.getItem('storeflow_address') || 'Select Location');
   const [savedAddresses, setSavedAddresses] = useState<string[]>(() => {
     const cached = localStorage.getItem('storeflow_saved_addresses');
-    return cached ? JSON.parse(cached) : ['23 Allen Avenue, Ikeja', '5 GRA, Ikeja', 'Lagos, Nigeria'];
+    return cached ? JSON.parse(cached) : ['Warri, Delta State', '23 Allen Avenue, Ikeja', '5 GRA, Ikeja', 'Lagos, Nigeria'];
   });
   const [newAddressInput, setNewAddressInput] = useState('');
 
