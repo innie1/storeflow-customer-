@@ -2,11 +2,6 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import jsQR from 'jsqr';
 import { parseRoute, parseQRCode } from './router';
-import { 
-  Search, Plus, Minus, ShoppingBag, X, Check, 
-  Phone, ArrowLeft, AlertTriangle, Star,
-  Smartphone, CreditCard, ChevronRight, RefreshCw, Camera, Clock, Copy
-} from 'lucide-react';
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -14,10 +9,14 @@ interface Product {
   id: string;
   store_id: string;
   category_id?: string;
+  barcode?: string;
   name: string;
   description?: string;
+  brand?: string;
+  cost_price?: number;
   selling_price: number;
   quantity: number;
+  unit?: string;
   image?: string;
   status?: string;
   category?: string;
@@ -30,6 +29,7 @@ interface Store {
   address?: string;
   logo?: string;
   currency: string;
+  status?: string; // 'active' | 'inactive'
 }
 
 interface CartItem {
@@ -37,49 +37,81 @@ interface CartItem {
   quantity: number;
 }
 
+interface Order {
+  id: string;
+  store_id: string;
+  order_number: string;
+  customer_name: string;
+  customer_phone: string;
+  status: string;
+  subtotal: number;
+  total: number;
+  notes?: string;
+  created_at: string;
+}
+
 // ─── Demo / Fallback Data ─────────────────────────────────────────────────────
 
 const MOCK_STORE_ID = 'demo';
-const MOCK_STORE: Store = {
-  id: MOCK_STORE_ID,
-  business_name: 'FreshMart Superstore',
-  phone: '+234 801 234 5678',
-  address: '23 Allen Avenue, Ikeja, Lagos',
-  logo: '🛍️',
-  currency: '₦',
-};
-
-const MOCK_PRODUCTS: Product[] = [
-  { id: 'p1', store_id: MOCK_STORE_ID, name: 'Indomie Chicken 70g', description: 'Delicious chicken flavor instant noodles.', selling_price: 480, quantity: 45, category: 'Groceries' },
-  { id: 'p2', store_id: MOCK_STORE_ID, name: 'Coca Cola 50cl', description: 'Refreshing carbonated soft drink.', selling_price: 350, quantity: 80, category: 'Drinks' },
-  { id: 'p3', store_id: MOCK_STORE_ID, name: 'Golden Penny Semovita 1kg', description: 'Premium quality semolina wheat flour.', selling_price: 850, quantity: 20, category: 'Groceries' },
-  { id: 'p4', store_id: MOCK_STORE_ID, name: 'Milo Tin 400g', description: 'Rich chocolate malt beverage powder.', selling_price: 2750, quantity: 15, category: 'Drinks' },
-  { id: 'p5', store_id: MOCK_STORE_ID, name: 'Bournvita 500g', description: 'Nutritious cocoa beverage refill pack.', selling_price: 2450, quantity: 12, category: 'Drinks' },
-  { id: 'p6', store_id: MOCK_STORE_ID, name: 'Dangote Sugar 1kg', description: 'Pure white granulated cane sugar.', selling_price: 750, quantity: 35, category: 'Groceries' },
-  { id: 'p7', store_id: MOCK_STORE_ID, name: 'Oral-B Toothpaste Big', description: 'Extra fresh fluoride toothpaste.', selling_price: 1500, quantity: 8, category: 'Personal Care' },
-  { id: 'p8', store_id: MOCK_STORE_ID, name: 'Morning Fresh Dishwashing', description: 'Super grease cutter lemon power.', selling_price: 1800, quantity: 14, category: 'Groceries' },
+const MOCK_STORES: Store[] = [
+  {
+    id: MOCK_STORE_ID,
+    business_name: 'FreshMart',
+    phone: '+234 801 234 5678',
+    address: '23 Allen Avenue, Ikeja, Lagos',
+    logo: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCFzu_8uDAWAMlHlVeiueI0OsaxeOipcvLtV8c1lwT-g6N65msOrb4M1MxWgVf3PIlizTOen8M2UJzZOFkxLB8Z_Z4WoQ4_Ui_uT2CsamMaCqjeOSm2Yu-9aPnnk2n1ZxCgrjdm4gvzmjCRGkfktMiOeKPSA_Cbp7UqJ8Kq6PB_bjBiHEsXWEXw46JhJJJXIXRmkNGAuxlZLrcS-PdHpfKOhrAXlJAcEWQV_zlwkudNEv_DzjSChi5mvQ',
+    currency: '₦',
+    status: 'active'
+  },
+  {
+    id: 'store-2',
+    business_name: 'Graphite Essentials',
+    phone: '+234 802 987 6543',
+    address: '5a Joel Ogunnaike, GRA Ikeja, Lagos',
+    logo: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80',
+    currency: '₦',
+    status: 'active'
+  },
+  {
+    id: 'store-3',
+    business_name: 'Corner Shop (Closed)',
+    phone: '+234 803 111 2222',
+    address: '12 Toyin Street, Ikeja, Lagos',
+    logo: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=800&q=80',
+    currency: '₦',
+    status: 'inactive'
+  }
 ];
 
-const MOCK_CATEGORIES = ['All', 'Groceries', 'Drinks', 'Personal Care'];
+const MOCK_PRODUCTS: Product[] = [
+  { id: 'p1', store_id: MOCK_STORE_ID, barcode: '1111', name: 'Indomie Chicken', description: '70g delicious chicken flavor instant noodles.', selling_price: 480, quantity: 45, category: 'Groceries', brand: 'Indomie', unit: 'pack', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDzcLS2XffDNKufXbHzPpOkWbuH91tH1WhYPKKSxkgzaXMj1AO_-o6GHVdDbGZ9zh0f22J3RltcDr1-zZce6gdmiHv95QsotrjMLZfdZotZCpixuXxviB45PHVy3Ni4lP5bZtszuCBQNZh5_zLcb2vfTA37P2OeTqhjfHi_ZVkzzTY5bpa_qdqLAy90Ypw8sEXxr5duj8AxiNxS1dYb2pC9D7oziYV3bn3nZYoKqlutiPLSaGvHcxLFVg' },
+  { id: 'p2', store_id: MOCK_STORE_ID, barcode: '2222', name: 'Coca Cola 50cl', description: 'Refreshing carbonated soft drink.', selling_price: 350, quantity: 80, category: 'Drinks', brand: 'Coca Cola', unit: 'bottle', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAraSVJUppxHchIoS1HPTU62rMyAP1xLs7cpAmCJSdPADjO0swkplsH4TpQebAOGNnRWUjgwb3yDfewhkYHmeW3dNQmfWhBnZw94fsjKtrh7VKXwL6hsVfdu7vJEyvsXHV7rUGMMlH88ZUh3RpgyEfy8Xr2kpW6d4JbiNGYryGCKgVwJj20hMnmm--Q8ZGKKMZncDMoR8PTne5HGIRkW7ueiGzMOGT5VT6ztpuYRKfcwnOGNPhflroBvw' },
+  { id: 'p3', store_id: MOCK_STORE_ID, barcode: '3333', name: 'Golden Penny', description: '1kg Semovita wheat flour.', selling_price: 850, quantity: 20, category: 'Groceries', brand: 'Golden Penny', unit: 'bag', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC3IhlwPN3WVKJ_DyPRhKc0KUb8o8G41pfxZmbQBt1sEg0Kg4BINNKnjsffFTbSWW2gbMS1TdxXkT00Ex84T-XjNW81DHVkYFNCtY7UqG6Y1npoJOCcZIoXebNrRCfpXwp7GbC3PfZ32YRR-PC0C7F5igbkWMwoAotRNkE7Ld1TqwOURRCWtOtyBqXZU_0W2NPaWpp_iOVCPQFXj1KlSl8zIsHoEKAE9MyQwQOF5cWqQ7IT1IzKqvvmhg' },
+  { id: 'p4', store_id: MOCK_STORE_ID, barcode: '4444', name: 'Milo Tin 400g', description: 'Rich chocolate malt beverage powder.', selling_price: 2750, quantity: 15, category: 'Drinks', brand: 'Nestle', unit: 'tin', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNhl4BW_ZQaHwmxOMsj1ro4kCUA5OHNsVHMobweeYvzvXFNzlvmRr0weI3iDv4XfXshJg7ZvkFQ7UbxIu6LFzyuIExv-Na_s-TfRMgRHYpDdsO7EwzeTJphMOb46duaGAG6t7enLXKtDwuHJIi_MoYd2qkbD4e0UC38W7P4EHNAzQOzsotPPElH1x6XYyP5orBM1i5JbkpXTSAnom-YKDpYmJb0O0zekAXux8GdcYWnoefSLWJoTI0Jg' },
+  { id: 'p5', store_id: 'store-2', barcode: '5555', name: 'Charcoal Notebook', description: 'Premium dotted grid notebook.', selling_price: 3200, quantity: 30, category: 'Stationery', brand: 'Graphite', unit: 'pcs', image: 'https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&w=400&q=80' }
+];
 
-// ─── Status helpers ───────────────────────────────────────────────────────────
+const MOCK_CATEGORIES = ['All', 'Groceries', 'Drinks', 'Stationery'];
 
 const STATUS_ORDER = ['Pending', 'Preparing', 'Ready', 'Completed'];
 const isStatusAtLeast = (current: string, target: string) =>
   STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(target);
 
-// ─── App Component ────────────────────────────────────────────────────────────
-
 function App() {
-  // Navigation & Store State
-  const [storeId, setStoreId] = useState<string | null>(null);
-  const [deepLinkedProductId, setDeepLinkedProductId] = useState<string | null>(null);
+  // Navigation & State Management
+  const [screen, setScreen] = useState<'splash' | 'onboarding' | 'login' | 'location' | 'home' | 'store' | 'tracking' | 'profile' | 'history'>('splash');
+  const [_storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<string[]>(['All']);
-  const [loading, setLoading] = useState(true);
+  const [allStores, setAllStores] = useState<Store[]>(MOCK_STORES);
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [categories, setCategories] = useState<string[]>(MOCK_CATEGORIES);
+  const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [deepLinkedProductId, setDeepLinkedProductId] = useState<string | null>(null);
 
+  // Connection/Offline state
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -89,8 +121,28 @@ function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Checkout & Order
-  const [checkoutStep, setCheckoutStep] = useState<'shopping' | 'checkout' | 'payment' | 'tracking'>('shopping');
+  // Onboarding first launch detection
+  const [isOnboarded, setIsOnboarded] = useState(() => localStorage.getItem('storeflow_onboarded') === 'true');
+
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authPhone, setAuthPhone] = useState('');
+  const [authOTP, setAuthOTP] = useState('');
+  const [showOTPField, setShowOTPField] = useState(false);
+
+  // Location selector State
+  const [selectedAddress, setSelectedAddress] = useState(() => localStorage.getItem('storeflow_address') || 'Ikeja, Lagos');
+  const [savedAddresses, setSavedAddresses] = useState<string[]>(() => {
+    const cached = localStorage.getItem('storeflow_saved_addresses');
+    return cached ? JSON.parse(cached) : ['23 Allen Avenue, Ikeja', '5 GRA, Ikeja', 'Lagos, Nigeria'];
+  });
+  const [newAddressInput, setNewAddressInput] = useState('');
+
+  // Checkout & Order State
+  const [checkoutStep, setCheckoutStep] = useState<'shopping' | 'checkout' | 'payment'>('shopping');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryType, setDeliveryType] = useState<'pickup' | 'delivery'>('pickup');
@@ -101,12 +153,13 @@ function App() {
   const [orderNumber, setOrderNumber] = useState('');
   const [orderStatus, setOrderStatus] = useState('Pending');
   const [orderCopied, setOrderCopied] = useState(false);
+  const [ordersHistory, setOrdersHistory] = useState<Order[]>([]);
 
-  // PWA Install
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  // PWA Install trigger
+  const [_showInstallPrompt, _setShowInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  // QR Scanner
+  // QR Scanner Modal State
   const [showScanner, setShowScanner] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanSuccess, setScanSuccess] = useState(false);
@@ -115,7 +168,271 @@ function App() {
   const streamRef = useRef<MediaStream | null>(null);
   const scanFrameRef = useRef<number | null>(null);
 
-  // ── QR Scanner Logic ──────────────────────────────────────────────────────
+  // Quick Order Modal
+  const [showQuickOrder, setShowQuickOrder] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [quickOrderInput, setQuickOrderInput] = useState('');
+
+  // User Profile
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('storeflow_dark_mode') === 'true');
+
+  // ─── Offline Support: Load Cached Data ──────────────────────────────────────
+
+  useEffect(() => {
+    const cachedStores = localStorage.getItem('storeflow_cached_all_stores');
+    const cachedProducts = localStorage.getItem('storeflow_cached_products');
+    const cachedCategories = localStorage.getItem('storeflow_cached_categories');
+    const cachedHistory = localStorage.getItem('storeflow_cached_orders_history');
+    
+    if (cachedStores) setAllStores(JSON.parse(cachedStores));
+    if (cachedProducts) setProducts(JSON.parse(cachedProducts));
+    if (cachedCategories) setCategories(JSON.parse(cachedCategories));
+    if (cachedHistory) setOrdersHistory(JSON.parse(cachedHistory));
+
+    // Cart loading from cache
+    const cachedCart = localStorage.getItem('storeflow_cached_cart');
+    if (cachedCart) setCart(JSON.parse(cachedCart));
+  }, []);
+
+  // Cache cart on updates
+  useEffect(() => {
+    localStorage.setItem('storeflow_cached_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  // Handle Online/Offline Status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncOfflineOrders();
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Sync Offline Queue
+  const syncOfflineOrders = async () => {
+    const pending = localStorage.getItem('storeflow_pending_sync_orders');
+    if (!pending) return;
+
+    try {
+      const ordersToSync: any[] = JSON.parse(pending);
+      for (const orderData of ordersToSync) {
+        await supabase.from('orders').insert(orderData.order);
+        if (orderData.items && orderData.items.length > 0) {
+          await supabase.from('order_items').insert(orderData.items);
+        }
+      }
+      localStorage.removeItem('storeflow_pending_sync_orders');
+      alert('Your offline order(s) have been successfully synchronized! 🎉');
+      loadOrdersHistory();
+    } catch (e) {
+      console.error('Failed to sync offline orders:', e);
+    }
+  };
+
+  // ─── PWA & Install Prompt ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const triggerInstall = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => {
+        setDeferredPrompt(null);
+        _setShowInstallPrompt(false);
+      });
+    } else {
+      alert('Tap browser settings -> "Add to Home Screen" to install StoreFlow.');
+      _setShowInstallPrompt(false);
+    }
+  };
+
+  // ─── Splash Screen Load Timer ──────────────────────────────────────────────
+
+  useEffect(() => {
+    if (screen === 'splash') {
+      const timer = setTimeout(() => {
+        if (!isOnboarded) {
+          setScreen('onboarding');
+        } else {
+          // Check session auto login
+          checkSession();
+        }
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [screen, isOnboarded]);
+
+  const checkSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setCurrentUser(session.user);
+      setProfileName(session.user.user_metadata?.full_name || '');
+      setProfileEmail(session.user.email || '');
+      setProfilePhone(session.user.phone || '');
+      setCustomerName(session.user.user_metadata?.full_name || '');
+      setCustomerPhone(session.user.phone || '');
+      setScreen('home');
+    } else {
+      // If remember logic is offline or no user, direct to home (as guest) or login
+      setScreen('home');
+    }
+    loadStoresData();
+  };
+
+  // ─── Fetch Stores & Dynamic Products ────────────────────────────────────────
+
+  const loadStoresData = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('stores').select('*');
+      if (error) throw error;
+      if (data) {
+        setAllStores(data);
+        localStorage.setItem('storeflow_cached_all_stores', JSON.stringify(data));
+      }
+    } catch (e) {
+      console.warn('Supabase loading error, running offline fallback:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadStoreDetails = async (sid: string) => {
+    setLoading(true);
+    setErrorText(null);
+    try {
+      const { data: storeData, error: storeErr } = await supabase.from('stores').select('*').eq('id', sid).maybeSingle();
+      if (storeErr) throw storeErr;
+
+      if (storeData) {
+        setStore(storeData);
+        const { data: prodData } = await supabase.from('products').select('*').eq('store_id', sid).eq('status', 'active');
+        const { data: catData } = await supabase.from('categories').select('name').eq('store_id', sid);
+
+        const prods = prodData || [];
+        setProducts(prods);
+        localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));
+
+        let cats = ['All'];
+        if (catData && catData.length > 0) {
+          cats = ['All', ...catData.map((c: any) => c.name)];
+        } else {
+          const uniq = Array.from(new Set(prods.map(p => p.category).filter((c): c is string => !!c)));
+          cats = ['All', ...uniq];
+        }
+        setCategories(cats);
+        localStorage.setItem('storeflow_cached_categories', JSON.stringify(cats));
+      } else {
+        // Fallback Store
+        const matched = allStores.find(s => s.id === sid);
+        if (matched) {
+          setStore(matched);
+          const filteredProds = MOCK_PRODUCTS.filter(p => p.store_id === sid || p.store_id === MOCK_STORE_ID);
+          setProducts(filteredProds);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading store detail:', err);
+      setErrorText('Offline Mode: Displaying offline catalog.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOrdersHistory = async () => {
+    if (!currentUser) return;
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_phone', currentUser.phone || customerPhone)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) {
+        setOrdersHistory(data);
+        localStorage.setItem('storeflow_cached_orders_history', JSON.stringify(data));
+      }
+    } catch (e) {
+      console.warn('Orders history loading failed:', e);
+    }
+  };
+
+  // ─── Real-time order status tracking ────────────────────────────────────────
+
+  useEffect(() => {
+    if (!orderId || screen !== 'tracking') return;
+
+    const channel = supabase
+      .channel('order-updates')
+      .on('postgres_changes', {
+        event: 'UPDATE', filter: `id=eq.${orderId}`, schema: 'public', table: 'orders'
+      }, (payload: any) => {
+        if (payload.new?.status) setOrderStatus(payload.new.status);
+      })
+      .subscribe();
+
+    const timer = setInterval(() => {
+      setOrderStatus(cur => {
+        if (cur === 'Pending') return 'Preparing';
+        if (cur === 'Preparing') return 'Ready';
+        if (cur === 'Ready') return 'Completed';
+        return cur;
+      });
+    }, 20000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(timer);
+    };
+  }, [orderId, screen]);
+
+  // ─── URL Routing / Deep Links ──────────────────────────────────────────────
+
+  useEffect(() => {
+    const handleRouting = () => {
+      const { storeId: sid, productId: pid } = parseRoute();
+      if (sid) {
+        setStoreId(sid);
+        loadStoreDetails(sid);
+        setScreen('store');
+        if (pid) {
+          setDeepLinkedProductId(pid);
+        }
+      }
+    };
+    window.addEventListener('popstate', handleRouting);
+    handleRouting();
+    return () => window.removeEventListener('popstate', handleRouting);
+  }, []);
+
+  useEffect(() => {
+    if (deepLinkedProductId && products.length > 0) {
+      const match = products.find(p => p.id === deepLinkedProductId);
+      if (match) {
+        setSelectedProduct(match);
+        setDeepLinkedProductId(null);
+      }
+    }
+  }, [deepLinkedProductId, products]);
+
+  // ─── QR Scanner Logic ──────────────────────────────────────────────────────
 
   const stopScanner = useCallback(() => {
     if (scanFrameRef.current) cancelAnimationFrame(scanFrameRef.current);
@@ -140,7 +457,7 @@ function App() {
         videoRef.current.play();
       }
     } catch {
-      setScanError('Camera access denied. Please allow camera permission and try again.');
+      setScanError('Camera access denied. Please grant permissions.');
     }
   }, []);
 
@@ -159,18 +476,20 @@ function App() {
       ctx.drawImage(video, 0, 0);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      
       if (code?.data) {
         const { storeId: scannedStore, productId: scannedProduct } = parseQRCode(code.data);
         if (scannedStore) {
           setScanSuccess(true);
           setTimeout(() => {
             stopScanner();
-            const newPath = scannedProduct
-              ? `/s/${scannedStore}/p/${scannedProduct}`
-              : `/s/${scannedStore}`;
-            window.history.pushState({}, '', newPath);
-            setDeepLinkedProductId(scannedProduct);
             setStoreId(scannedStore);
+            loadStoreDetails(scannedStore);
+            setScreen('store');
+            if (scannedProduct) {
+              const matched = products.find(p => p.id === scannedProduct);
+              if (matched) setSelectedProduct(matched);
+            }
           }, 700);
           return;
         }
@@ -178,120 +497,120 @@ function App() {
       scanFrameRef.current = requestAnimationFrame(tick);
     };
     scanFrameRef.current = requestAnimationFrame(tick);
-  }, [stopScanner]);
+  }, [products, stopScanner]);
 
-  // ── URL Routing on Mount ──────────────────────────────────────────────────
+  // ─── Authentication Flow ───────────────────────────────────────────────────
 
-  useEffect(() => {
-    // Handle ?action=scan (PWA shortcut)
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('action') === 'scan') {
-      setLoading(false);
-      startScanner();
-      return;
-    }
-
-    const { storeId: sid, productId: pid } = parseRoute();
-    if (sid) {
-      setStoreId(sid);
-      if (pid) setDeepLinkedProductId(pid);
-      loadStoreData(sid);
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  // ── Deep-link: auto-open product after store loads ────────────────────────
-
-  useEffect(() => {
-    if (!deepLinkedProductId || products.length === 0) return;
-    const match = products.find(p => p.id === deepLinkedProductId);
-    if (match) setSelectedProduct(match);
-  }, [deepLinkedProductId, products]);
-
-  // ── PWA Install trigger ───────────────────────────────────────────────────
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  // ── Fetch Store, Products, Categories from Supabase ───────────────────────
-
-  const loadStoreData = async (id: string) => {
+  const handleEmailAuth = async () => {
     setLoading(true);
     setErrorText(null);
     try {
-      const [storeRes, productRes, catRes] = await Promise.all([
-        supabase.from('stores').select('*').eq('id', id).maybeSingle(),
-        supabase.from('products').select('*').eq('store_id', id).eq('status', 'active'),
-        supabase.from('categories').select('name').eq('store_id', id),
-      ]);
-
-      if (storeRes.error) throw storeRes.error;
-
-      if (storeRes.data) {
-        const prods: Product[] = productRes.data || [];
-        let cats = ['All'];
-        if (catRes.data && catRes.data.length > 0) {
-          cats = ['All', ...catRes.data.map((c: any) => c.name)];
-        } else {
-          const uniq = Array.from(new Set(prods.map(p => p.category).filter((c): c is string => !!c)));
-          cats = ['All', ...uniq];
-        }
-        setStore(storeRes.data);
-        setProducts(prods);
-        setCategories(cats);
+      if (authMode === 'signup') {
+        const { error } = await supabase.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+          options: {
+            data: { full_name: profileName || 'Customer' }
+          }
+        });
+        if (error) throw error;
+        alert('Account created! Please log in.');
+        setAuthMode('login');
       } else {
-        // Fallback: demo or generic mock
-        const isDemo = id === 'demo' || id === 'freshmart-demo-uuid';
-        setStore(isDemo ? MOCK_STORE : { id, business_name: `Shop (${id.slice(0, 8)})`, currency: '₦', logo: '🏪', phone: '', address: '' });
-        setProducts(MOCK_PRODUCTS.map(p => ({ ...p, store_id: id })));
-        setCategories(MOCK_CATEGORIES);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword
+        });
+        if (error) throw error;
+        if (data.user) {
+          setCurrentUser(data.user);
+          setProfileName(data.user.user_metadata?.full_name || '');
+          setProfileEmail(data.user.email || '');
+          setCustomerName(data.user.user_metadata?.full_name || '');
+          setScreen('home');
+        }
       }
-    } catch (err) {
-      console.error('Error loading store:', err);
-      setErrorText('Could not reach server. Showing demo store.');
-      setStore(MOCK_STORE);
-      setProducts(MOCK_PRODUCTS);
-      setCategories(MOCK_CATEGORIES);
+    } catch (e: any) {
+      setErrorText(e.message || 'Authentication failed.');
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Real-time order tracking ──────────────────────────────────────────────
+  const handlePhoneOTPAuth = async () => {
+    setLoading(true);
+    setErrorText(null);
+    try {
+      if (!showOTPField) {
+        const { error } = await supabase.auth.signInWithOtp({
+          phone: authPhone
+        });
+        if (error) throw error;
+        setShowOTPField(true);
+        alert('OTP sent to phone!');
+      } else {
+        const { data, error } = await supabase.auth.verifyOtp({
+          phone: authPhone,
+          token: authOTP,
+          type: 'sms'
+        });
+        if (error) throw error;
+        if (data.user) {
+          setCurrentUser(data.user);
+          setProfilePhone(data.user.phone || '');
+          setCustomerPhone(data.user.phone || '');
+          setScreen('home');
+        }
+      }
+    } catch (e: any) {
+      setErrorText(e.message || 'OTP verification failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  useEffect(() => {
-    if (!orderId || checkoutStep !== 'tracking') return;
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setScreen('home');
+  };
 
-    const channel = supabase
-      .channel('order-updates')
-      .on('postgres_changes', {
-        event: 'UPDATE', filter: `id=eq.${orderId}`, schema: 'public', table: 'orders'
-      }, (payload: any) => {
-        if (payload.new?.status) setOrderStatus(payload.new.status);
-      })
-      .subscribe();
+  // ─── Location & Address Selector ───────────────────────────────────────────
 
-    // Demo simulation
-    const interval = setInterval(() => {
-      setOrderStatus(cur => {
-        if (cur === 'Pending') return 'Preparing';
-        if (cur === 'Preparing') return 'Ready';
-        if (cur === 'Ready') return 'Completed';
-        return cur;
-      });
-    }, 25000);
+  const selectAddressAndSave = (addr: string) => {
+    setSelectedAddress(addr);
+    localStorage.setItem('storeflow_address', addr);
+    setScreen('home');
+  };
 
-    return () => { supabase.removeChannel(channel); clearInterval(interval); };
-  }, [orderId, checkoutStep]);
+  const addNewAddress = () => {
+    if (!newAddressInput.trim()) return;
+    const list = [newAddressInput, ...savedAddresses];
+    setSavedAddresses(list);
+    localStorage.setItem('storeflow_saved_addresses', JSON.stringify(list));
+    selectAddressAndSave(newAddressInput);
+    setNewAddressInput('');
+  };
 
-  // ── Cart Operations ───────────────────────────────────────────────────────
+  const requestGPSLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const mockAddr = `GRA Phase II (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+          selectAddressAndSave(mockAddr);
+        },
+        () => {
+          alert('GPS access denied. Please type address manually.');
+        }
+      );
+    } else {
+      alert('Geolocation not supported by this browser.');
+    }
+  };
+
+  // ─── Cart & Checkout Calculations ──────────────────────────────────────────
 
   const addToCart = (product: Product, qty = 1) => {
     setCart(prev => {
@@ -308,63 +627,86 @@ function App() {
 
   const getQty = (productId: string) => cart.find(i => i.product.id === productId)?.quantity ?? 0;
 
-  // ── Calculations ──────────────────────────────────────────────────────────
-
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.product.selling_price * i.quantity, 0), [cart]);
   const deliveryFee = useMemo(() => (deliveryType === 'pickup' || subtotal === 0) ? 0 : subtotal >= 5000 ? 0 : 500, [deliveryType, subtotal]);
   const total = subtotal + deliveryFee;
   const totalItemsCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
 
-  const filteredProducts = useMemo(() => products.filter(p => {
-    const ms = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-    const mc = selectedCategory === 'All' || p.category === selectedCategory;
-    return ms && mc;
-  }), [products, searchQuery, selectedCategory]);
-
-  // ── Submit Order ──────────────────────────────────────────────────────────
+  // ─── Place Order / Checkout Sync ───────────────────────────────────────────
 
   const submitOrder = async () => {
-    if (!customerName || !customerPhone) return;
+    if (!customerName || !customerPhone) {
+      alert('Please enter your details first.');
+      return;
+    }
     setLoading(true);
     try {
       const genOrderNo = `SF-${Math.floor(100000 + Math.random() * 900000)}`;
-      const notes = JSON.stringify({ delivery_type: deliveryType, address: deliveryType === 'delivery' ? deliveryAddress : '', payment_method: paymentMethod, instructions: specialInstructions });
+      const notes = JSON.stringify({
+        delivery_type: deliveryType,
+        address: deliveryType === 'delivery' ? deliveryAddress : '',
+        payment_method: paymentMethod,
+        instructions: specialInstructions
+      });
 
-      const { data: newOrder, error: orderErr } = await supabase
-        .from('orders')
-        .insert({ store_id: store?.id || MOCK_STORE_ID, customer_name: customerName, customer_phone: customerPhone, order_number: genOrderNo, status: 'Pending', subtotal, total, notes })
-        .select().single();
+      const orderPayload = {
+        store_id: store?.id || MOCK_STORE_ID,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        order_number: genOrderNo,
+        status: 'Pending',
+        subtotal,
+        total,
+        notes
+      };
 
-      if (orderErr) throw orderErr;
-      const oid = newOrder?.id || Date.now().toString();
+      if (isOnline) {
+        const { data: newOrder, error: orderErr } = await supabase
+          .from('orders')
+          .insert(orderPayload)
+          .select().single();
 
-      await supabase.from('order_items').insert(
-        cart.map(item => ({ order_id: oid, product_id: item.product.id, quantity: item.quantity, price: item.product.selling_price, subtotal: item.product.selling_price * item.quantity }))
-      );
+        if (orderErr) throw orderErr;
+        const oid = newOrder?.id || Date.now().toString();
 
-      setOrderId(oid); setOrderNumber(genOrderNo); setOrderStatus('Pending');
-      setCheckoutStep('tracking'); setCart([]);
-      localStorage.setItem('storeflow_order_placed', 'true');
-      setShowInstallPrompt(true);
-    } catch {
-      const mockNo = `SF-${Math.floor(100000 + Math.random() * 900000)}`;
-      setOrderId('mock-' + Date.now()); setOrderNumber(mockNo); setOrderStatus('Pending');
-      setCheckoutStep('tracking'); setCart([]);
-      localStorage.setItem('storeflow_order_placed', 'true');
-      setShowInstallPrompt(true);
+        await supabase.from('order_items').insert(
+          cart.map(item => ({
+            order_id: oid,
+            product_id: item.product.id,
+            quantity: item.quantity,
+            price: item.product.selling_price,
+            subtotal: item.product.selling_price * item.quantity
+          }))
+        );
+
+        setOrderId(oid);
+      } else {
+        // Offline Order Caching Queue
+        const offlineQueue = JSON.parse(localStorage.getItem('storeflow_pending_sync_orders') || '[]');
+        offlineQueue.push({
+          order: orderPayload,
+          items: cart.map(item => ({
+            product_id: item.product.id,
+            quantity: item.quantity,
+            price: item.product.selling_price,
+            subtotal: item.product.selling_price * item.quantity
+          }))
+        });
+        localStorage.setItem('storeflow_pending_sync_orders', JSON.stringify(offlineQueue));
+        setOrderId('offline-' + Date.now());
+      }
+
+      setOrderNumber(genOrderNo);
+      setOrderStatus('Pending');
+      setCheckoutStep('shopping');
+      setIsCartOpen(false);
+      setCart([]);
+      setScreen('tracking');
+      loadOrdersHistory();
+    } catch (e: any) {
+      alert('Order placement failed: ' + e.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const triggerInstall = () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(() => { setDeferredPrompt(null); setShowInstallPrompt(false); });
-    } else {
-      alert('Tap Share / Browser Menu → "Add to Home Screen" to install StoreFlow.');
-      setShowInstallPrompt(false);
     }
   };
 
@@ -375,126 +717,27 @@ function App() {
     });
   };
 
-  // ── Loading State ─────────────────────────────────────────────────────────
-
-  if (loading && checkoutStep === 'shopping') {
-    return (
-      <div className="container animate-fade">
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', gap: '20px' }}>
-          <div style={{ width: '48px', height: '48px', border: '3px solid var(--bg-secondary)', borderTopColor: 'var(--color-graphite)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></div>
-          <p style={{ fontWeight: '600', color: 'var(--color-text-muted)', fontSize: '14px' }}>Loading store...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Scan-First Landing Page ───────────────────────────────────────────────
-
-  if (!storeId) {
-    return (
-      <div className="container animate-fade" style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
-        {/* Hero */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: '32px', textAlign: 'center' }}>
-          
-          {/* Brand */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '72px', height: '72px', backgroundColor: 'var(--color-graphite)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ShoppingBag size={36} color="#fff" />
-            </div>
-            <div>
-              <h1 style={{ fontSize: '26px', fontWeight: '900', color: 'var(--color-graphite)', letterSpacing: '-0.5px' }}>StoreFlow</h1>
-              <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Scan. Browse. Order. Done.</p>
-            </div>
-          </div>
-
-          {/* Primary CTA */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', width: '100%', maxWidth: '280px' }}>
-            <button
-              id="landing-scan-btn"
-              onClick={startScanner}
-              style={{
-                width: '100%', padding: '18px', backgroundColor: 'var(--color-graphite)',
-                color: '#fff', borderRadius: 'var(--radius-md)', border: 'none',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-                fontSize: '16px', fontWeight: '700', cursor: 'pointer',
-                boxShadow: '0 8px 24px rgba(47,52,58,0.25)', transition: 'var(--transition-fast)'
-              }}
-            >
-              <Camera size={22} />
-              Scan Store QR Code
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-              <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--color-border)' }} />
-              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: '600' }}>OR</span>
-              <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--color-border)' }} />
-            </div>
-
-            {/* Manual entry */}
-            <div style={{ width: '100%', display: 'flex', gap: '8px' }}>
-              <input
-                className="form-input"
-                placeholder="Enter store code..."
-                style={{ flex: 1, fontSize: '14px' }}
-                onChange={e => {
-                  const v = e.target.value.trim();
-                  if (v.length > 3) {
-                    setStoreId(v);
-                    loadStoreData(v);
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Features */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', maxWidth: '280px' }}>
-            {[
-              { icon: '⚡', label: 'Instant — no account needed' },
-              { icon: '🛒', label: 'Add items and pay in seconds' },
-              { icon: '📦', label: 'Pickup or home delivery' },
-            ].map(f => (
-              <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', fontSize: '13px', fontWeight: '500' }}>
-                <span style={{ fontSize: '16px' }}>{f.icon}</span>
-                <span>{f.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding: '16px', textAlign: 'center', fontSize: '11px', color: 'var(--color-text-muted)' }}>
-          Powered by <strong>StoreFlow</strong> · No registration required
-        </div>
-
-        {/* Scanner Modal */}
-        {showScanner && renderScanner()}
-      </div>
-    );
-  }
-
-  // ── Scanner Modal Renderer ─────────────────────────────────────────────────
-
   function renderScanner() {
     return (
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 999,
-        backgroundColor: 'rgba(0,0,0,0.94)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center">
+        <div className="absolute top-0 left-0 right-0 p-6 flex items-center justify-between z-10">
           <div>
-            <div style={{ color: '#fff', fontWeight: '800', fontSize: '18px' }}>Scan QR Code</div>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>Point at a store or product QR code</div>
+            <div className="text-white font-extrabold text-xl">Scan QR Code</div>
+            <div className="text-white/50 text-xs mt-1">Point at a store or product QR code</div>
           </div>
-          <button onClick={stopScanner} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-            <X size={20} />
+          <button onClick={stopScanner} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white cursor-pointer hover:bg-white/20">
+            <span className="material-symbols-outlined text-xl">close</span>
           </button>
         </div>
 
-        <div style={{ position: 'relative', width: '280px', height: '280px' }}>
+        <div className="relative w-72 h-72">
           {/* Corner brackets */}
-          {([{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}] as any[]).map((pos, i) => (
+          {([
+            { top: 0, left: 0 },
+            { top: 0, right: 0 },
+            { bottom: 0, left: 0 },
+            { bottom: 0, right: 0 }
+          ] as any[]).map((pos, i) => (
             <div key={i} style={{
               position: 'absolute', width: '28px', height: '28px',
               borderColor: scanSuccess ? '#22c55e' : '#fff',
@@ -507,479 +750,1204 @@ function App() {
           ))}
 
           <video ref={videoRef} onCanPlay={handleVideoReady} playsInline muted
-            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', opacity: scanSuccess ? 0.4 : 1, transition: 'opacity 0.3s ease' }}
+            className="w-full h-full object-cover rounded-2xl transition-opacity duration-300"
+            style={{ opacity: scanSuccess ? 0.4 : 1 }}
           />
-          <canvas ref={canvasRef} style={{ display: 'none' }} />
+          <canvas ref={canvasRef} className="hidden" />
 
           {scanSuccess && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Check size={28} color="#fff" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center shadow-lg">
+                <span className="material-symbols-outlined text-white text-3xl font-bold">check</span>
               </div>
-              <span style={{ color: '#22c55e', fontWeight: '700', fontSize: '14px' }}>QR Code Detected!</span>
+              <span className="text-green-500 font-bold text-sm">QR Code Detected!</span>
             </div>
           )}
 
           {!scanSuccess && !scanError && (
-            <div style={{ position: 'absolute', left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent, #fff, transparent)', animation: 'scan-line 2s linear infinite', top: '50%' }} />
+            <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-white to-transparent animate-scan-line" />
           )}
         </div>
 
         {scanError && (
-          <div style={{ marginTop: '24px', padding: '14px 18px', backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: '12px', border: '1px solid rgba(239,68,68,0.3)', display: 'flex', alignItems: 'flex-start', gap: '10px', maxWidth: '280px' }}>
-            <AlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: '1px' }} />
-            <span style={{ color: '#fca5a5', fontSize: '13px', lineHeight: '1.4' }}>{scanError}</span>
+          <div className="mt-6 mx-6 p-4 bg-red-500/15 border border-red-500/30 rounded-2xl flex items-start gap-3 max-w-xs">
+            <span className="material-symbols-outlined text-red-500 text-lg shrink-0 mt-0.5">warning</span>
+            <span className="text-red-300 text-xs leading-relaxed">{scanError}</span>
           </div>
         )}
 
         {!scanError && !scanSuccess && (
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginTop: '24px', textAlign: 'center', padding: '0 32px' }}>
-            Scanning automatically · Works with store &amp; product QR codes
+          <p className="text-white/40 text-xs mt-6 text-center px-8">
+            Scanning automatically · Support local stores and partners
           </p>
         )}
       </div>
     );
   }
 
-  // ── Main App Shell ────────────────────────────────────────────────────────
+  // ─── ⚡ Quick Order Search & Voice ──────────────────────────────────────────
+
+  const handleVoiceSearch = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser.');
+      return;
+    }
+
+    const rec = new SpeechRecognition();
+    rec.lang = 'en-US';
+    rec.continuous = false;
+    
+    rec.onstart = () => setIsListening(true);
+    rec.onend = () => setIsListening(false);
+    
+    rec.onresult = (e: any) => {
+      const transcript = e.results[0][0].transcript;
+      setQuickOrderInput(transcript);
+      setSearchQuery(transcript);
+    };
+
+    rec.start();
+  };
+
+  // ─── Search Filtering logic ────────────────────────────────────────────────
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+        (p.category?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+      const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
+      return matchSearch && matchCat;
+    });
+  }, [products, searchQuery, selectedCategory]);
+
+  const searchedStores = useMemo(() => {
+    if (!searchQuery) return allStores;
+    return allStores.filter(s =>
+      s.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.address?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+    );
+  }, [allStores, searchQuery]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-4">
+        <div className="w-12 h-12 border-4 border-surface-container-high border-t-primary rounded-full animate-spin"></div>
+        <p className="text-secondary text-sm font-semibold">Loading StoreFlow...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="container animate-fade">
+    <div className={`min-h-screen ${darkMode ? 'dark bg-zinc-950 text-zinc-100' : 'bg-surface text-on-surface'}`}>
+      
+      {/* Offline Status Banner */}
+      {!isOnline && (
+        <div className="bg-red-500 text-white text-xs py-2 px-4 text-center sticky top-0 z-[100] font-bold">
+          ⚠️ You are offline. Showing cached catalog data. Sync when online.
+        </div>
+      )}
 
-      {/* ═══ SHOPPING SCREEN ═══════════════════════════════════════════════ */}
-      {checkoutStep === 'shopping' && (
-        <>
-          {/* Header */}
-          <header className="header">
-            <div style={{ fontSize: '32px', padding: '6px', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)' }}>
-              {store?.logo || '🏪'}
+      {/* ─── 1. Splash Screen ─── */}
+      {screen === 'splash' && (
+        <main className="bg-on-background text-surface min-h-screen flex flex-col justify-between items-center py-20 px-10">
+          <div className="flex-1 flex flex-col items-center justify-center text-center">
+            <div className="mb-6 flex items-center justify-center w-24 h-24 bg-surface rounded-[28%] rotate-12 shadow-xl animate-bounce">
+              <span className="material-symbols-outlined text-[64px] text-on-background -rotate-12" style={{ fontVariationSettings: "'FILL' 1" }}>
+                inventory_2
+              </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-              <h1 style={{ fontSize: '18px', fontWeight: '800' }}>{store?.business_name}</h1>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: '600' }}>
-                <span style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                  <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--color-success)', borderRadius: '50%' }}></span> Open
-                </span>
-                <span>•</span>
-                <Clock size={11} />
-                <span>{deliveryType === 'delivery' ? '30–45 min' : '15–20 min'}</span>
+            <h1 className="text-3xl font-extrabold text-surface tracking-tight font-headline-xl">
+              StoreFlow
+            </h1>
+            <p className="mt-3 text-sm text-surface-variant max-w-[200px] leading-relaxed font-body-lg">
+              Everything you need, delivered fast.
+            </p>
+          </div>
+          <div className="w-full max-w-[140px] h-1 bg-surface-variant/20 rounded-full overflow-hidden">
+            <div className="h-full bg-primary-container w-2/3 animate-pulse rounded-full"></div>
+          </div>
+        </main>
+      )}
+
+      {/* ─── 2. Onboarding Screen ─── */}
+      {screen === 'onboarding' && (
+        <div className="min-h-screen flex flex-col justify-between p-6 max-w-md mx-auto">
+          <div className="flex justify-end pt-4">
+            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); setScreen('home'); }} className="text-sm font-bold text-secondary cursor-pointer">Skip</button>
+          </div>
+          <main className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-extrabold text-on-background font-headline-xl">Welcome to StoreFlow</h1>
+              <p className="text-sm text-secondary max-w-xs mx-auto leading-relaxed">
+                Connect to nearby stores, select products, and check out in under a minute.
+              </p>
+            </div>
+            <div className="relative w-72 h-72 bg-surface-container rounded-[40px] shadow-sm overflow-hidden flex items-center justify-center p-6">
+              <img className="w-full h-full object-cover rounded-3xl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqOVy4Qz9h-3rrA4QjtMif0NFdiQx8MP6W-YhT_kpIfRfOGfci_B4Xc9XLeWSafM-YqlExuIeOPtgv4axxkmJPWtOydIXtAo86zx5AnnoGPt0yViyi2oCJAS4daz9Mh07eaV4aJPzZz7WZnjp_7l5oDmOSOJstc_mvowOIXnl5L-vSjdmi1GbTe36GnOgDJZDBewq7CAYcn2Y9bJlUnFmSrNbwRXfmqYHrhMyJIfbPz8kHRI6SS8t1eg" alt="" />
+            </div>
+            <div className="flex justify-center space-x-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-surface-container-highest"></div>
+              <div className="h-1.5 w-6 rounded-full bg-primary"></div>
+              <div className="h-1.5 w-1.5 rounded-full bg-surface-container-highest"></div>
+            </div>
+          </main>
+          <footer className="space-y-4 pb-8">
+            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); setScreen('login'); }} className="w-full h-14 bg-on-background text-surface font-bold rounded-xl active-scale cursor-pointer">
+              Get Started
+            </button>
+            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); setScreen('home'); }} className="w-full h-14 border border-outline-variant text-on-background font-bold rounded-xl active-scale cursor-pointer">
+              Explore as Guest
+            </button>
+          </footer>
+        </div>
+      )}
+
+      {/* ─── 3. Login / Signup Screen ─── */}
+      {screen === 'login' && (
+        <div className="min-h-screen p-6 flex flex-col justify-between max-w-md mx-auto relative z-10">
+          <header className="h-14 flex items-center">
+            <button onClick={() => setScreen('home')} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer active-scale">
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+            </button>
+          </header>
+
+          <main className="flex-1 flex flex-col justify-center space-y-6 pt-12">
+            <div className="text-center md:text-left">
+              <h1 className="text-3xl font-extrabold text-on-background font-headline-xl">
+                {authMode === 'login' ? 'Welcome back 👋' : 'Create Account 🚀'}
+              </h1>
+              <p className="text-sm text-secondary mt-1">
+                {authMode === 'login' ? 'Log in to your StoreFlow account' : 'Register to save addresses and track orders'}
+              </p>
+            </div>
+
+            {errorText && (
+              <div className="p-3.5 bg-red-50 text-red-700 text-xs rounded-xl font-bold border border-red-200">
+                {errorText}
               </div>
+            )}
+
+            <form className="space-y-4" onSubmit={e => e.preventDefault()}>
+              {authMode === 'signup' && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-secondary uppercase px-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={e => setProfileName(e.target.value)}
+                    className="w-full px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                    placeholder="Enter full name"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-secondary uppercase px-1">Email Address</label>
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  className="w-full px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                  placeholder="name@example.com"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-secondary uppercase px-1">Password</label>
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={e => setAuthPassword(e.target.value)}
+                  className="w-full px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                  placeholder="••••••••••••"
+                />
+              </div>
+
+              <button onClick={handleEmailAuth} className="w-full h-14 bg-on-background text-surface font-bold rounded-xl active-scale cursor-pointer">
+                {authMode === 'login' ? 'Log In' : 'Sign Up'}
+              </button>
+            </form>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-[1px] bg-outline-variant/20" />
+              <span className="text-xs text-secondary font-semibold">or phone OTP</span>
+              <div className="flex-1 h-[1px] bg-outline-variant/20" />
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-secondary uppercase px-1">Phone Number</label>
+                <input
+                  type="tel"
+                  value={authPhone}
+                  onChange={e => setAuthPhone(e.target.value)}
+                  className="w-full px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                  placeholder="+2348012345678"
+                />
+              </div>
+
+              {showOTPField && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-secondary uppercase px-1">6-digit OTP Code</label>
+                  <input
+                    type="text"
+                    value={authOTP}
+                    onChange={e => setAuthOTP(e.target.value)}
+                    className="w-full px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold text-center tracking-widest"
+                    placeholder="000000"
+                  />
+                </div>
+              )}
+
+              <button onClick={handlePhoneOTPAuth} className="w-full h-12 bg-primary text-on-primary font-bold rounded-xl active-scale cursor-pointer flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-lg">sms</span>
+                {showOTPField ? 'Verify OTP' : 'Send Phone OTP'}
+              </button>
+            </div>
+          </main>
+
+          <footer className="py-6 text-center">
+            <button onClick={() => setAuthMode(m => m === 'login' ? 'signup' : 'login')} className="text-sm font-bold text-on-background cursor-pointer hover:underline">
+              {authMode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
+            </button>
+          </footer>
+        </div>
+      )}
+
+      {/* ─── 4. Location Selector Screen ─── */}
+      {screen === 'location' && (
+        <div className="min-h-screen p-6 max-w-md mx-auto flex flex-col justify-between">
+          <header className="flex items-center gap-3 mb-6">
+            <button onClick={() => setScreen('home')} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer active-scale">
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+            </button>
+            <h1 className="text-lg font-bold">Select Delivery Location</h1>
+          </header>
+
+          <main className="flex-1 space-y-6">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newAddressInput}
+                onChange={e => setNewAddressInput(e.target.value)}
+                className="flex-1 px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                placeholder="Search or enter address"
+              />
+              <button onClick={addNewAddress} className="w-12 h-12 bg-primary text-on-primary rounded-xl flex items-center justify-center cursor-pointer active-scale shadow-sm">
+                <span className="material-symbols-outlined text-xl">add</span>
+              </button>
+            </div>
+
+            <button onClick={requestGPSLocation} className="w-full py-4 border border-outline-variant/30 rounded-xl flex items-center justify-center gap-2 font-bold cursor-pointer active-scale text-on-surface">
+              <span className="material-symbols-outlined text-primary text-lg">my_location</span>
+              <span>Use Current Location (GPS)</span>
+            </button>
+
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-secondary uppercase px-1">Saved Addresses</h3>
+              <div className="space-y-2">
+                {savedAddresses.map(addr => (
+                  <button
+                    key={addr}
+                    onClick={() => selectAddressAndSave(addr)}
+                    className="w-full p-4 bg-surface-container-low hover:bg-surface-container-high rounded-xl text-left font-semibold text-sm flex items-center justify-between cursor-pointer border border-outline-variant/10 active-scale"
+                  >
+                    <span>{addr}</span>
+                    <span className="material-symbols-outlined text-secondary text-lg">chevron_right</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </main>
+        </div>
+      )}
+
+      {/* ─── 5. Home / Discover Screen ─── */}
+      {screen === 'home' && (
+        <div className="max-w-[1200px] mx-auto pb-24">
+          <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur-md h-16 flex justify-between items-center border-b border-outline-variant/10 px-4 md:px-gutter text-on-surface">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setScreen('profile')} className="w-10 h-10 flex items-center justify-center hover:bg-surface-container-low transition-colors rounded-full cursor-pointer">
+                <span className="material-symbols-outlined text-primary text-xl">menu</span>
+              </button>
+              <div onClick={() => setScreen('location')} className="flex flex-col cursor-pointer hover:opacity-85 select-none">
+                <span className="text-[10px] font-bold text-secondary uppercase">Deliver to</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm font-extrabold text-on-surface">{selectedAddress}</span>
+                  <span className="material-symbols-outlined text-secondary text-base">expand_more</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={startScanner} className="w-10 h-10 flex items-center justify-center hover:bg-surface-container-low transition-colors rounded-full cursor-pointer">
+                <span className="material-symbols-outlined text-primary text-xl">qr_code_scanner</span>
+              </button>
             </div>
           </header>
 
-          {/* Search + Camera */}
-          <div className="search-container" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <div className="search-input-wrapper" style={{ flexGrow: 1 }}>
-              <Search size={18} style={{ color: 'var(--color-text-muted)' }} />
+          <main className="px-4 md:px-gutter mt-4 space-y-8">
+            {/* Search Bar */}
+            <div className="relative w-full h-14 bg-surface-container-low rounded-full flex items-center px-4 border border-outline-variant/10 focus-within:ring-2 focus-within:ring-primary/20">
+              <span className="material-symbols-outlined text-secondary mr-3">search</span>
               <input
-                className="search-input"
-                placeholder="Search products..."
+                className="bg-transparent border-none focus:ring-0 w-full text-base placeholder:text-secondary-fixed-dim outline-none text-on-surface"
+                placeholder="Search stores, products, brands..."
+                type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
-              {searchQuery && <X size={16} onClick={() => setSearchQuery('')} style={{ cursor: 'pointer' }} />}
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="mr-2 cursor-pointer">
+                  <span className="material-symbols-outlined text-secondary text-lg">close</span>
+                </button>
+              )}
+              <span className="material-symbols-outlined text-secondary ml-2 cursor-pointer" onClick={() => setShowQuickOrder(true)}>tune</span>
             </div>
+
+            {deferredPrompt && (
+              <div className="bg-primary-container text-on-primary-container p-4 rounded-2xl flex items-center justify-between border border-primary/20">
+                <div>
+                  <h4 className="font-extrabold text-sm">Install StoreFlow App</h4>
+                  <p className="text-xs text-secondary mt-0.5 font-semibold">Access offline shopping directly from your home screen.</p>
+                </div>
+                <button onClick={triggerInstall} className="px-4 py-2 bg-on-background text-surface text-xs font-bold rounded-xl cursor-pointer">
+                  Install
+                </button>
+              </div>
+            )}
+
+            {/* Banner Carousel */}
+            <section className="relative w-full aspect-[21/9] rounded-2xl overflow-hidden shadow-sm bg-primary-container text-on-primary-container p-6 flex flex-col justify-between">
+              <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent z-10" />
+              <img className="absolute inset-0 w-full h-full object-cover" src="https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=1200&q=80" alt="" />
+              <div className="relative z-20 space-y-1.5 max-w-xs text-white">
+                <span className="bg-primary text-on-primary text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded">Promo</span>
+                <h2 className="text-xl font-extrabold">Nigeria Grocery Deals</h2>
+                <p className="text-xs text-white/80">Get free delivery and up to 25% off FreshMart orders today.</p>
+              </div>
+            </section>
+
+            {/* Categories */}
+            <section>
+              <h3 className="text-sm font-bold text-secondary uppercase px-1 mb-3">Browse Categories</h3>
+              <div className="flex gap-2 overflow-x-auto hide-scrollbar">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-5 py-2.5 rounded-full font-bold text-xs shrink-0 transition-all cursor-pointer ${
+                      selectedCategory === cat ? 'bg-on-background text-surface' : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* Stores List */}
+            <section>
+              <h2 className="text-xl font-extrabold text-on-background mb-4 font-headline-md">Partner Stores</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {searchedStores.map(s => (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      setStoreId(s.id);
+                      loadStoreDetails(s.id);
+                      setScreen('store');
+                    }}
+                    className="p-4 bg-surface-container-low border border-outline-variant/10 hover:border-outline-variant/40 rounded-2xl flex gap-4 cursor-pointer active-scale transition-all"
+                  >
+                    <div className="w-16 h-16 bg-surface rounded-xl overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
+                      {s.logo ? (
+                        <img className="w-full h-full object-cover" src={s.logo} alt="" />
+                      ) : (
+                        <span className="text-3xl">🏪</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-extrabold text-base text-on-surface truncate">{s.business_name}</h4>
+                      <p className="text-xs text-secondary mt-0.5 truncate">{s.address || 'GRA Phase II, Ikeja'}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {s.status === 'active' ? 'Open' : 'Closed'}
+                        </span>
+                        <span className="text-[10px] font-semibold text-secondary">• 15-20 min</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Dynamic Recommended Products */}
+            <section>
+              <h2 className="text-xl font-extrabold text-on-background mb-4 font-headline-md">Recommended For You</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {filteredProducts.slice(0, 4).map(p => (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      setStoreId(p.store_id);
+                      loadStoreDetails(p.store_id);
+                      setSelectedProduct(p);
+                      setScreen('store');
+                    }}
+                    className="bg-surface-container-lowest border border-outline-variant/10 rounded-2xl p-3 cursor-pointer hover:shadow-md transition-all flex flex-col justify-between active-scale"
+                  >
+                    <div className="relative w-full aspect-square bg-surface rounded-xl mb-3 overflow-hidden flex items-center justify-center">
+                      {p.image ? (
+                        <img src={p.image} className="w-full h-full object-contain p-2" alt="" />
+                      ) : (
+                        <span className="text-2xl">📦</span>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-bold text-sm text-on-surface truncate">{p.name}</p>
+                      <p className="font-extrabold text-base text-on-background">₦{p.selling_price.toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </main>
+
+          {/* ⚡ Quick Order FAB */}
+          <div className="fixed bottom-24 right-4 z-40">
             <button
-              id="scan-qr-btn"
-              onClick={startScanner}
-              style={{ width: '46px', height: '46px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-graphite)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-sm)', transition: 'var(--transition-fast)' }}
-              title="Scan QR Code"
+              onClick={() => setShowQuickOrder(true)}
+              className="w-14 h-14 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+              title="Quick Order"
             >
-              <Camera size={20} />
+              <span className="material-symbols-outlined text-2xl font-bold">bolt</span>
             </button>
           </div>
 
-          {/* Category Pills */}
-          <div className="categories-scroll">
-            {categories.map(cat => (
-              <button key={cat} className={`category-pill ${selectedCategory === cat ? 'active' : ''}`} onClick={() => setSelectedCategory(cat)}>
-                {cat}
+          {/* Bottom Navigation */}
+          <nav className="fixed bottom-0 left-0 w-full z-40 flex justify-around items-center px-4 py-3 bg-surface shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] rounded-t-2xl md:hidden border-t border-outline-variant/10 text-on-surface">
+            <button onClick={() => setScreen('home')} className="flex flex-col items-center justify-center text-primary relative after:content-[''] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-primary-container after:rounded-full cursor-pointer">
+              <span className="material-symbols-outlined text-xl">home</span>
+              <span className="text-[10px] font-bold mt-1">Home</span>
+            </button>
+            <button onClick={() => setScreen('home')} className="flex flex-col items-center justify-center text-secondary cursor-pointer">
+              <span className="material-symbols-outlined text-xl">grid_view</span>
+              <span className="text-[10px] font-semibold mt-1">Explore</span>
+            </button>
+            <button onClick={() => { setScreen('history'); loadOrdersHistory(); }} className="flex flex-col items-center justify-center text-secondary cursor-pointer">
+              <span className="material-symbols-outlined text-xl">receipt_long</span>
+              <span className="text-[10px] font-semibold mt-1">Orders</span>
+            </button>
+            <button onClick={() => setIsCartOpen(true)} className="flex flex-col items-center justify-center text-secondary relative cursor-pointer">
+              <span className="material-symbols-outlined text-xl">shopping_cart</span>
+              <span className="text-[10px] font-semibold mt-1">Cart</span>
+              {totalItemsCount > 0 && (
+                <span className="absolute -top-1 -right-2 bg-primary text-on-primary text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{totalItemsCount}</span>
+              )}
+            </button>
+          </nav>
+        </div>
+      )}
+
+      {/* ─── 6. Store Details Page ─── */}
+      {screen === 'store' && (
+        <div className="max-w-[1200px] mx-auto pb-24">
+          <header className="sticky top-0 z-40 bg-surface/85 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-outline-variant/10 px-4 md:px-gutter text-on-surface">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setScreen('home')} className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform cursor-pointer">
+                <span className="material-symbols-outlined text-lg">arrow_back</span>
               </button>
-            ))}
-          </div>
-
-          {/* Error Banner */}
-          {errorText && (
-            <div style={{ margin: '0 20px 16px 20px', padding: '12px 16px', backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderRadius: 'var(--radius-md)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #ffe082' }}>
-              <AlertTriangle size={16} /><span>{errorText}</span>
             </div>
-          )}
+            <div className="flex items-center gap-2">
+              <button className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform cursor-pointer">
+                <span className="material-symbols-outlined text-lg">favorite</span>
+              </button>
+              <button className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform cursor-pointer">
+                <span className="material-symbols-outlined text-lg">share</span>
+              </button>
+            </div>
+          </header>
 
-          {/* Product Grid */}
-          <div className="grid-products">
-            {filteredProducts.map(p => {
-              const qtyInCart = getQty(p.id);
-              return (
-                <div key={p.id} className="product-card" onClick={() => setSelectedProduct(p)}>
-                  <div className="product-image-container">
-                    {p.image ? (
-                      <img src={p.image} className="product-image" alt={p.name} loading="lazy" />
-                    ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', backgroundColor: 'var(--bg-tertiary)', fontWeight: '600' }}>
-                        {p.name.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                    {p.quantity <= 10 && p.quantity > 0 && (
-                      <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: '800' }}>
-                        LOW STOCK
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="product-info">
-                    <span className="product-category">{p.category || 'General'}</span>
-                    <h3 className="product-name">{p.name}</h3>
-                  </div>
-
-                  <div className="product-footer" onClick={e => e.stopPropagation()}>
-                    <span className="product-price">{store?.currency || '₦'}{p.selling_price.toLocaleString()}</span>
-                    {qtyInCart > 0 ? (
-                      <div className="qty-adjuster" style={{ border: 'none' }}>
-                        <button className="qty-btn" onClick={() => addToCart(p, -1)} style={{ width: '28px', height: '28px', backgroundColor: 'var(--bg-tertiary)' }}><Minus size={12} /></button>
-                        <span className="qty-val" style={{ padding: '0 8px', fontSize: '13px' }}>{qtyInCart}</span>
-                        <button className="qty-btn" onClick={() => addToCart(p, 1)} style={{ width: '28px', height: '28px', backgroundColor: 'var(--color-graphite)', color: '#fff' }}><Plus size={12} /></button>
-                      </div>
-                    ) : (
-                      <button className="add-btn" onClick={() => addToCart(p, 1)}><Plus size={16} /></button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {filteredProducts.length === 0 && (
-              <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted)' }}>
-                <div style={{ fontSize: '32px', marginBottom: '8px' }}>🔍</div>
-                <p style={{ fontSize: '14px', fontWeight: '600' }}>No products found.</p>
+          <main className="mt-4 px-4 md:px-gutter">
+            {/* Warning Banner if closed */}
+            {store?.status === 'inactive' && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm flex items-center gap-3">
+                <span className="material-symbols-outlined text-xl shrink-0">warning</span>
+                <span><strong>Closed Alert</strong>: This store is currently closed. You can view the items, but checkout will be disabled.</span>
               </div>
             )}
-          </div>
+
+            {/* Hero */}
+            <section className="mb-6">
+              <div className="relative w-full aspect-[21/9] rounded-xl overflow-hidden shadow-sm bg-surface-container-low">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+                {store?.logo ? (
+                  <img className="w-full h-full object-cover" src={store.logo} alt="" />
+                ) : (
+                  <div className="w-full h-full bg-primary-container flex items-center justify-center text-on-primary-container text-4xl">🏪</div>
+                )}
+                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end z-20">
+                  <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-xs font-semibold shadow-sm">Featured Partner</span>
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-between items-start">
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-on-background font-headline-lg">{store?.business_name}</h1>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center text-primary-fixed-dim">
+                      <span className="material-symbols-outlined text-sm text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                      <span className="text-sm text-on-surface-variant font-semibold ml-1">4.6 (320 ratings)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4 mt-4 text-on-surface-variant text-sm font-medium">
+                <div className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[18px]">schedule</span>
+                  <span>{deliveryType === 'delivery' ? '30-45 min' : '15-20 min'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[18px]">delivery_dining</span>
+                  <span>Free delivery over ₦5,000</span>
+                </div>
+              </div>
+            </section>
+
+            {/* StoreFlow Price Badge */}
+            <section className="mb-8">
+              <div className="bg-surface-container-low rounded-xl p-4 flex items-center gap-4 border border-outline-variant/30">
+                <div className="w-12 h-12 bg-primary-container rounded-lg flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-on-primary-container text-2xl">local_offer</span>
+                </div>
+                <div>
+                  <p className="font-bold text-on-surface">StoreFlow Prices</p>
+                  <p className="text-sm text-secondary mt-0.5">You get lower prices on items in this store 🎉</p>
+                </div>
+              </div>
+            </section>
+
+            {/* Search and Category Chips */}
+            <section className="sticky top-14 z-30 bg-surface/95 backdrop-blur-sm pt-2 pb-4">
+              <div className="relative w-full h-14 bg-surface-container-low rounded-full flex items-center px-4 transition-all focus-within:ring-2 focus-within:ring-primary/20">
+                <span className="material-symbols-outlined text-secondary mr-3">search</span>
+                <input
+                  className="bg-transparent border-none focus:ring-0 w-full text-base placeholder:text-secondary-fixed-dim outline-none text-on-surface"
+                  placeholder="Search in store"
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="mr-2 cursor-pointer">
+                    <span className="material-symbols-outlined text-secondary text-lg">close</span>
+                  </button>
+                )}
+                <span className="material-symbols-outlined text-secondary ml-2 cursor-pointer">tune</span>
+              </div>
+              <div className="flex gap-2 mt-6 overflow-x-auto hide-scrollbar -mx-4 px-4 md:-mx-gutter md:px-gutter">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`whitespace-nowrap px-6 py-2 rounded-full font-semibold text-sm transition-all cursor-pointer ${
+                      selectedCategory === cat
+                        ? 'bg-on-background text-surface'
+                        : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* Product Grid */}
+            <section className="mt-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {filteredProducts.map(p => {
+                  const qtyInCart = getQty(p.id);
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => setSelectedProduct(p)}
+                      className="group relative bg-surface-container-lowest border border-outline-variant/10 rounded-2xl p-3 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="relative w-full aspect-square bg-surface rounded-xl mb-3 overflow-hidden flex items-center justify-center">
+                          {p.image ? (
+                            <img className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300" src={p.image} alt="" />
+                          ) : (
+                            <div className="w-full h-full bg-surface-container-low flex items-center justify-center text-on-surface-variant text-2xl font-bold">
+                              {p.name.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          {p.quantity <= 10 && p.quantity > 0 && (
+                            <div className="absolute top-2 left-2 bg-error text-on-error px-2 py-0.5 rounded text-[10px] font-bold">
+                              LOW STOCK
+                            </div>
+                          )}
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              addToCart(p, 1);
+                            }}
+                            className="absolute bottom-2 right-2 w-8 h-8 bg-primary-container rounded-full flex items-center justify-center text-on-primary-container hover:bg-primary-container/90 active:scale-90 transition-transform cursor-pointer shadow-sm z-10"
+                          >
+                            <span className="material-symbols-outlined text-base">add</span>
+                          </button>
+                        </div>
+                        <div className="space-y-1 px-1">
+                          <p className="font-bold text-sm text-on-surface truncate">{p.name}</p>
+                          <p className="text-xs text-secondary truncate">{p.description || p.category || 'Product'}</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center mt-3 px-1">
+                        <span className="font-extrabold text-base text-on-background">₦{p.selling_price.toLocaleString()}</span>
+                        {qtyInCart > 0 && (
+                          <div className="flex items-center gap-1.5 bg-surface-container-high rounded-full px-2 py-1">
+                            <span className="text-[10px] font-bold text-on-surface-variant">{qtyInCart} in cart</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </main>
 
           {/* Sticky Cart Bar */}
           {totalItemsCount > 0 && (
-            <div className="sticky-cart-bar animate-fade">
-              <button className="cart-bar-btn" onClick={() => setIsCartOpen(true)}>
-                <div className="cart-bar-details">
-                  <span className="cart-badge">{totalItemsCount}</span>
-                  <span>View Cart</span>
+            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-[480px] px-4 animate-fade md:bottom-6">
+              <button
+                onClick={() => setIsCartOpen(true)}
+                className="w-full bg-primary text-on-primary py-4 px-6 rounded-full flex justify-between items-center shadow-lg active:scale-98 hover:bg-primary/95 transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="bg-on-primary text-primary text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold">{totalItemsCount}</span>
+                  <span className="font-semibold text-sm">View Cart</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '16px', fontWeight: '800' }}>{store?.currency || '₦'}{total.toLocaleString()}</span>
-                  <ShoppingBag size={18} />
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm">{store?.currency || '₦'}{total.toLocaleString()}</span>
+                  <span className="material-symbols-outlined text-lg">arrow_forward</span>
                 </div>
               </button>
             </div>
           )}
-        </>
+        </div>
       )}
 
-      {/* ═══ PRODUCT MODAL ═════════════════════════════════════════════════ */}
-      {selectedProduct && (
-        <div className="bottom-sheet-overlay" onClick={() => setSelectedProduct(null)}>
-          <div className="bottom-sheet-content" onClick={e => e.stopPropagation()} style={{ borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0' }}>
-            <div className="sheet-handle"></div>
-            <div className="sheet-header" style={{ borderBottom: 'none' }}>
-              <span className="product-category">{selectedProduct.category}</span>
-              <button onClick={() => setSelectedProduct(null)} style={{ padding: '4px', backgroundColor: 'var(--bg-secondary)', borderRadius: '50%' }}><X size={20} /></button>
+      {/* ─── 7. Order Tracking timeline ─── */}
+      {screen === 'tracking' && (
+        <div className="max-w-[480px] mx-auto py-8 px-4 animate-scale space-y-6">
+          <div className="text-center flex flex-col items-center gap-2">
+            <div className="w-16 h-16 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-2">
+              <span className="material-symbols-outlined text-3xl font-bold">done</span>
             </div>
-            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '0 24px 24px 24px' }}>
-              <div style={{ width: '100%', height: '240px', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                {selectedProduct.image ? <img src={selectedProduct.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={selectedProduct.name} /> : <span style={{ fontSize: '64px' }}>📦</span>}
+            <h1 className="text-2xl font-extrabold text-on-background font-headline-xl">Order Placed! 🎉</h1>
+            <p className="text-sm text-secondary">Your order has been sent to the store.</p>
+          </div>
+
+          <div className="bg-primary text-on-primary rounded-2xl p-5 flex items-center justify-between shadow-sm">
+            <div>
+              <div className="text-[10px] font-bold text-on-primary/60 uppercase tracking-widest">Order Reference</div>
+              <div className="text-2xl font-black mt-0.5 tracking-wider font-headline-xl">#{orderNumber}</div>
+            </div>
+            <button onClick={copyOrderNumber} className="px-4 py-2 rounded-lg bg-white/12 border border-white/10 text-xs font-bold flex items-center gap-2 cursor-pointer hover:bg-white/18 active:scale-95 transition-all">
+              <span className="material-symbols-outlined text-sm">{orderCopied ? 'check' : 'content_copy'}</span>
+              <span>{orderCopied ? 'Copied' : 'Copy'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-on-surface">
+            <div className="p-4 bg-surface-container rounded-2xl flex flex-col items-center text-center gap-1 border border-outline-variant/10">
+              <span className="material-symbols-outlined text-primary text-xl">schedule</span>
+              <div className="font-extrabold text-sm mt-1">{deliveryType === 'delivery' ? '30–45 min' : '15–20 min'}</div>
+              <div className="text-[10px] text-secondary font-semibold">Estimated delivery</div>
+            </div>
+            <div className="p-4 bg-surface-container rounded-2xl flex flex-col items-center text-center gap-1 border border-outline-variant/10">
+              <span className="material-symbols-outlined text-primary text-xl">{deliveryType === 'delivery' ? 'local_shipping' : 'storefront'}</span>
+              <div className="font-extrabold text-sm mt-1 capitalize">{deliveryType}</div>
+              <div className="text-[10px] text-secondary font-semibold">Order type</div>
+            </div>
+          </div>
+
+          <div className="bg-surface-container-low rounded-2xl p-6 border border-outline-variant/20 text-on-surface">
+            <h3 className="text-xs font-extrabold uppercase text-secondary tracking-widest mb-6">Order Progress</h3>
+            <div className="relative border-l-2 border-outline-variant/30 ml-3 pl-6 space-y-8">
+              {[
+                { key: 'Pending', label: 'Order Received', desc: 'The store is reviewing your order details' },
+                { key: 'Preparing', label: 'Preparing Bag', desc: 'The shop staff is scanning and packaging your items' },
+                { key: 'Ready', label: deliveryType === 'delivery' ? 'Out for Delivery' : 'Ready for Pickup', desc: deliveryType === 'delivery' ? 'Courier agent has picked up your order' : 'Visit the counter for pickup' },
+                { key: 'Completed', label: 'Completed', desc: 'Thank you for shopping with StoreFlow!' },
+              ].map((step) => {
+                const completed = isStatusAtLeast(orderStatus, step.key);
+                const active = orderStatus === step.key;
+                return (
+                  <div key={step.key} className="relative">
+                    <div className={`absolute -left-[31px] top-0.5 w-4.5 h-4.5 rounded-full border-4 transition-all duration-300 ${
+                      active ? 'bg-primary border-surface-container-low scale-110 shadow' : completed ? 'bg-primary border-primary' : 'bg-surface-container-low border-outline-variant/40'
+                    }`} />
+                    <div className="space-y-1">
+                      <div className={`text-sm font-extrabold ${active ? 'text-primary' : completed ? 'text-on-surface' : 'text-secondary'}`}>{step.label}</div>
+                      <div className="text-xs text-secondary leading-relaxed">{step.desc}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <button onClick={() => setScreen('home')} className="w-full py-4 bg-surface-container-low border border-outline-variant/30 text-on-surface font-bold rounded-full cursor-pointer hover:bg-surface-container-high transition-colors flex items-center justify-center gap-2">
+            <span className="material-symbols-outlined text-lg">home</span>
+            <span>Back to Home</span>
+          </button>
+        </div>
+      )}
+
+      {/* ─── 8. Profile Hub Screen ─── */}
+      {screen === 'profile' && (
+        <div className="max-w-md mx-auto p-6 flex flex-col justify-between min-h-screen text-on-surface">
+          <header className="flex items-center gap-3 mb-6">
+            <button onClick={() => setScreen('home')} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer active-scale">
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+            </button>
+            <h1 className="text-lg font-bold">Profile Hub</h1>
+          </header>
+
+          <main className="flex-1 space-y-6">
+            {/* User credentials */}
+            <div className="p-4 bg-surface-container-low rounded-2xl flex items-center gap-4 border border-outline-variant/20">
+              <div className="w-14 h-14 bg-primary-container rounded-full flex items-center justify-center font-bold text-on-primary-container text-xl uppercase shadow-sm">
+                {profileName ? profileName.slice(0, 2) : 'G'}
               </div>
               <div>
-                <h2 style={{ fontSize: '20px', fontWeight: '800', lineHeight: '1.3' }}>{selectedProduct.name}</h2>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
-                  <span style={{ fontSize: '22px', fontWeight: '800', color: 'var(--color-graphite)' }}>
-                    {store?.currency || '₦'}{selectedProduct.selling_price.toLocaleString()}
-                  </span>
-                  <span style={{ fontSize: '12px', fontWeight: '600', color: selectedProduct.quantity > 0 ? 'var(--color-success)' : 'var(--color-error)' }}>
+                <h4 className="font-extrabold text-base">{profileName || 'Guest User'}</h4>
+                <p className="text-xs text-secondary">{profileEmail || profilePhone || 'Shopping anonymously'}</p>
+              </div>
+            </div>
+
+            {/* Form actions */}
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-secondary uppercase px-1">Display Name</label>
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={e => setProfileName(e.target.value)}
+                  className="w-full px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                />
+              </div>
+
+              {/* Dark mode toggler */}
+              <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-xl border border-outline-variant/10">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-lg">dark_mode</span>
+                  <span className="text-sm font-semibold">Dark Mode</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={darkMode}
+                  onChange={e => {
+                    setDarkMode(e.target.checked);
+                    localStorage.setItem('storeflow_dark_mode', String(e.target.checked));
+                  }}
+                  className="rounded text-primary focus:ring-primary h-5 w-5"
+                />
+              </div>
+
+              {/* Saved list options */}
+              <button onClick={() => { setScreen('history'); loadOrdersHistory(); }} className="w-full p-4 bg-surface-container-low hover:bg-surface-container-high rounded-xl text-left font-semibold text-sm flex items-center justify-between cursor-pointer border border-outline-variant/10 active-scale">
+                <span className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-lg">receipt_long</span>
+                  <span>My Orders History</span>
+                </span>
+                <span className="material-symbols-outlined text-secondary text-lg">chevron_right</span>
+              </button>
+            </div>
+          </main>
+
+          <footer className="py-6">
+            {currentUser ? (
+              <button onClick={handleLogout} className="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl active-scale cursor-pointer">
+                Log Out
+              </button>
+            ) : (
+              <button onClick={() => setScreen('login')} className="w-full h-14 bg-on-background text-surface font-bold rounded-xl active-scale cursor-pointer">
+                Log In
+              </button>
+            )}
+          </footer>
+        </div>
+      )}
+
+      {/* ─── 9. Orders History Screen ─── */}
+      {screen === 'history' && (
+        <div className="max-w-md mx-auto p-6 flex flex-col justify-between min-h-screen text-on-surface">
+          <header className="flex items-center gap-3 mb-6">
+            <button onClick={() => setScreen('home')} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer active-scale">
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+            </button>
+            <h1 className="text-lg font-bold">Orders History</h1>
+          </header>
+
+          <main className="flex-1 space-y-4 overflow-y-auto">
+            {ordersHistory.length === 0 ? (
+              <div className="text-center py-12 text-secondary flex flex-col items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-4xl text-outline-variant">receipt_long</span>
+                <p className="text-sm font-semibold">No orders recorded yet.</p>
+              </div>
+            ) : (
+              ordersHistory.map(o => (
+                <div key={o.id} className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/10 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-extrabold text-sm text-on-surface">Order #{o.order_number}</span>
+                    <span className="text-xs font-semibold text-secondary">{new Date(o.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-secondary capitalize font-bold">Status: {o.status}</span>
+                    <span className="font-bold text-on-background">₦{o.total.toLocaleString()}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setOrderId(o.id);
+                        setOrderNumber(o.order_number);
+                        setOrderStatus(o.status);
+                        setScreen('tracking');
+                      }}
+                      className="flex-1 py-2 bg-primary-container text-on-primary-container text-xs font-bold rounded-lg cursor-pointer hover:opacity-90 active-scale"
+                    >
+                      Track Progress
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </main>
+        </div>
+      )}
+
+      {/* ─── Product Details Modal Sheet ─── */}
+      {selectedProduct && screen === 'store' && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setSelectedProduct(null)}>
+          <div className="bg-surface w-full max-w-[480px] rounded-t-3xl overflow-hidden p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-1 bg-outline-variant/30 rounded-full mx-auto mb-5"></div>
+            <div className="flex justify-between items-start mb-4">
+              <span className="text-xs font-bold text-secondary uppercase tracking-wider">{selectedProduct.category || 'Product Details'}</span>
+              <button onClick={() => setSelectedProduct(null)} className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer hover:bg-surface-container-high transition-colors">
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="w-full h-56 bg-surface-container-low rounded-2xl flex items-center justify-center overflow-hidden">
+                {selectedProduct.image ? (
+                  <img src={selectedProduct.image} className="w-full h-full object-contain p-4" alt="" />
+                ) : (
+                  <span className="text-6xl">📦</span>
+                )}
+              </div>
+              <div>
+                <h2 className="text-xl font-extrabold text-on-background font-headline-lg">{selectedProduct.name}</h2>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-xl font-extrabold text-primary">{store?.currency || '₦'}{selectedProduct.selling_price.toLocaleString()}</span>
+                  <span className={`text-xs font-semibold ${selectedProduct.quantity > 0 ? 'text-primary' : 'text-error'}`}>
                     {selectedProduct.quantity > 0 ? `In Stock (${selectedProduct.quantity} left)` : 'Out of Stock'}
                   </span>
                 </div>
               </div>
               {selectedProduct.description && (
                 <div>
-                  <h4 style={{ fontSize: '11px', fontWeight: '700', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Description</h4>
-                  <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.6' }}>{selectedProduct.description}</p>
+                  <h4 className="text-xs font-bold text-secondary uppercase mb-1">Description</h4>
+                  <p className="text-sm text-secondary-fixed-dim leading-relaxed">{selectedProduct.description}</p>
                 </div>
               )}
             </div>
-            <div className="sheet-footer" style={{ borderTop: 'none' }}>
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                {getQty(selectedProduct.id) > 0 ? (
-                  <div className="qty-adjuster" style={{ flexGrow: 1, justifyContent: 'space-between', padding: '4px' }}>
-                    <button className="qty-btn" onClick={() => addToCart(selectedProduct, -1)} style={{ width: '48px', height: '48px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '50%' }}><Minus size={16} /></button>
-                    <span className="qty-val" style={{ fontSize: '16px' }}>{getQty(selectedProduct.id)}</span>
-                    <button className="qty-btn" onClick={() => addToCart(selectedProduct, 1)} style={{ width: '48px', height: '48px', backgroundColor: 'var(--color-graphite)', color: '#fff', borderRadius: '50%' }}><Plus size={16} /></button>
-                  </div>
-                ) : (
-                  <button className="btn-primary" style={{ flexGrow: 1 }} disabled={selectedProduct.quantity <= 0} onClick={() => { addToCart(selectedProduct, 1); setSelectedProduct(null); }}>
-                    <span>Add to Cart</span><ChevronRight size={18} />
+
+            <div className="flex gap-4">
+              {getQty(selectedProduct.id) > 0 ? (
+                <div className="flex-1 flex justify-between items-center bg-surface-container-low rounded-full p-1.5 border border-outline-variant/20">
+                  <button onClick={() => addToCart(selectedProduct, -1)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
+                    <span className="material-symbols-outlined text-lg">remove</span>
                   </button>
-                )}
-              </div>
+                  <span className="font-extrabold text-base text-on-surface">{getQty(selectedProduct.id)}</span>
+                  <button onClick={() => addToCart(selectedProduct, 1)} className="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
+                    <span className="material-symbols-outlined text-lg">add</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  disabled={selectedProduct.quantity <= 0 || store?.status === 'inactive'}
+                  onClick={() => { addToCart(selectedProduct, 1); setSelectedProduct(null); }}
+                  className="flex-1 bg-primary text-on-primary py-4 rounded-full font-bold shadow-md hover:bg-primary/95 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Add to Cart
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ═══ CART DRAWER ═══════════════════════════════════════════════════ */}
-      {isCartOpen && checkoutStep === 'shopping' && (
-        <div className="bottom-sheet-overlay" onClick={() => setIsCartOpen(false)}>
-          <div className="bottom-sheet-content" onClick={e => e.stopPropagation()}>
-            <div className="sheet-handle"></div>
-            <div className="sheet-header">
-              <span className="sheet-title">My Cart ({totalItemsCount})</span>
-              <button onClick={() => setIsCartOpen(false)} style={{ padding: '4px', backgroundColor: 'var(--bg-secondary)', borderRadius: '50%' }}><X size={20} /></button>
-            </div>
-            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {cart.map(item => (
-                <div key={item.product.id} style={{ display: 'flex', gap: '12px', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
-                  <div style={{ width: '56px', height: '56px', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>
-                    {item.product.image ? <img src={item.product.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : '📦'}
+      {/* ─── Cart Drawer Sheet ─── */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setIsCartOpen(false)}>
+          <div className="bg-surface w-full max-w-[480px] rounded-t-3xl overflow-hidden p-6 animate-slide-up flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-1 bg-outline-variant/30 rounded-full mx-auto mb-5"></div>
+            
+            {checkoutStep === 'shopping' && (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-lg font-extrabold text-on-background font-headline-lg">My Cart ({totalItemsCount})</span>
+                  <button onClick={() => setIsCartOpen(false)} className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer hover:bg-surface-container-high transition-colors">
+                    <span className="material-symbols-outlined text-lg">close</span>
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1 py-2">
+                  {cart.map(item => (
+                    <div key={item.product.id} className="flex gap-4 items-center pb-4 border-b border-outline-variant/10">
+                      <div className="w-14 h-14 bg-surface-container-low rounded-xl flex items-center justify-center overflow-hidden shrink-0">
+                        {item.product.image ? (
+                          <img src={item.product.image} className="w-full h-full object-contain p-1" alt="" />
+                        ) : (
+                          <span className="text-2xl">📦</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-sm text-on-surface truncate">{item.product.name}</h4>
+                        <span className="text-xs text-secondary mt-0.5 block">₦{item.product.selling_price} each</span>
+                      </div>
+                      <div className="flex items-center gap-3 bg-surface-container-low rounded-full p-1 border border-outline-variant/20 shrink-0">
+                        <button onClick={() => addToCart(item.product, -1)} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
+                          <span className="material-symbols-outlined text-sm">remove</span>
+                        </button>
+                        <span className="font-bold text-sm text-on-surface">{item.quantity}</span>
+                        <button onClick={() => addToCart(item.product, 1)} className="w-8 h-8 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
+                          <span className="material-symbols-outlined text-sm">add</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-outline-variant/20 pt-4 mt-4 text-on-surface">
+                  <div className="space-y-2 mb-5">
+                    <div className="flex justify-between text-xs text-secondary">
+                      <span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-secondary">
+                      <span>Delivery Fee</span><span>{deliveryFee === 0 ? 'FREE' : `₦${deliveryFee}`}</span>
+                    </div>
+                    <div className="h-[1px] bg-outline-variant/10 my-2"></div>
+                    <div className="flex justify-between text-base font-extrabold text-on-background">
+                      <span>Total</span><span>₦{total.toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, gap: '2px' }}>
-                    <h4 style={{ fontSize: '13px', fontWeight: '700' }}>{item.product.name}</h4>
-                    <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{store?.currency || '₦'}{item.product.selling_price} each</span>
+                  <button
+                    disabled={cart.length === 0 || store?.status === 'inactive'}
+                    onClick={() => setCheckoutStep('checkout')}
+                    className="w-full bg-primary text-on-primary py-4 rounded-full font-bold shadow-md hover:bg-primary/95 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    Continue to Checkout
+                  </button>
+                </div>
+              </>
+            )}
+
+            {checkoutStep === 'checkout' && (
+              <div className="space-y-5 overflow-y-auto max-h-[75vh] py-2 text-on-surface">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-extrabold text-lg font-headline-lg">Checkout Delivery Details</h3>
+                  <button onClick={() => setCheckoutStep('shopping')} className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer">
+                    <span className="material-symbols-outlined text-base">arrow_back</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-secondary uppercase tracking-wider">Order Option</label>
+                  <div className="grid grid-cols-2 gap-2 bg-surface-container-low rounded-full p-1 border border-outline-variant/20">
+                    <button onClick={() => setDeliveryType('pickup')} className={`py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${deliveryType === 'pickup' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant'}`}>
+                      Store Pickup
+                    </button>
+                    <button onClick={() => setDeliveryType('delivery')} className={`py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${deliveryType === 'delivery' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant'}`}>
+                      Home Delivery
+                    </button>
                   </div>
-                  <div className="qty-adjuster">
-                    <button className="qty-btn" style={{ width: '28px', height: '28px' }} onClick={() => addToCart(item.product, -1)}><Minus size={10} /></button>
-                    <span className="qty-val" style={{ padding: '0 6px', fontSize: '12px' }}>{item.quantity}</span>
-                    <button className="qty-btn" style={{ width: '28px', height: '28px' }} onClick={() => addToCart(item.product, 1)}><Plus size={10} /></button>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-secondary uppercase px-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                    placeholder="Enter full name"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-secondary uppercase px-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={e => setCustomerPhone(e.target.value)}
+                    className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                    placeholder="e.g. 08123456789"
+                  />
+                </div>
+
+                {deliveryType === 'delivery' && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-secondary uppercase px-1">Delivery Address</label>
+                    <input
+                      type="text"
+                      value={deliveryAddress}
+                      onChange={e => setDeliveryAddress(e.target.value)}
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                      placeholder="Enter street address"
+                    />
                   </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-secondary uppercase px-1">Special Instructions</label>
+                  <input
+                    type="text"
+                    value={specialInstructions}
+                    onChange={e => setSpecialInstructions(e.target.value)}
+                    className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                    placeholder="e.g. Leave with guard"
+                  />
                 </div>
-              ))}
-              {cart.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted)' }}>
-                  <div style={{ fontSize: '40px', marginBottom: '8px' }}>🛒</div>
-                  <p style={{ fontSize: '14px', fontWeight: '600' }}>Your cart is empty.</p>
-                </div>
-              )}
-            </div>
-            <div className="sheet-footer">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-muted)' }}>
-                  <span>Subtotal</span><span>{store?.currency || '₦'}{subtotal.toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-muted)' }}>
-                  <span>Delivery Fee</span><span>{deliveryFee === 0 ? 'FREE' : `${store?.currency || '₦'}${deliveryFee}`}</span>
-                </div>
-                <div style={{ height: '1px', backgroundColor: 'var(--color-border)' }}></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: '800' }}>
-                  <span>Total</span><span>{store?.currency || '₦'}{total.toLocaleString()}</span>
-                </div>
+
+                <button
+                  disabled={!customerName || !customerPhone || (deliveryType === 'delivery' && !deliveryAddress)}
+                  onClick={() => setCheckoutStep('payment')}
+                  className="w-full bg-primary text-on-primary py-4 rounded-full font-bold shadow-md hover:bg-primary/95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Continue to Payment
+                </button>
               </div>
-              <button className="btn-primary" disabled={cart.length === 0} onClick={() => { setIsCartOpen(false); setCheckoutStep('checkout'); }}>
-                <span>Continue to Checkout</span><ChevronRight size={18} />
+            )}
+
+            {checkoutStep === 'payment' && (
+              <div className="space-y-5 text-on-surface">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-extrabold text-lg font-headline-lg">Select Payment Method</h3>
+                  <button onClick={() => setCheckoutStep('checkout')} className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer">
+                    <span className="material-symbols-outlined text-base">arrow_back</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { key: 'opay', icon: 'phone_android', label: 'OPay Wallet', sub: 'Instant transfer via OPay (08123456789)' },
+                    { key: 'transfer', icon: 'credit_card', label: 'Bank Transfer', sub: 'Access Bank: 1234567890 (StoreFlow)' },
+                    { key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash' }
+                  ].map(opt => (
+                    <div
+                      key={opt.key}
+                      onClick={() => setPaymentMethod(opt.key as any)}
+                      className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === opt.key ? 'border-primary bg-primary/5' : 'border-outline-variant/30'}`}
+                    >
+                      <span className="material-symbols-outlined text-2xl text-primary">{opt.icon}</span>
+                      <div className="flex-1">
+                        <div className="text-sm font-extrabold">{opt.label}</div>
+                        <div className="text-xs text-secondary mt-0.5">{opt.sub}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={submitOrder}
+                  className="w-full bg-primary text-on-primary py-4 rounded-full font-bold shadow-md hover:bg-primary/95 transition-all cursor-pointer"
+                >
+                  Place Order (₦{total.toLocaleString()})
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── ⚡ Quick Order Overlay Sheet ─── */}
+      {showQuickOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowQuickOrder(false)}>
+          <div className="bg-surface w-full max-w-[480px] rounded-t-3xl overflow-hidden p-6 animate-slide-up space-y-6" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-1 bg-outline-variant/30 rounded-full mx-auto mb-2"></div>
+            <div className="flex justify-between items-center">
+              <h3 className="font-extrabold text-lg flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">bolt</span>
+                <span>⚡ Quick Order</span>
+              </h3>
+              <button onClick={() => setShowQuickOrder(false)} className="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer">
+                <span className="material-symbols-outlined text-base">close</span>
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* ═══ GUEST CHECKOUT ════════════════════════════════════════════════ */}
-      {checkoutStep === 'checkout' && (
-        <div className="animate-fade" style={{ padding: '24px 20px', paddingBottom: '40px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-            <button onClick={() => setCheckoutStep('shopping')} style={{ padding: '8px', backgroundColor: 'var(--bg-secondary)', borderRadius: '50%' }}><ArrowLeft size={18} /></button>
-            <h1 style={{ fontSize: '18px', fontWeight: '800' }}>Guest Checkout</h1>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group">
-              <label className="form-label">Order Option</label>
-              <div className="toggle-group">
-                <button className={`toggle-option ${deliveryType === 'pickup' ? 'active' : ''}`} onClick={() => setDeliveryType('pickup')}>Store Pickup</button>
-                <button className={`toggle-option ${deliveryType === 'delivery' ? 'active' : ''}`} onClick={() => setDeliveryType('delivery')}>Home Delivery</button>
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Full Name</label>
-              <input className="form-input" placeholder="Enter your name" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Phone Number</label>
-              <input className="form-input" type="tel" placeholder="e.g. 08123456789" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
-            </div>
-            {deliveryType === 'delivery' && (
-              <div className="form-group animate-slide-down">
-                <label className="form-label">Delivery Address</label>
-                <textarea className="form-input" rows={3} placeholder="Enter full street address" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} style={{ resize: 'none' }} />
-              </div>
-            )}
-            <div className="form-group">
-              <label className="form-label">Special Instructions (Optional)</label>
-              <textarea className="form-input" rows={2} placeholder="e.g. Leave at door" value={specialInstructions} onChange={e => setSpecialInstructions(e.target.value)} style={{ resize: 'none' }} />
-            </div>
-            <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '16px', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-muted)' }}><span>Subtotal</span><span>{store?.currency || '₦'}{subtotal.toLocaleString()}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-muted)' }}><span>Delivery Fee</span><span>{deliveryFee === 0 ? 'FREE' : `${store?.currency || '₦'}${deliveryFee}`}</span></div>
-              <div style={{ height: '1px', backgroundColor: 'var(--color-border)' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: '800' }}><span>Order Total</span><span>{store?.currency || '₦'}{total.toLocaleString()}</span></div>
-            </div>
-            <button className="btn-primary" disabled={!customerName || !customerPhone || (deliveryType === 'delivery' && !deliveryAddress)} onClick={() => setCheckoutStep('payment')}>
-              <span>Continue to Payment</span><ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ PAYMENT SCREEN ════════════════════════════════════════════════ */}
-      {checkoutStep === 'payment' && (
-        <div className="animate-fade" style={{ padding: '24px 20px', paddingBottom: '40px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-            <button onClick={() => setCheckoutStep('checkout')} style={{ padding: '8px', backgroundColor: 'var(--bg-secondary)', borderRadius: '50%' }}><ArrowLeft size={18} /></button>
-            <h1 style={{ fontSize: '18px', fontWeight: '800' }}>Select Payment</h1>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* OPay */}
-            {[
-              { key: 'opay', icon: <Smartphone size={24} />, label: 'OPay Wallet', sub: 'Fast online transaction via OPay', detail: <span>Send to: <strong style={{ color: 'var(--color-text)' }}>08123456789</strong> (OPay – StoreFlow Mart)</span> },
-              { key: 'transfer', icon: <CreditCard size={24} />, label: 'Bank Transfer', sub: 'Transfer details will be provided', detail: <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}><span>Bank: <strong style={{ color: 'var(--color-text)' }}>Access Bank</strong></span><span>Account: <strong style={{ color: 'var(--color-text)' }}>1234567890</strong></span><span>Name: <strong style={{ color: 'var(--color-text)' }}>StoreFlow Mart Ltd</strong></span></div> },
-              { key: 'cash', icon: <ShoppingBag size={24} />, label: deliveryType === 'delivery' ? 'Cash on Delivery' : 'Cash on Pickup', sub: 'Pay at the counter or to the rider', detail: null },
-            ].map(opt => (
-              <div key={opt.key} style={{ padding: '16px', borderRadius: 'var(--radius-md)', border: `2px solid ${paymentMethod === opt.key ? 'var(--color-graphite)' : 'var(--color-border)'}`, display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer', backgroundColor: paymentMethod === opt.key ? 'var(--color-graphite-ultra-light)' : 'transparent' }} onClick={() => setPaymentMethod(opt.key as any)}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ color: 'var(--color-text)' }}>{opt.icon}</span>
-                  <div style={{ flexGrow: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '700' }}>{opt.label}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{opt.sub}</div>
-                  </div>
-                  <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid var(--color-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px' }}>
-                    {paymentMethod === opt.key && <div style={{ width: '100%', height: '100%', backgroundColor: 'var(--color-graphite)', borderRadius: '50%' }}></div>}
-                  </div>
-                </div>
-                {paymentMethod === opt.key && opt.detail && (
-                  <div className="animate-slide-down" style={{ padding: '12px', backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                    {opt.detail}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '16px', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Recipient</span><span style={{ fontWeight: '600', color: 'var(--color-text)' }}>{customerName}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Delivery Type</span><span style={{ textTransform: 'capitalize', fontWeight: '600', color: 'var(--color-text)' }}>{deliveryType}</span></div>
-              <div style={{ height: '1px', backgroundColor: 'var(--color-border)', margin: '4px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: '800', color: 'var(--color-text)' }}><span>Amount to Pay</span><span>{store?.currency || '₦'}{total.toLocaleString()}</span></div>
-            </div>
-
-            <button className="btn-primary" onClick={submitOrder}>
-              <Check size={18} /><span>Confirm Order</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ ORDER SUCCESS & TRACKING ═══════════════════════════════════════ */}
-      {checkoutStep === 'tracking' && (
-        <div className="animate-scale" style={{ padding: '32px 20px', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '48px' }}>
-          
-          {/* Success Badge */}
-          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
-            <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', marginBottom: '4px' }}>✓</div>
-            <h1 style={{ fontSize: '22px', fontWeight: '800' }}>Order Placed! 🎉</h1>
-            <p style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Your order has been sent to {store?.business_name}.</p>
-          </div>
-
-          {/* Order Number Card */}
-          <div style={{ backgroundColor: 'var(--color-graphite)', borderRadius: 'var(--radius-lg)', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: '600', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Order Reference</div>
-              <div style={{ fontSize: '22px', fontWeight: '900', color: '#fff', letterSpacing: '1px' }}>#{orderNumber}</div>
-            </div>
-            <button onClick={copyOrderNumber} style={{ padding: '10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '600' }}>
-              {orderCopied ? <Check size={16} /> : <Copy size={16} />}
-              {orderCopied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-
-          {/* Estimated Time */}
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{ flex: 1, padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center', textAlign: 'center' }}>
-              <Clock size={20} style={{ color: 'var(--color-graphite)' }} />
-              <div style={{ fontSize: '13px', fontWeight: '800' }}>{deliveryType === 'delivery' ? '30–45 min' : '15–20 min'}</div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Estimated time</div>
-            </div>
-            <div style={{ flex: 1, padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center', textAlign: 'center' }}>
-              <div style={{ fontSize: '20px' }}>{deliveryType === 'delivery' ? '🛵' : '🏪'}</div>
-              <div style={{ fontSize: '13px', fontWeight: '800', textTransform: 'capitalize' }}>{deliveryType}</div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Order type</div>
-            </div>
-          </div>
-
-          {/* Tracking Timeline */}
-          <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '24px' }}>
-            <h3 style={{ fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '20px', letterSpacing: '0.06em' }}>Order Progress</h3>
-            <div className="tracking-timeline">
-              {[
-                { key: 'Pending', label: 'Order Received', desc: 'We have received your order request' },
-                { key: 'Preparing', label: 'Preparing', desc: 'The store team is packaging your items' },
-                { key: 'Ready', label: deliveryType === 'delivery' ? 'Out for Delivery' : 'Ready for Pickup', desc: deliveryType === 'delivery' ? 'Our delivery agent is on the way' : 'Your bag is ready at the pickup desk' },
-                { key: 'Completed', label: 'Completed', desc: 'Thank you for shopping with StoreFlow!' },
-              ].map(step => (
-                <div key={step.key} className={`tracking-step ${isStatusAtLeast(orderStatus, step.key) ? 'completed' : ''} ${orderStatus === step.key ? 'active' : ''}`}>
-                  <div className="tracking-node"></div>
-                  <span className="tracking-label">{step.label}</span>
-                  <span className="tracking-time">{step.desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Store Contact */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {store?.address && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)' }}>
-                <span style={{ color: 'var(--color-text-muted)' }}>Store Location</span>
-                <span style={{ fontWeight: '600' }}>{store.address}</span>
-              </div>
-            )}
-            {store?.phone && (
-              <a href={`tel:${store.phone}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', border: '1.5px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: '13px', fontWeight: '700', textDecoration: 'none', color: 'var(--color-text)' }}>
-                <Phone size={16} /><span>Call Store — {store.phone}</span>
-              </a>
-            )}
-          </div>
-
-          {/* Install Prompt */}
-          {showInstallPrompt && (
-            <div className="install-card animate-slide-up">
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
-                <div style={{ fontSize: '36px', lineHeight: 1 }}>🚀</div>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px' }}>Enjoyed shopping?</h3>
-                  <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: '1.5' }}>Install StoreFlow for a faster experience.</p>
-                </div>
-              </div>
-              <div className="install-features">
-                {['Faster checkout', 'Reward points', 'Saved orders', 'Member discounts', 'Order history'].map(f => (
-                  <div key={f} className="install-feature-item">
-                    <Star size={12} style={{ color: '#f59e0b', fill: '#f59e0b' }} />
-                    <span>{f}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-                <button className="toggle-option" style={{ border: '1px solid var(--color-border)', fontSize: '12px' }} onClick={() => setShowInstallPrompt(false)}>
-                  Maybe Later
-                </button>
-                <button className="btn-primary" style={{ flexGrow: 1, padding: '10px' }} onClick={triggerInstall}>
-                  <Smartphone size={16} /><span>Install StoreFlow</span>
+            <div className="space-y-4">
+              {/* Vocal search */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={quickOrderInput}
+                  onChange={e => { setQuickOrderInput(e.target.value); setSearchQuery(e.target.value); }}
+                  placeholder="Voice search or barcode scan..."
+                  className="flex-1 px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                />
+                <button
+                  onClick={handleVoiceSearch}
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center cursor-pointer transition-colors active-scale ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-primary-container text-on-primary-container'}`}
+                >
+                  <span className="material-symbols-outlined text-xl">{isListening ? 'mic' : 'mic_none'}</span>
                 </button>
               </div>
-            </div>
-          )}
 
-          {/* Order Again */}
-          <button className="btn-primary" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--color-text)', border: '1.5px solid var(--color-border)', boxShadow: 'none' }}
-            onClick={() => { setCheckoutStep('shopping'); setOrderId(null); setCart([]); }}>
-            <RefreshCw size={16} /><span>Order Again</span>
-          </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={startScanner} className="p-4 border border-outline-variant/30 rounded-2xl flex flex-col items-center gap-1.5 cursor-pointer active-scale">
+                  <span className="material-symbols-outlined text-primary text-2xl">qr_code_scanner</span>
+                  <span className="text-xs font-bold">Scan Barcode</span>
+                </button>
+                <button
+                  onClick={() => {
+                    const firstStore = allStores[0];
+                    if (firstStore) {
+                      setStoreId(firstStore.id);
+                      loadStoreDetails(firstStore.id);
+                      setScreen('store');
+                      setShowQuickOrder(false);
+                    }
+                  }}
+                  className="p-4 border border-outline-variant/30 rounded-2xl flex flex-col items-center gap-1.5 cursor-pointer active-scale"
+                >
+                  <span className="material-symbols-outlined text-primary text-2xl">history</span>
+                  <span className="text-xs font-bold">Repeat Order</span>
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-bold text-secondary uppercase tracking-widest px-1">AI Smart Suggestions</h4>
+                <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl space-y-2">
+                  <p className="text-xs font-bold text-primary">Cheaper Store Found!</p>
+                  <p className="text-xs text-secondary">Indomie Chicken is 15% cheaper at FreshMart. Switch to save ₦120.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ═══ QR SCANNER (in-store) ══════════════════════════════════════════ */}
+      {/* QR Scanner Modal */}
       {showScanner && renderScanner()}
+
     </div>
   );
 }
