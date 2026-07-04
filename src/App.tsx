@@ -281,11 +281,16 @@ function App() {
     setErrorText(null);
     try {
       console.log(`[StoreFlow QR] Executing database query for store ID: "${sid}"...`);
-      const { data: storeData, error: storeErr } = await supabase
-        .from('stores')
-        .select('*')
-        .eq('id', sid)
-        .maybeSingle();
+      
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sid);
+      let query = supabase.from('stores').select('*');
+      if (isUuid) {
+        query = query.or(`id.eq.${sid},store_id.eq.${sid}`);
+      } else {
+        query = query.eq('store_id', sid);
+      }
+      
+      const { data: storeData, error: storeErr } = await query.maybeSingle();
 
       if (storeErr) {
         console.error(`[StoreFlow QR] Database query error for store ID: "${sid}":`, storeErr);
@@ -296,15 +301,16 @@ function App() {
 
       if (storeData) {
         setStore(storeData);
-        console.log(`[StoreFlow QR] Querying active products for store ID: "${sid}"...`);
+        const resolvedStoreUuid = storeData.id;
+        console.log(`[StoreFlow QR] Querying active products for store UUID: "${resolvedStoreUuid}"...`);
         const { data: prodData, error: prodErr } = await supabase
           .from('products')
           .select('*')
-          .eq('store_id', sid)
+          .eq('store_id', resolvedStoreUuid)
           .eq('status', 'active');
 
         if (prodErr) {
-          console.error(`[StoreFlow QR] Error querying products for store ID: "${sid}":`, prodErr);
+          console.error(`[StoreFlow QR] Error querying products for store UUID: "${resolvedStoreUuid}":`, prodErr);
           throw prodErr;
         }
 
@@ -313,14 +319,14 @@ function App() {
         setProducts(prods);
         localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));
 
-        console.log(`[StoreFlow QR] Querying categories for store ID: "${sid}"...`);
+        console.log(`[StoreFlow QR] Querying categories for store UUID: "${resolvedStoreUuid}"...`);
         const { data: catData, error: catErr } = await supabase
           .from('categories')
           .select('name')
-          .eq('store_id', sid);
+          .eq('store_id', resolvedStoreUuid);
 
         if (catErr) {
-          console.warn(`[StoreFlow QR] Optional categories fetch error for store ID: "${sid}":`, catErr);
+          console.warn(`[StoreFlow QR] Optional categories fetch error for store UUID: "${resolvedStoreUuid}":`, catErr);
         }
 
         let cats = ['All'];
