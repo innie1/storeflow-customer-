@@ -11,7 +11,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       // Serve .well-known files without extension check
-      includeAssets: ['favicon.svg', 'icons.svg', '.well-known/**'],
+      includeAssets: ['logo.jpg', 'favicon.svg', 'icons.svg', '.well-known/**'],
       manifest: {
         name: 'StoreFlow Customer',
         short_name: 'StoreFlow',
@@ -25,10 +25,16 @@ export default defineConfig({
         categories: ['shopping'],
         icons: [
           {
-            src: 'favicon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any maskable'
+            src: 'logo.jpg',
+            sizes: '512x512',
+            type: 'image/jpeg',
+            purpose: 'any'
+          },
+          {
+            src: 'logo.jpg',
+            sizes: '512x512',
+            type: 'image/jpeg',
+            purpose: 'maskable'
           }
         ],
         shortcuts: [
@@ -37,7 +43,7 @@ export default defineConfig({
             short_name: 'Scan',
             description: 'Open camera to scan a store QR code',
             url: '/?action=scan',
-            icons: [{ src: 'favicon.svg', sizes: 'any' }]
+            icons: [{ src: 'logo.jpg', sizes: '512x512', type: 'image/jpeg' }]
           }
         ]
       },
