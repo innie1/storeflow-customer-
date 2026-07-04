@@ -853,10 +853,8 @@ function App() {
       {screen === 'splash' && (
         <main className="bg-on-background text-surface min-h-screen flex flex-col justify-between items-center py-20 px-10">
           <div className="flex-1 flex flex-col items-center justify-center text-center">
-            <div className="mb-6 flex items-center justify-center w-24 h-24 bg-surface rounded-[28%] rotate-12 shadow-xl animate-bounce">
-              <span className="material-symbols-outlined text-[64px] text-on-background -rotate-12" style={{ fontVariationSettings: "'FILL' 1" }}>
-                inventory_2
-              </span>
+            <div className="mb-6 flex items-center justify-center w-24 h-24 bg-surface rounded-[28%] rotate-12 shadow-xl animate-bounce overflow-hidden">
+              <img src="/logo.jpg" className="w-full h-full object-cover -rotate-12 scale-110" alt="StoreFlow" />
             </div>
             <h1 className="text-3xl font-extrabold text-surface tracking-tight font-headline-xl">
               StoreFlow
