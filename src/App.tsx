@@ -50,49 +50,6 @@ interface Order {
   created_at: string;
 }
 
-// ─── Demo / Fallback Data ─────────────────────────────────────────────────────
-
-const MOCK_STORE_ID = 'demo';
-const MOCK_STORES: Store[] = [
-  {
-    id: MOCK_STORE_ID,
-    business_name: 'FreshMart',
-    phone: '+234 801 234 5678',
-    address: '23 Allen Avenue, Ikeja, Lagos',
-    logo: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCFzu_8uDAWAMlHlVeiueI0OsaxeOipcvLtV8c1lwT-g6N65msOrb4M1MxWgVf3PIlizTOen8M2UJzZOFkxLB8Z_Z4WoQ4_Ui_uT2CsamMaCqjeOSm2Yu-9aPnnk2n1ZxCgrjdm4gvzmjCRGkfktMiOeKPSA_Cbp7UqJ8Kq6PB_bjBiHEsXWEXw46JhJJJXIXRmkNGAuxlZLrcS-PdHpfKOhrAXlJAcEWQV_zlwkudNEv_DzjSChi5mvQ',
-    currency: '₦',
-    status: 'active'
-  },
-  {
-    id: 'store-2',
-    business_name: 'Graphite Essentials',
-    phone: '+234 802 987 6543',
-    address: '5a Joel Ogunnaike, GRA Ikeja, Lagos',
-    logo: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80',
-    currency: '₦',
-    status: 'active'
-  },
-  {
-    id: 'store-3',
-    business_name: 'Corner Shop (Closed)',
-    phone: '+234 803 111 2222',
-    address: '12 Toyin Street, Ikeja, Lagos',
-    logo: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&w=800&q=80',
-    currency: '₦',
-    status: 'inactive'
-  }
-];
-
-const MOCK_PRODUCTS: Product[] = [
-  { id: 'p1', store_id: MOCK_STORE_ID, barcode: '1111', name: 'Indomie Chicken', description: '70g delicious chicken flavor instant noodles.', selling_price: 480, quantity: 45, category: 'Groceries', brand: 'Indomie', unit: 'pack', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDzcLS2XffDNKufXbHzPpOkWbuH91tH1WhYPKKSxkgzaXMj1AO_-o6GHVdDbGZ9zh0f22J3RltcDr1-zZce6gdmiHv95QsotrjMLZfdZotZCpixuXxviB45PHVy3Ni4lP5bZtszuCBQNZh5_zLcb2vfTA37P2OeTqhjfHi_ZVkzzTY5bpa_qdqLAy90Ypw8sEXxr5duj8AxiNxS1dYb2pC9D7oziYV3bn3nZYoKqlutiPLSaGvHcxLFVg' },
-  { id: 'p2', store_id: MOCK_STORE_ID, barcode: '2222', name: 'Coca Cola 50cl', description: 'Refreshing carbonated soft drink.', selling_price: 350, quantity: 80, category: 'Drinks', brand: 'Coca Cola', unit: 'bottle', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAraSVJUppxHchIoS1HPTU62rMyAP1xLs7cpAmCJSdPADjO0swkplsH4TpQebAOGNnRWUjgwb3yDfewhkYHmeW3dNQmfWhBnZw94fsjKtrh7VKXwL6hsVfdu7vJEyvsXHV7rUGMMlH88ZUh3RpgyEfy8Xr2kpW6d4JbiNGYryGCKgVwJj20hMnmm--Q8ZGKKMZncDMoR8PTne5HGIRkW7ueiGzMOGT5VT6ztpuYRKfcwnOGNPhflroBvw' },
-  { id: 'p3', store_id: MOCK_STORE_ID, barcode: '3333', name: 'Golden Penny', description: '1kg Semovita wheat flour.', selling_price: 850, quantity: 20, category: 'Groceries', brand: 'Golden Penny', unit: 'bag', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC3IhlwPN3WVKJ_DyPRhKc0KUb8o8G41pfxZmbQBt1sEg0Kg4BINNKnjsffFTbSWW2gbMS1TdxXkT00Ex84T-XjNW81DHVkYFNCtY7UqG6Y1npoJOCcZIoXebNrRCfpXwp7GbC3PfZ32YRR-PC0C7F5igbkWMwoAotRNkE7Ld1TqwOURRCWtOtyBqXZU_0W2NPaWpp_iOVCPQFXj1KlSl8zIsHoEKAE9MyQwQOF5cWqQ7IT1IzKqvvmhg' },
-  { id: 'p4', store_id: MOCK_STORE_ID, barcode: '4444', name: 'Milo Tin 400g', description: 'Rich chocolate malt beverage powder.', selling_price: 2750, quantity: 15, category: 'Drinks', brand: 'Nestle', unit: 'tin', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDNhl4BW_ZQaHwmxOMsj1ro4kCUA5OHNsVHMobweeYvzvXFNzlvmRr0weI3iDv4XfXshJg7ZvkFQ7UbxIu6LFzyuIExv-Na_s-TfRMgRHYpDdsO7EwzeTJphMOb46duaGAG6t7enLXKtDwuHJIi_MoYd2qkbD4e0UC38W7P4EHNAzQOzsotPPElH1x6XYyP5orBM1i5JbkpXTSAnom-YKDpYmJb0O0zekAXux8GdcYWnoefSLWJoTI0Jg' },
-  { id: 'p5', store_id: 'store-2', barcode: '5555', name: 'Charcoal Notebook', description: 'Premium dotted grid notebook.', selling_price: 3200, quantity: 30, category: 'Stationery', brand: 'Graphite', unit: 'pcs', image: 'https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&w=400&q=80' }
-];
-
-const MOCK_CATEGORIES = ['All', 'Groceries', 'Drinks', 'Stationery'];
-
 const STATUS_ORDER = ['Pending', 'Preparing', 'Ready', 'Completed'];
 const isStatusAtLeast = (current: string, target: string) =>
   STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(target);
@@ -102,9 +59,9 @@ function App() {
   const [screen, setScreen] = useState<'splash' | 'onboarding' | 'login' | 'location' | 'home' | 'store' | 'tracking' | 'profile' | 'history'>('splash');
   const [_storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
-  const [allStores, setAllStores] = useState<Store[]>(MOCK_STORES);
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
-  const [categories, setCategories] = useState<string[]>(MOCK_CATEGORIES);
+  const [allStores, setAllStores] = useState<Store[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [deepLinkedProductId, setDeepLinkedProductId] = useState<string | null>(null);
@@ -340,12 +297,10 @@ function App() {
         setCategories(cats);
         localStorage.setItem('storeflow_cached_categories', JSON.stringify(cats));
       } else {
-        // Fallback Store
         const matched = allStores.find(s => s.id === sid);
         if (matched) {
           setStore(matched);
-          const filteredProds = MOCK_PRODUCTS.filter(p => p.store_id === sid || p.store_id === MOCK_STORE_ID);
-          setProducts(filteredProds);
+          setProducts([]);
         }
       }
     } catch (err) {
@@ -650,7 +605,7 @@ function App() {
       });
 
       const orderPayload = {
-        store_id: store?.id || MOCK_STORE_ID,
+        store_id: store?.id || '',
         customer_name: customerName,
         customer_phone: customerPhone,
         order_number: genOrderNo,
