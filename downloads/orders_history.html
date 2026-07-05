@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoreFlow - Orders History</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#e3e2e2",
+                        "surface-container-low": "#f5f3f3",
+                        "surface-container-highest": "#e3e2e2",
+                        "surface-container-high": "#e9e8e7",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-background": "#1b1c1c",
+                        "tertiary-container": "#d9d9d9",
+                        "outline": "#7f775f",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#e5e2e1",
+                        "outline-variant": "#d0c6ab",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed-variant": "#474646",
+                        "on-tertiary-container": "#5d5f5f",
+                        "surface-tint": "#705d00",
+                        "tertiary": "#5d5f5f",
+                        "surface-container": "#efeded",
+                        "on-secondary-container": "#656464",
+                        "primary-fixed-dim": "#e9c400",
+                        "on-primary-fixed": "#221b00",
+                        "on-primary-fixed-variant": "#544600",
+                        "inverse-primary": "#e9c400",
+                        "surface": "#fbf9f9",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "primary-container": "#ffd600",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#dbdad9",
+                        "secondary": "#5f5e5e",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "secondary-container": "#e5e2e1",
+                        "on-surface": "#1b1c1c",
+                        "primary-fixed": "#ffe170",
+                        "on-primary": "#ffffff",
+                        "primary": "#705d00",
+                        "surface-bright": "#fbf9f9",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#e2e2e2",
+                        "background": "#fbf9f9",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-surface-variant": "#4d4632",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#303031",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#705d00",
+                        "inverse-on-surface": "#f2f0f0"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "stack-lg": "32px",
+                        "stack-sm": "8px",
+                        "gutter": "16px",
+                        "container-padding": "24px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "headline-xl-mobile": ["Plus Jakarta Sans"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .order-card-transition {
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+        }
+        .order-card-transition:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        body {
+            background-color: #fbf9f9;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-on-surface antialiased">
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-gutter h-14 bg-surface dark:bg-background">
+<div class="flex items-center gap-4">
+<button class="p-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-primary">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-headline-md-mobile text-primary font-bold">My Orders</h1>
+</div>
+<button class="p-2 active:scale-95 transition-transform text-primary">
+<span class="material-symbols-outlined">search</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-14 pb-24 px-gutter max-w-2xl mx-auto">
+<!-- Filter Tabs -->
+<div class="flex overflow-x-auto py-stack-md gap-3 no-scrollbar sticky top-14 bg-surface/80 backdrop-blur-md z-40">
+<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-on-background text-white font-label-lg text-label-lg active:scale-95 transition-all">
+                All
+            </button>
+<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-secondary font-label-lg text-label-lg hover:bg-surface-container-highest active:scale-95 transition-all">
+                Ongoing
+            </button>
+<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-secondary font-label-lg text-label-lg hover:bg-surface-container-highest active:scale-95 transition-all">
+                Completed
+            </button>
+<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-secondary font-label-lg text-label-lg hover:bg-surface-container-highest active:scale-95 transition-all">
+                Cancelled
+            </button>
+</div>
+<!-- Orders List -->
+<div class="space-y-stack-md mt-4">
+<!-- Order Card 1: Ongoing -->
+<div class="bg-surface-container-lowest rounded-xl p-4 shadow-[0px_4px_20px_rgba(0,0,0,0.03)] border border-surface-container-high order-card-transition">
+<div class="flex justify-between items-start mb-4">
+<div class="flex gap-4">
+<div class="w-16 h-16 rounded-lg bg-surface-container overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A clean, minimalist logo of a grocery store named FreshMart, styled as a premium modern boutique supermarket icon with graphite and yellow accents on a white high-resolution background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBACDLtOC6q7qAaTM4vYBzDHq3154BbJhYwNaYAlSfntPJOI7PafZfjqZSZEEVvXgicXvDmVnMgtA7oLYc23FCwFl17Qdgseaeb7dBeujeKd7tSoHc5pSxtFOKqxZOKryZrSmMOsWJtfJRX-Ebio0_5xWmtrvLxhlcxjf0cvdVxu0rcBf-d41pGtTqBFIzeSxTlEPSROr28HLtHxwBcMbtxyHJ2CB_u0Kgjoh2wULugEZrZ1u69KTzu6A"/>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-background">FreshMart</h3>
+<p class="text-secondary font-label-sm text-label-sm">Order #SF12345678</p>
+<p class="text-on-surface-variant font-label-sm text-label-sm mt-1">Today, 10:30 AM</p>
+</div>
+</div>
+<span class="px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm font-bold">On the way</span>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-surface-container-high">
+<div class="text-on-background font-headline-md text-headline-md">
+                        ₦2,160
+                    </div>
+<button class="flex items-center gap-2 px-5 py-2 rounded-lg bg-on-background text-white font-label-lg text-label-lg active:scale-95 transition-transform">
+                        Track Order
+                    </button>
+</div>
+</div>
+<!-- Order Card 2: Completed -->
+<div class="bg-surface-container-lowest rounded-xl p-4 shadow-[0px_4px_20px_rgba(0,0,0,0.03)] border border-surface-container-high order-card-transition">
+<div class="flex justify-between items-start mb-4">
+<div class="flex gap-4">
+<div class="w-16 h-16 rounded-lg bg-surface-container overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A sophisticated retail brand logo for QuickBuy Superstore, featuring sleek typography and a minimalist shopping bag icon, professionally designed in high-contrast graphite black and vibrant yellow for a luxury urban grocery experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCb1sRFRH1P0aPPC5VZml67hJdublBGIywfwvCHL3xkuv9ppJuKk12k3UHsNZJwWwilTwB7x4KbRSL86bs6Tisrz78wgc0pP1Rrjzgj94ZZBCqg76EaQrmxynM2g2Ukhux_QbU2D3b_QcRhv-nVqZVu39U0RuRZbb03raD9shuiPRXxp0YB7fCMM3I9PULqLy5IjkCmHNnJHYCxDBRVNx5sGdSNpjv1_Rq6A6BJnI8-cFbtrf7pYs0VDw"/>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-background">QuickBuy Superstore</h3>
+<p class="text-secondary font-label-sm text-label-sm">Order #SF12345001</p>
+<p class="text-on-surface-variant font-label-sm text-label-sm mt-1">Yesterday, 4:15 PM</p>
+</div>
+</div>
+<span class="px-3 py-1 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm">Completed</span>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-surface-container-high">
+<div class="text-on-background font-headline-md text-headline-md">
+                        ₦3,450
+                    </div>
+<div class="flex gap-2">
+<button class="px-4 py-2 rounded-lg border border-outline-variant text-on-surface-variant font-label-lg text-label-lg hover:bg-surface-container active:scale-95 transition-all">
+                            View
+                        </button>
+<button class="px-5 py-2 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold active:scale-95 transition-transform">
+                            Reorder
+                        </button>
+</div>
+</div>
+</div>
+<!-- Order Card 3: Completed -->
+<div class="bg-surface-container-lowest rounded-xl p-4 shadow-[0px_4px_20px_rgba(0,0,0,0.03)] border border-surface-container-high order-card-transition">
+<div class="flex justify-between items-start mb-4">
+<div class="flex gap-4">
+<div class="w-16 h-16 rounded-lg bg-surface-container overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Logo for Prime Store, showing a stylized peak or prime symbol, executed in a clean modern corporate style using graphite grey and subtle white space, professional photography quality against a soft cloud grey background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAU2ElcJbybIgiZjOe06G4-VXD62DNV2P3iXHgPrc6yK-AzTUI9vSwR3Y6grxMKh4RRmo97iidU3KqzhkSMjAio4hFKVahnpn4VrB7aYgMA_5Z_RhZPM-imRZip4W_d5NWC9oUuGVre72itB0KBXrTNYEADfOvmwILhJgtuB-SpN7pFtYud0PHgZCBW2jnc7BG7o60i-3Rk2LG2EdvESXM72dxtialw1A8p8tY-ArhO0zaTESXKoTOMeA"/>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-background">Prime Store</h3>
+<p class="text-secondary font-label-sm text-label-sm">Order #SF12344021</p>
+<p class="text-on-surface-variant font-label-sm text-label-sm mt-1">May 15, 2024, 2:20 PM</p>
+</div>
+</div>
+<span class="px-3 py-1 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm">Completed</span>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-surface-container-high">
+<div class="text-on-background font-headline-md text-headline-md">
+                        ₦1,870
+                    </div>
+<div class="flex gap-2">
+<button class="px-4 py-2 rounded-lg border border-outline-variant text-on-surface-variant font-label-lg text-label-lg hover:bg-surface-container active:scale-95 transition-all">
+                            View
+                        </button>
+<button class="px-5 py-2 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold active:scale-95 transition-transform">
+                            Reorder
+                        </button>
+</div>
+</div>
+</div>
+<!-- Empty State Illustration Placeholder (Invisible if content exists) -->
+<div class="hidden flex-col items-center justify-center py-20 text-center">
+<div class="w-48 h-48 mb-6">
+<img class="w-full h-full object-contain opacity-20" data-alt="A minimalist line-art illustration of an empty shopping basket in a graphite black and yellow color scheme, sitting in a vast white airy space, conveying a clean and modern 'no orders yet' aesthetic for a luxury app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDiyMwxlfPubyk5gwMpYKt7JExThi_G_dAmadsnx_AeqmWh7mQfkjHeyyKa1P090RR78GZaEbp3FG3s0I1p5yXfM90kPmslRsztJiaU_HOQ-WMN3bDgi79vddPvAnLN23Irq42yjRS8g2olUuujlJ46nm8M0Ayj6sJJ4th7VCkwuSNgSefRwJKF_fEgey5zAgNKhQxyDkC9_jOMwKTJ4cUmW7VryXw9_lscZlAi5fzurYpM7xOjoJ2t4Q"/>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-on-background">No orders yet</h2>
+<p class="text-secondary mt-2">When you place an order, it will appear here.</p>
+<button class="mt-8 px-8 py-3 rounded-xl bg-primary-container text-on-primary-container font-headline-md text-headline-md font-bold shadow-lg active:scale-95 transition-all">
+                    Start Shopping
+                </button>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-surface dark:bg-background shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] rounded-t-xl">
+<!-- Home -->
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">home</span>
+<span class="font-label-sm text-label-sm mt-1">Home</span>
+</a>
+<!-- Categories -->
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">grid_view</span>
+<span class="font-label-sm text-label-sm mt-1">Categories</span>
+</a>
+<!-- Orders (ACTIVE) -->
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed relative after:content-[''] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-primary-container after:rounded-full scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">receipt_long</span>
+<span class="font-label-sm text-label-sm mt-1 font-bold">Orders</span>
+</a>
+<!-- Cart -->
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">shopping_cart</span>
+<span class="font-label-sm text-label-sm mt-1">Cart</span>
+</a>
+<!-- Profile -->
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">person</span>
+<span class="font-label-sm text-label-sm mt-1">Profile</span>
+</a>
+</nav>
+<script>
+        // Micro-interaction for filter tabs
+        const tabs = document.querySelectorAll('.filter-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => {
+                    t.classList.remove('bg-on-background', 'text-white');
+                    t.classList.add('bg-surface-container-high', 'text-secondary');
+                });
+                tab.classList.remove('bg-surface-container-high', 'text-secondary');
+                tab.classList.add('bg-on-background', 'text-white');
+            });
+        });
+
+        // Simple fade-in animation on scroll for cards
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.order-card-transition').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+            observer.observe(card);
+        });
+    </script>
+</body></html>

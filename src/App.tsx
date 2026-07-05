@@ -205,14 +205,14 @@ function App() {
 
   // Checkout & Order State
   const [checkoutStep, setCheckoutStep] = useState<'shopping' | 'checkout' | 'payment'>('shopping');
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [deliveryType, setDeliveryType] = useState<'pickup' | 'delivery'>('pickup');
-  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [customerName, setCustomerName] = useState(() => localStorage.getItem('storeflow_saved_checkout_name') || '');
+  const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('storeflow_saved_checkout_phone') || '');
+  const [deliveryType, setDeliveryType] = useState<'pickup' | 'delivery'>(() => (localStorage.getItem('storeflow_pref_delivery_type') as any) || 'pickup');
+  const [deliveryAddress, setDeliveryAddress] = useState(() => localStorage.getItem('storeflow_pref_address') || '');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [deliveryLandmark, setDeliveryLandmark] = useState('');
-  const [specialInstructions, setSpecialInstructions] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'opay'>('cash');
+  const [deliveryLandmark, setDeliveryLandmark] = useState(() => localStorage.getItem('storeflow_saved_checkout_landmark') || '');
+  const [specialInstructions, setSpecialInstructions] = useState(() => localStorage.getItem('storeflow_saved_checkout_notes') || '');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'opay'>(() => (localStorage.getItem('storeflow_pref_payment_method') as any) || 'cash');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState('');
   const [orderStatus, setOrderStatus] = useState('Pending');
@@ -1465,341 +1465,848 @@ function App() {
 
       {/* ─── 6. Store Details Page ─── */}
       {screen === 'store' && (
-        <div className="max-w-[1200px] mx-auto pb-24">
-          <header className="sticky top-0 z-40 bg-surface/85 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-outline-variant/10 px-4 md:px-gutter text-on-surface">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setScreen('home')} className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform cursor-pointer">
+        <div className="bg-[#1A1C1E] min-h-screen text-white pb-32">
+          {/* Header Banner Background */}
+          <div className="relative w-full bg-[#1A1C1E] pb-8 pt-6 rounded-b-[32px] shadow-lg border-b border-white/5">
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-transparent pointer-events-none" />
+            
+            {/* Top Navigation Row */}
+            <header className="flex justify-between items-center w-full px-4 h-12 relative z-20">
+              <button 
+                onClick={() => setScreen('home')} 
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white active:scale-90 transition-transform cursor-pointer"
+              >
                 <span className="material-symbols-outlined text-lg">arrow_back</span>
               </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform cursor-pointer">
-                <span className="material-symbols-outlined text-lg">favorite</span>
-              </button>
-              <button className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform cursor-pointer">
-                <span className="material-symbols-outlined text-lg">share</span>
-              </button>
-            </div>
-          </header>
-
-          <main className="mt-4 px-4 md:px-gutter">
-            {store?.data?.marketplaceSettings?.marketplaceListingEnabled === false || store?.data?.marketplaceSettings?.temporarilyHidden === true ? (
-              <div className="flex flex-col items-center justify-center py-20 px-6 text-center space-y-4 max-w-md mx-auto text-on-surface">
-                <span className="text-6xl">🔒</span>
-                <h2 className="text-xl font-bold">Store Temporarily Offline</h2>
-                <p className="text-sm text-secondary">The merchant has temporarily disabled the marketplace listing or hidden this store. Please try again later.</p>
-                <button onClick={() => setScreen('home')} className="px-6 py-2.5 bg-primary text-on-primary rounded-full text-xs font-bold shadow-md cursor-pointer">
-                  Go Back Home
+              <div className="flex items-center gap-2">
+                <button className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white active:scale-90 transition-transform cursor-pointer">
+                  <span className="material-symbols-outlined text-lg">favorite</span>
+                </button>
+                <button className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white active:scale-90 transition-transform cursor-pointer">
+                  <span className="material-symbols-outlined text-lg">share</span>
                 </button>
               </div>
-            ) : (
-              <>
-                {/* Warning Banner if closed */}
-                {!isStoreOpenState && (
-                  <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm flex items-center gap-3">
-                    <span className="material-symbols-outlined text-xl shrink-0">warning</span>
-                    <span><strong>Closed Alert</strong>: This store is currently closed. You can view the items, but checkout will be disabled.</span>
+            </header>
+
+            {/* Centered Store Branding */}
+            <div className="flex flex-col items-center text-center mt-4 space-y-3 relative z-10 px-4">
+              <div className="w-32 h-32 rounded-full border-4 border-white bg-[#1A1C1E] shadow-2xl overflow-hidden flex items-center justify-center shrink-0">
+                {store?.logo ? (
+                  <img src={store.logo} className="w-full h-full object-cover" alt="" />
+                ) : (
+                  <span className="text-5xl">🏪</span>
+                )}
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-2xl font-black tracking-tight text-white flex items-center justify-center gap-1.5 font-headline-xl">
+                  {store?.business_name || 'StoreFlow Store'}
+                  <span className="material-symbols-outlined text-[#FFD23F] text-xl font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                </h1>
+                
+                <div className="flex items-center justify-center gap-1 text-[#FFD23F] text-xs font-bold">
+                  <span className="material-symbols-outlined text-sm font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                  <span>{(store?.data?.marketplaceSettings?.rating || 4.8).toFixed(1)} (320 reviews)</span>
+                </div>
+                
+                <p className="text-xs text-slate-300 font-medium max-w-xs mx-auto">
+                  {store?.data?.marketplaceSettings?.description || 'Your trusted neighborhood store.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Store Status Badge */}
+            <div className="flex justify-center mt-4 relative z-10">
+              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                storeStatusText === 'Open' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                storeStatusText === 'Closing Soon' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                'bg-red-500/20 text-red-400 border border-red-500/30'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  storeStatusText === 'Open' ? 'bg-emerald-400 animate-pulse' :
+                  storeStatusText === 'Closing Soon' ? 'bg-amber-400' :
+                  'bg-red-400'
+                }`} />
+                {storeStatusText}
+              </span>
+            </div>
+
+            {/* Closed Alert Notice */}
+            {storeStatusText === 'Closed' && (
+              <div className="mt-4 mx-4 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-xs font-semibold text-center leading-relaxed max-w-md md:mx-auto">
+                ⚠️ <strong>This store is currently closed.</strong><br/>
+                Orders will be processed when the store opens.
+              </div>
+            )}
+
+            {/* Premium Tab Selector Segments */}
+            <div className="mt-6 flex p-1 rounded-2xl bg-[#26282B] border border-white/5 text-xs font-bold w-full max-w-[340px] mx-auto z-10 relative">
+              {(['Overview', 'Products', 'Info'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setStoreTab(t)}
+                  className={`flex-1 py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    storeTab === t 
+                      ? 'bg-white text-[#1A1C1E] shadow-lg' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>{t}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <main className="mt-6 px-4 max-w-lg md:max-w-2xl mx-auto space-y-6">
+            
+            {/* OVERVIEW TAB */}
+            {storeTab === 'Overview' && (
+              <div className="space-y-6 animate-fade">
+                {/* Dynamic Quick Info Tiles */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-[#26282B] border border-white/5 rounded-2xl p-3 flex flex-col items-center text-center gap-1 shadow-sm">
+                    <span className="material-symbols-outlined text-[#FFD23F] text-xl">schedule</span>
+                    <span className="font-extrabold text-[11px] text-white mt-1">
+                      {store?.data?.marketplaceSettings?.deliveryTime || (deliveryType === 'delivery' ? '30-45 min' : '15-20 min')}
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-semibold leading-tight">Delivery Time</span>
+                  </div>
+                  <div className="bg-[#26282B] border border-white/5 rounded-2xl p-3 flex flex-col items-center text-center gap-1 shadow-sm">
+                    <span className="material-symbols-outlined text-[#FFD23F] text-xl">delivery_dining</span>
+                    <span className="font-extrabold text-[11px] text-white mt-1">
+                      ₦{(store?.data?.marketplaceSettings?.deliveryFee || 1500).toLocaleString()}
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-semibold leading-tight">Delivery Fee</span>
+                  </div>
+                  <div className="bg-[#26282B] border border-white/5 rounded-2xl p-3 flex flex-col items-center text-center gap-1 shadow-sm">
+                    <span className="material-symbols-outlined text-[#FFD23F] text-xl">verified_user</span>
+                    <span className="font-extrabold text-[11px] text-white mt-1">Verified</span>
+                    <span className="text-[9px] text-slate-400 font-semibold leading-tight">Since 2024</span>
+                  </div>
+                </div>
+
+                {/* Promotions section */}
+                {((store?.data?.marketplaceSettings?.freeDeliveryThreshold || 5000) > 0) && (
+                  <div className="bg-gradient-to-r from-[#FFD23F]/15 to-[#FFD23F]/5 border border-[#FFD23F]/20 p-4 rounded-2xl flex items-center gap-3.5 shadow-sm text-left">
+                    <span className="text-3xl">🚚</span>
+                    <div>
+                      <h4 className="font-extrabold text-sm text-white">Free Delivery Offer</h4>
+                      <p className="text-[10px] text-slate-300 mt-0.5">
+                        Get free home delivery on orders above ₦{(store?.data?.marketplaceSettings?.freeDeliveryThreshold || 5000).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
                 )}
 
-            {/* Hero */}
-            <section className="mb-6">
-              <div className="relative w-full aspect-[21/9] rounded-xl overflow-hidden shadow-sm bg-surface-container-low">
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
-                {store?.logo ? (
-                  <img className="w-full h-full object-cover" src={store.logo} alt="" />
-                ) : (
-                  <div className="w-full h-full bg-primary-container flex items-center justify-center text-on-primary-container text-4xl">🏪</div>
-                )}
-                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end z-20">
-                  <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-xs font-semibold shadow-sm">Featured Partner</span>
+                {/* Quick Categories list */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-xs uppercase tracking-wider font-extrabold text-slate-400 px-1">Categories</h3>
+                    <button onClick={() => setStoreTab('Products')} className="text-xs font-bold text-[#FFD23F] hover:underline cursor-pointer">View all</button>
+                  </div>
+                  <div className="flex gap-2.5 overflow-x-auto hide-scrollbar -mx-4 px-4">
+                    {categories.map(cat => {
+                      const iconMap = {
+                        All: '🌾',
+                        Beverages: '🥤',
+                        Groceries: '🌾',
+                        Snacks: '🍿',
+                        Frozen: '❄️',
+                        Household: '🧼',
+                        Medicine: '💊',
+                        Personal: '🧴',
+                        Other: '📦'
+                      };
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => {
+                            setSelectedCategory(cat);
+                            setStoreTab('Products');
+                          }}
+                          className="bg-[#26282B] border border-white/5 text-white whitespace-nowrap px-4 py-3 rounded-2xl font-bold text-xs shrink-0 flex items-center gap-2 cursor-pointer hover:bg-[#32353A] transition"
+                        >
+                          <span>{iconMap[cat] || '📦'}</span>
+                          <span>{cat}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Popular Products section */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-xs uppercase tracking-wider font-extrabold text-slate-400 px-1">Popular Products</h3>
+                    <button onClick={() => setStoreTab('Products')} className="text-xs font-bold text-[#FFD23F] hover:underline cursor-pointer">View all</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {filteredProducts.slice(0, 4).map(p => {
+                      const qtyInCart = getQty(p.id);
+                      const isOutOfStock = p.quantity <= 0;
+
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => setSelectedProduct(p)}
+                          className="bg-[#26282B] border border-white/5 rounded-2xl p-3 flex flex-col justify-between shadow-sm relative group cursor-pointer hover:border-white/10 transition-all text-left"
+                        >
+                          <div>
+                            {/* Tags row */}
+                            <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                              {p.wholesale_price && p.retail_price && p.wholesale_price < p.retail_price && (
+                                <span className="bg-[#FFD23F] text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider">Promo</span>
+                              )}
+                            </div>
+
+                            {/* Image wrapper */}
+                            <div className="relative w-full aspect-square bg-white rounded-xl mb-3 overflow-hidden flex items-center justify-center">
+                              {p.image ? (
+                                <img src={p.image} className="w-full h-full object-contain p-2" alt="" />
+                              ) : (
+                                <span className="text-3xl">📦</span>
+                              )}
+                            </div>
+                            
+                            <div className="space-y-1">
+                              <h4 className="font-extrabold text-sm text-white truncate">{p.name}</h4>
+                              <p className="text-[10px] text-slate-400 truncate">{p.description || p.category || 'Product'}</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="font-black text-sm text-[#FFD23F]">₦{getPrice(p).toLocaleString()}</span>
+                            {isOutOfStock ? (
+                              <span className="text-[9px] font-black text-rose-500 uppercase">Sold Out</span>
+                            ) : (
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  addToCart(p, 1);
+                                }}
+                                className="w-8 h-8 bg-[#FFD23F] text-slate-950 rounded-full flex items-center justify-center active:scale-90 transition cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-base font-bold">add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
+            )}
 
-              <div className="mt-4 flex justify-between items-start">
-                <div>
-                  <h1 className="text-2xl md:text-3xl font-extrabold text-on-background font-headline-lg">{store?.business_name}</h1>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="flex items-center text-primary-fixed-dim">
-                      <span className="material-symbols-outlined text-sm text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                      <span className="text-sm text-on-surface-variant font-semibold ml-1">4.6 (320 ratings)</span>
+            {/* PRODUCTS TAB */}
+            {storeTab === 'Products' && (
+              <div className="space-y-6 animate-fade">
+                
+                {/* Retail vs Wholesale Control toggle */}
+                {isRetailEnabled && isWholesaleEnabled && (
+                  <div className="flex p-1 rounded-2xl bg-[#26282B] border border-white/5 text-xs font-bold w-full max-w-[280px] mx-auto">
+                    <button
+                      onClick={() => setPriceMode('retail')}
+                      className={`flex-1 py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        priceMode === 'retail' ? 'bg-white text-[#1A1C1E] shadow-md' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>Retail Pricing</span>
+                    </button>
+                    <button
+                      onClick={() => setPriceMode('wholesale')}
+                      className={`flex-1 py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        priceMode === 'wholesale' ? 'bg-white text-[#1A1C1E] shadow-md' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>Wholesale Pricing</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Product Search Bar */}
+                <div className="relative w-full h-12 bg-[#26282B] rounded-2xl flex items-center px-4 border border-white/5 focus-within:border-white/20 transition-all">
+                  <span className="material-symbols-outlined text-slate-400 mr-2.5">search</span>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search products in this store..."
+                    className="bg-transparent border-none text-xs focus:ring-0 focus:outline-none w-full text-white placeholder:text-slate-400"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="mr-2 cursor-pointer text-slate-400 hover:text-white">
+                      <span className="material-symbols-outlined text-base">close</span>
+                    </button>
+                  )}
+                  <span className="material-symbols-outlined text-slate-400 cursor-pointer ml-1 hover:text-white">mic</span>
+                  <span className="material-symbols-outlined text-slate-400 cursor-pointer ml-2 hover:text-white">qr_code_scanner</span>
+                </div>
+
+                {/* Categories scrolling pills */}
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4">
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-4 py-2 rounded-full font-bold text-xs shrink-0 transition-all cursor-pointer ${
+                        selectedCategory === cat
+                          ? 'bg-[#FFD23F] text-slate-950 font-black'
+                          : 'bg-[#26282B] border border-white/5 text-slate-300 hover:bg-[#32353A]'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 2-Column Product Grid */}
+                {filteredProducts.length === 0 ? (
+                  <div className="bg-[#26282B] border border-white/5 rounded-2xl p-8 text-center text-xs text-slate-400">
+                    No products found matching your search.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    {filteredProducts.map(p => {
+                      const qtyInCart = getQty(p.id);
+                      const isOutOfStock = p.quantity <= 0;
+                      const isLimited = p.quantity > 0 && p.quantity <= 5;
+                      const isNew = p.status === 'new' || (p.cost_price === 0 && p.selling_price > 0);
+
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => setSelectedProduct(p)}
+                          className="bg-[#26282B] border border-white/5 rounded-2xl p-3 flex flex-col justify-between shadow-sm relative group cursor-pointer hover:border-white/10 transition-all text-left"
+                        >
+                          <div>
+                            {/* Badges block */}
+                            <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                              {isOutOfStock && (
+                                <span className="bg-rose-600 text-white font-black text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider">Out of Stock</span>
+                              )}
+                              {isLimited && (
+                                <span className="bg-amber-600 text-white font-black text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider">Limited</span>
+                              )}
+                              {isNew && (
+                                <span className="bg-[#FFD23F] text-slate-950 font-black text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider">New</span>
+                              )}
+                            </div>
+
+                            {/* Favorite Heart Button */}
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); alert('Added to favorites!'); }}
+                              className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-[#1A1C1E]/60 backdrop-blur-md flex items-center justify-center text-slate-300 hover:text-rose-500 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-sm font-semibold">favorite</span>
+                            </button>
+
+                            {/* Product Image */}
+                            <div className="relative w-full aspect-square bg-white rounded-xl mb-3 overflow-hidden flex items-center justify-center">
+                              {p.image ? (
+                                <img src={p.image} className="w-full h-full object-contain p-2" alt="" />
+                              ) : (
+                                <span className="text-3xl">📦</span>
+                              )}
+                            </div>
+
+                            <div className="space-y-1">
+                              <h4 className="font-extrabold text-sm text-white truncate">{p.name}</h4>
+                              <p className="text-[10px] text-slate-400 truncate">{p.description || p.category || 'Product'}</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <span className="font-black text-sm text-[#FFD23F]">₦{getPrice(p).toLocaleString()}</span>
+                              <span className="text-[9px] text-slate-400 font-semibold">
+                                {isOutOfStock ? 'Unavailable' : isLimited ? 'Limited Stock' : 'Available'}
+                              </span>
+                            </div>
+
+                            {isOutOfStock ? (
+                              <span className="text-[9px] font-black text-rose-500 uppercase">Sold Out</span>
+                            ) : qtyInCart > 0 ? (
+                              <div className="flex items-center gap-1 bg-[#FFD23F]/10 rounded-full px-1.5 py-1">
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    addToCart(p, -1);
+                                  }}
+                                  className="w-5 h-5 bg-[#FFD23F] text-slate-950 rounded-full flex items-center justify-center active:scale-90 transition cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[10px] font-bold">remove</span>
+                                </button>
+                                <span className="text-xs font-black text-white px-1 font-mono">{qtyInCart}</span>
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    addToCart(p, 1);
+                                  }}
+                                  className="w-5 h-5 bg-[#FFD23F] text-slate-950 rounded-full flex items-center justify-center active:scale-90 transition cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[10px] font-bold">add</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  addToCart(p, 1);
+                                }}
+                                className="w-8 h-8 bg-[#FFD23F] text-slate-950 rounded-full flex items-center justify-center active:scale-90 transition cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-base font-bold">add</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* INFO TAB */}
+            {storeTab === 'Info' && (
+              <div className="space-y-6 animate-fade">
+                {/* Store Information Card */}
+                <div className="bg-[#26282B] border border-white/5 rounded-3xl p-5 shadow-lg space-y-4 text-left">
+                  <h3 className="font-display font-black text-base text-white border-b border-white/5 pb-2">Store Details</h3>
+                  
+                  <div className="space-y-3.5 text-xs text-slate-300">
+                    <div className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0">📍</span>
+                      <div>
+                        <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Full Address</p>
+                        <p className="mt-0.5 leading-relaxed font-semibold">{store?.address || 'Warri, Delta State, Nigeria'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0">☎</span>
+                      <div>
+                        <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Phone Number</p>
+                        <p className="mt-0.5 font-semibold">{store?.phone || '+234 801 234 5678'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0">✉</span>
+                      <div>
+                        <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Email Address</p>
+                        <p className="mt-0.5 font-semibold">{store?.email || 'support@storeflow.com'}</p>
+                      </div>
+                    </div>
+
+                    {store?.data?.marketplaceSettings?.website && (
+                      <div className="flex gap-3 items-start">
+                        <span className="text-lg shrink-0">🌍</span>
+                        <div>
+                          <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Website</p>
+                          <p className="mt-0.5 font-semibold text-[#FFD23F] hover:underline cursor-pointer">{store.data.marketplaceSettings.website}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0">🕒</span>
+                      <div>
+                        <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Opening Hours</p>
+                        <p className="mt-0.5 font-semibold text-emerald-400">
+                          {store?.data?.marketplaceSettings?.openingTime || '08:00'} AM – {store?.data?.marketplaceSettings?.closingTime || '09:00'} PM
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0">🚚</span>
+                      <div>
+                        <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Delivery Information</p>
+                        <p className="mt-0.5 font-semibold">
+                          Time: {store?.data?.marketplaceSettings?.deliveryTime || '30-45 mins'} | Fee: ₦{(store?.data?.marketplaceSettings?.deliveryFee || 1500).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0">🏪</span>
+                      <div>
+                        <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Store Type</p>
+                        <p className="mt-0.5 font-semibold capitalize">{store?.category || 'Retail Provision Store'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0">📦</span>
+                      <div>
+                        <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Catalog Size</p>
+                        <p className="mt-0.5 font-semibold">{products.length} published products</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start">
+                      <span className="text-lg shrink-0">📍</span>
+                      <div>
+                        <p className="font-bold text-white uppercase text-[9px] tracking-wider text-slate-400">Distance</p>
+                        <p className="mt-0.5 font-semibold text-slate-200">0.8 km away from your location</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex gap-4 mt-4 text-on-surface-variant text-sm font-medium">
-                <div className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[18px]">schedule</span>
-                  <span>{deliveryType === 'delivery' ? '30-45 min' : '15-20 min'}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[18px]">delivery_dining</span>
-                  <span>Free delivery over ₦5,000</span>
-                </div>
-              </div>
-            </section>
-
-            {/* StoreFlow Price Badge */}
-            <section className="mb-8 space-y-4">
-              <div className="bg-surface-container-low rounded-xl p-4 flex items-center justify-between border border-outline-variant/30">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary-container rounded-lg flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-on-primary-container text-2xl">local_offer</span>
-                  </div>
-                  <div>
-                    <p className="font-bold text-on-surface">StoreFlow Prices</p>
-                    <p className="text-sm text-secondary mt-0.5">
-                      {priceMode === 'wholesale' ? '📦 Wholesale Mode (selling in cartons)' : '🥛 Retail Mode (selling in singles)'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {isRetailEnabled && isWholesaleEnabled && (
-                <div className="flex p-1 rounded-full bg-surface-container-high border border-outline-variant/20 text-xs font-bold w-full max-w-[320px] mx-auto">
-                  <button
-                    onClick={() => setPriceMode('retail')}
-                    className={`flex-1 py-2.5 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                      priceMode === 'retail' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:text-on-surface'
-                    }`}
+                {/* Quick Action Buttons */}
+                <div className="grid grid-cols-4 gap-2 text-[10px] font-bold text-center">
+                  <a 
+                    href={`tel:${store?.phone || '08012345678'}`}
+                    className="bg-[#26282B] border border-white/5 py-3.5 rounded-2xl flex flex-col items-center gap-1.5 hover:bg-[#32353A] cursor-pointer text-white"
                   >
-                    <span>🥛 Retail Prices</span>
-                  </button>
-                  <button
-                    onClick={() => setPriceMode('wholesale')}
-                    className={`flex-1 py-2.5 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                      priceMode === 'wholesale' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:text-on-surface'
-                    }`}
+                    <span className="material-symbols-outlined text-lg text-[#FFD23F]">call</span>
+                    <span>Call Store</span>
+                  </a>
+                  <a 
+                    href={`https://wa.me/${(store?.phone || '2348012345678').replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-[#26282B] border border-white/5 py-3.5 rounded-2xl flex flex-col items-center gap-1.5 hover:bg-[#32353A] cursor-pointer text-white"
                   >
-                    <span>📦 Wholesale Prices</span>
+                    <span className="material-symbols-outlined text-lg text-[#FFD23F]">chat</span>
+                    <span>WhatsApp</span>
+                  </a>
+                  <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store?.address || 'Warri, Delta State, Nigeria')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-[#26282B] border border-white/5 py-3.5 rounded-2xl flex flex-col items-center gap-1.5 hover:bg-[#32353A] cursor-pointer text-white"
+                  >
+                    <span className="material-symbols-outlined text-lg text-[#FFD23F]">directions_car</span>
+                    <span>Directions</span>
+                  </a>
+                  <button 
+                    onClick={() => {
+                      if (navigator.share) {
+                        navigator.share({
+                          title: store?.business_name || 'StoreFlow Store',
+                          text: `Shop online at ${store?.business_name || 'StoreFlow'}!`,
+                          url: window.location.href
+                        }).catch(() => {});
+                      } else {
+                        alert('Link copied to clipboard!');
+                      }
+                    }}
+                    className="bg-[#26282B] border border-white/5 py-3.5 rounded-2xl flex flex-col items-center gap-1.5 hover:bg-[#32353A] cursor-pointer text-white"
+                  >
+                    <span className="material-symbols-outlined text-lg text-[#FFD23F]">share</span>
+                    <span>Share Link</span>
                   </button>
                 </div>
-              )}
-            </section>
+              </div>
+            )}
+          </main>
 
-            {/* Search and Category Chips */}
-            <section className="sticky top-14 z-30 bg-surface/95 backdrop-blur-sm pt-2 pb-4">
-              <div className="relative w-full h-14 bg-surface-container-low rounded-full flex items-center px-4 transition-all focus-within:ring-2 focus-within:ring-primary/20">
-                <span className="material-symbols-outlined text-secondary mr-3">search</span>
-                <input
-                  className="bg-transparent border-none focus:ring-0 w-full text-base placeholder:text-secondary-fixed-dim outline-none text-on-surface"
-                  placeholder="Search in store"
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="mr-2 cursor-pointer">
-                    <span className="material-symbols-outlined text-secondary text-lg">close</span>
-                  </button>
+          {/* Floating Sticky Bottom Cart Card */}
+          {totalItemsCount > 0 && (
+            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-[480px] px-4 animate-fade md:bottom-6">
+              <button
+                onClick={() => setIsCartOpen(true)}
+                className="w-full bg-[#FFD23F] text-slate-950 py-4 px-6 rounded-full flex justify-between items-center shadow-2xl active:scale-98 transition-all cursor-pointer font-black"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="bg-slate-950 text-[#FFD23F] text-[11px] w-6 h-6 flex items-center justify-center rounded-full font-black font-mono">{totalItemsCount}</span>
+                  <span className="font-black text-sm uppercase tracking-wider">View Cart</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-black text-sm">₦{total.toLocaleString()}</span>
+                  <span className="material-symbols-outlined text-lg font-bold">arrow_forward</span>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {/* ─── 7. Order Tracking timeline ─── */}
+      {screen === 'tracking' && (
+        <div className="bg-[#1A1C1E] min-h-screen text-white pb-32">
+          {/* Header */}
+          <header className="sticky top-0 z-40 bg-[#1A1C1E]/80 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-white/5 px-4 text-white">
+            <button 
+              onClick={() => {
+                setScreen('store');
+                setStoreTab('Overview');
+              }} 
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white active:scale-95 transition cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+            </button>
+            <span className="text-sm font-black tracking-wider uppercase">Track Order</span>
+            <div className="w-10 h-10" />
+          </header>
+
+          <main className="mt-6 px-4 max-w-md mx-auto space-y-6 text-left">
+            {/* Status Header Hero */}
+            <div className="text-center flex flex-col items-center gap-2.5 py-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-1 ${
+                orderStatus === 'Rejected' || orderStatus === 'Cancelled' 
+                  ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30' 
+                  : 'bg-[#FFD23F]/20 text-[#FFD23F] border border-[#FFD23F]/35'
+              }`}>
+                <span className="material-symbols-outlined text-3xl font-black">
+                  {orderStatus === 'Rejected' ? 'block' : orderStatus === 'Cancelled' ? 'close' : 'receipt_long'}
+                </span>
+              </div>
+              <h1 className="text-2xl font-black text-white font-display uppercase tracking-tight">
+                {orderStatus === 'Rejected' ? 'Order Rejected' : orderStatus === 'Cancelled' ? 'Order Cancelled' : 'Order Placed! 🎉'}
+              </h1>
+              <p className="text-xs text-slate-400 font-medium max-w-xs leading-relaxed">
+                {orderStatus === 'Pending Approval' && 'The store is currently reviewing your order details.'}
+                {orderStatus === 'Accepted' && 'Your order was accepted! Awaiting packaging.'}
+                {orderStatus === 'Preparing' && 'Staff are preparing and packing your order.'}
+                {orderStatus === 'Ready' && 'Your order is ready! Awaiting pickup/delivery.'}
+                {orderStatus === 'Out for Delivery' && 'Your package is on its way to you.'}
+                {orderStatus === 'Delivered' && 'Order marked as delivered. Enjoy!'}
+                {orderStatus === 'Completed' && 'Thank you for shopping with StoreFlow!'}
+                {orderStatus === 'Changes Requested' && 'The merchant requested changes to your order.'}
+              </p>
+            </div>
+
+            {/* Rejection Notice Banner */}
+            {orderStatus === 'Rejected' && (
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-2xl text-xs space-y-1.5">
+                <h4 className="font-extrabold text-sm flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm font-bold">warning</span>
+                  <span>Cancellation details</span>
+                </h4>
+                <p className="text-slate-300 font-medium leading-relaxed">
+                  The merchant rejected your order.
+                </p>
+                {rejectionReason && (
+                  <p className="mt-2 bg-rose-500/20 p-3 rounded-xl border border-rose-500/30 text-white font-semibold font-mono">
+                    Reason: {rejectionReason}
+                  </p>
                 )}
-                <span className="material-symbols-outlined text-secondary ml-2 cursor-pointer">tune</span>
               </div>
-              <div className="flex gap-2 mt-6 overflow-x-auto hide-scrollbar -mx-4 px-4 md:-mx-gutter md:px-gutter">
-                {categories.map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`whitespace-nowrap px-6 py-2 rounded-full font-semibold text-sm transition-all cursor-pointer ${
-                      selectedCategory === cat
-                        ? 'bg-on-background text-surface'
-                        : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </section>
+            )}
 
-            {/* Product Grid */}
-            <section className="mt-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {filteredProducts.map(p => {
-                  const qtyInCart = getQty(p.id);
+            {/* Changes Requested Interactive Box */}
+            {orderStatus === 'Changes Requested' && (
+              <div className="bg-amber-500/10 border border-amber-500/20 text-[#FFD23F] p-4 rounded-2xl text-xs space-y-3.5">
+                <h4 className="font-extrabold text-sm flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm font-bold">info</span>
+                  <span>Review Proposal</span>
+                </h4>
+                {changeRequestMessage && (
+                  <div className="bg-amber-500/20 p-3 rounded-xl border border-amber-500/30 text-white leading-relaxed font-semibold">
+                    "{changeRequestMessage}"
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={handleCancelOrder}
+                    disabled={loading}
+                    className="flex-1 py-3 bg-rose-500/20 border border-rose-500/30 hover:bg-rose-500/30 text-rose-400 font-extrabold rounded-xl transition cursor-pointer text-center uppercase tracking-wider"
+                  >
+                    Cancel Order
+                  </button>
+                  <button
+                    onClick={handleApproveChanges}
+                    disabled={loading}
+                    className="flex-1 py-3 bg-[#FFD23F] hover:opacity-90 text-slate-950 font-black rounded-xl transition cursor-pointer text-center uppercase tracking-wider"
+                  >
+                    {loading ? 'Approving...' : 'Approve Proposal'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Reference Badge Card */}
+            <div className="bg-[#26282B] border border-white/5 rounded-2xl p-5 flex items-center justify-between shadow-sm">
+              <div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Order Number</div>
+                <div className="text-xl font-black mt-0.5 tracking-wider text-white font-mono">#{orderNumber}</div>
+              </div>
+              <button 
+                onClick={copyOrderNumber} 
+                className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-xs font-bold flex items-center gap-2 cursor-pointer hover:bg-white/15 active:scale-95 transition-all text-white"
+              >
+                <span className="material-symbols-outlined text-sm">{orderCopied ? 'check' : 'content_copy'}</span>
+                <span>{orderCopied ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-3 gap-3 text-white text-xs">
+              <div className="p-3 bg-[#26282B] border border-white/5 rounded-2xl flex flex-col items-center text-center gap-1">
+                <span className="material-symbols-outlined text-[#FFD23F] text-lg">schedule</span>
+                <span className="font-extrabold text-[11px] mt-1 truncate">{deliveryType === 'delivery' ? '30–45 min' : '15–20 min'}</span>
+                <span className="text-[9px] text-slate-400 font-semibold">Estimated Time</span>
+              </div>
+              <div className="p-3 bg-[#26282B] border border-white/5 rounded-2xl flex flex-col items-center text-center gap-1">
+                <span className="material-symbols-outlined text-[#FFD23F] text-lg">{deliveryType === 'delivery' ? 'local_shipping' : 'storefront'}</span>
+                <span className="font-extrabold text-[11px] mt-1 capitalize truncate">{deliveryType}</span>
+                <span className="text-[9px] text-slate-400 font-semibold">Order Mode</span>
+              </div>
+              <div className="p-3 bg-[#26282B] border border-white/5 rounded-2xl flex flex-col items-center text-center gap-1">
+                <span className="material-symbols-outlined text-[#FFD23F] text-lg">credit_card</span>
+                <span className="font-extrabold text-[11px] mt-1 capitalize truncate">{paymentMethod}</span>
+                <span className="text-[9px] text-slate-400 font-semibold">Payment</span>
+              </div>
+            </div>
+
+            {/* Timeline Steps Tracker */}
+            <div className="bg-[#26282B] border border-white/5 rounded-3xl p-5 shadow-lg space-y-6">
+              <h3 className="font-black text-sm uppercase tracking-wider text-slate-400 border-b border-white/5 pb-2.5">Live Timeline</h3>
+              
+              <div className="relative border-l border-white/10 ml-3.5 pl-6 space-y-6">
+                {[
+                  { key: 'Pending Approval', label: 'Order Sent & Awaiting Approval', desc: 'The merchant is verifying item stocks and pricing.' },
+                  { key: 'Preparing', label: 'Order Accepted & Packing', desc: 'Staff are packaging your items at the store counter.' },
+                  { key: 'Ready', label: deliveryType === 'delivery' ? 'Out for Delivery' : 'Ready at Counter', desc: deliveryType === 'delivery' ? 'Delivery dispatch agent is carrying your order.' : 'Visit the counter to pick up your package.' },
+                  { key: 'Completed', label: 'Completed', desc: 'Thank you for shopping with StoreFlow!' },
+                ].map((step) => {
+                  const completed = isStatusAtLeast(orderStatus, step.key);
+                  const active = orderStatus === step.key;
                   return (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedProduct(p)}
-                      className="group relative bg-surface-container-lowest border border-outline-variant/10 rounded-2xl p-3 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="relative w-full aspect-square bg-surface rounded-xl mb-3 overflow-hidden flex items-center justify-center">
-                          {p.image ? (
-                            <img className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300" src={p.image} alt="" />
-                          ) : (
-                            <div className="w-full h-full bg-surface-container-low flex items-center justify-center text-on-surface-variant text-2xl font-bold">
-                              {p.name.slice(0, 2).toUpperCase()}
-                            </div>
-                          )}
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              addToCart(p, 1);
-                            }}
-                            className="absolute bottom-2 right-2 w-8 h-8 bg-primary-container rounded-full flex items-center justify-center text-on-primary-container hover:bg-primary-container/90 active:scale-90 transition-transform cursor-pointer shadow-sm z-10"
-                          >
-                            <span className="material-symbols-outlined text-base">add</span>
-                          </button>
-                        </div>
-                        <div className="space-y-1 px-1">
-                          <p className="font-bold text-sm text-on-surface truncate">{p.name}</p>
-                          <p className="text-xs text-secondary truncate">{p.description || p.category || 'Product'}</p>
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center mt-3 px-1">
-                        <span className="font-extrabold text-base text-on-background">₦{getPrice(p).toLocaleString()}</span>
-                        {qtyInCart > 0 && (
-                          <div className="flex items-center gap-1.5 bg-surface-container-high rounded-full px-2 py-1">
-                            <span className="text-[10px] font-bold text-on-surface-variant">{qtyInCart} in cart</span>
-                          </div>
-                        )}
+                    <div key={step.key} className="relative">
+                      <div className={`absolute -left-[30px] top-0.5 w-4 h-4 rounded-full border-2 transition-all duration-300 ${
+                        active 
+                          ? 'bg-[#FFD23F] border-[#1A1C1E] scale-110 shadow-lg shadow-[#FFD23F]/20' 
+                          : completed 
+                            ? 'bg-[#FFD23F] border-[#FFD23F]' 
+                            : 'bg-[#1A1C1E] border-white/20'
+                      }`} />
+                      <div className="space-y-1">
+                        <div className={`text-xs font-black ${active ? 'text-[#FFD23F]' : completed ? 'text-white' : 'text-slate-400'}`}>{step.label}</div>
+                        <div className="text-[10px] text-slate-400 leading-relaxed font-semibold">{step.desc}</div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </section>
-          </>
-        )}
-      </main>
+            </div>
 
-          {/* Sticky Cart Bar */}
-          {totalItemsCount > 0 && (
-            <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-[480px] px-4 animate-fade md:bottom-6">
+            {/* Navigation Actions */}
+            <div className="space-y-3 pt-2">
               <button
-                onClick={() => setIsCartOpen(true)}
-                className="w-full bg-primary text-on-primary py-4 px-6 rounded-full flex justify-between items-center shadow-lg active:scale-98 hover:bg-primary/95 transition-all cursor-pointer"
+                onClick={() => {
+                  setScreen('store');
+                  setStoreTab('Overview');
+                }}
+                className="w-full py-4 bg-[#FFD23F] text-slate-950 font-black rounded-2xl flex items-center justify-center gap-2 active:scale-98 transition shadow-lg text-sm uppercase tracking-wider cursor-pointer"
               >
-                <div className="flex items-center gap-3">
-                  <span className="bg-on-primary text-primary text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold">{totalItemsCount}</span>
-                  <span className="font-semibold text-sm">View Cart</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm">{store?.currency || '₦'}{total.toLocaleString()}</span>
-                  <span className="material-symbols-outlined text-lg">arrow_forward</span>
-                </div>
+                <span className="material-symbols-outlined text-base font-bold">arrow_back</span>
+                <span>Back to Storefront</span>
               </button>
+
+              <button
+                onClick={() => {
+                  setScreen('history');
+                  loadOrdersHistory();
+                }}
+                className="w-full py-4 bg-[#26282B] border border-white/5 text-white font-extrabold rounded-2xl flex items-center justify-between px-5 hover:bg-[#32353A] cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#FFD23F] text-lg">receipt_long</span>
+                  <span>View All Past Orders</span>
+                </span>
+                <span className="material-symbols-outlined text-slate-400 text-lg">chevron_right</span>
+              </button>
+
+              {/* PWA Installer banner */}
+              {deferredPrompt && (
+                <button 
+                  onClick={triggerInstall} 
+                  className="w-full py-4 bg-[#FFD23F]/10 border border-[#FFD23F]/20 text-[#FFD23F] font-bold rounded-2xl flex items-center justify-between px-5 hover:bg-[#FFD23F]/15 cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#FFD23F] text-lg">download</span>
+                    <span>Install PWA Web App</span>
+                  </span>
+                  <span className="material-symbols-outlined text-[#FFD23F] text-lg">chevron_right</span>
+                </button>
+              )}
             </div>
-          )}
+          </main>
         </div>
       )}
-
-      {/* ─── 7. Order Tracking timeline ─── */}
-      {screen === 'tracking' && (
-        <div className="max-w-[480px] mx-auto py-8 px-4 animate-scale space-y-6">
-          <div className="text-center flex flex-col items-center gap-2">
-            <div className="w-16 h-16 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-2">
-              <span className="material-symbols-outlined text-3xl font-bold">done</span>
-            </div>
-            <h1 className="text-2xl font-extrabold text-on-background font-headline-xl">Order Placed! 🎉</h1>
-            <p className="text-sm text-secondary">Your order has been sent to the store.</p>
-          </div>
-
-          <div className="bg-primary text-on-primary rounded-2xl p-5 flex items-center justify-between shadow-sm">
-            <div>
-              <div className="text-[10px] font-bold text-on-primary/60 uppercase tracking-widest">Order Reference</div>
-              <div className="text-2xl font-black mt-0.5 tracking-wider font-headline-xl">#{orderNumber}</div>
-            </div>
-            <button onClick={copyOrderNumber} className="px-4 py-2 rounded-lg bg-white/12 border border-white/10 text-xs font-bold flex items-center gap-2 cursor-pointer hover:bg-white/18 active:scale-95 transition-all">
-              <span className="material-symbols-outlined text-sm">{orderCopied ? 'check' : 'content_copy'}</span>
-              <span>{orderCopied ? 'Copied' : 'Copy'}</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-on-surface">
-            <div className="p-4 bg-surface-container rounded-2xl flex flex-col items-center text-center gap-1 border border-outline-variant/10">
-              <span className="material-symbols-outlined text-primary text-xl">schedule</span>
-              <div className="font-extrabold text-sm mt-1">{deliveryType === 'delivery' ? '30–45 min' : '15–20 min'}</div>
-              <div className="text-[10px] text-secondary font-semibold">Estimated delivery</div>
-            </div>
-            <div className="p-4 bg-surface-container rounded-2xl flex flex-col items-center text-center gap-1 border border-outline-variant/10">
-              <span className="material-symbols-outlined text-primary text-xl">{deliveryType === 'delivery' ? 'local_shipping' : 'storefront'}</span>
-              <div className="font-extrabold text-sm mt-1 capitalize">{deliveryType}</div>
-              <div className="text-[10px] text-secondary font-semibold">Order type</div>
-            </div>
-          </div>
-
-          <div className="bg-surface-container-low rounded-2xl p-6 border border-outline-variant/20 text-on-surface">
-            <h3 className="text-xs font-extrabold uppercase text-secondary tracking-widest mb-6">Order Progress</h3>
-            <div className="relative border-l-2 border-outline-variant/30 ml-3 pl-6 space-y-8">
-              {[
-                { key: 'Pending', label: 'Order Received', desc: 'The store is reviewing your order details' },
-                { key: 'Preparing', label: 'Preparing Bag', desc: 'The shop staff is scanning and packaging your items' },
-                { key: 'Ready', label: deliveryType === 'delivery' ? 'Out for Delivery' : 'Ready for Pickup', desc: deliveryType === 'delivery' ? 'Courier agent has picked up your order' : 'Visit the counter for pickup' },
-                { key: 'Completed', label: 'Completed', desc: 'Thank you for shopping with StoreFlow!' },
-              ].map((step) => {
-                const completed = isStatusAtLeast(orderStatus, step.key);
-                const active = orderStatus === step.key;
-                return (
-                  <div key={step.key} className="relative">
-                    <div className={`absolute -left-[31px] top-0.5 w-4.5 h-4.5 rounded-full border-4 transition-all duration-300 ${
-                      active ? 'bg-primary border-surface-container-low scale-110 shadow' : completed ? 'bg-primary border-primary' : 'bg-surface-container-low border-outline-variant/40'
-                    }`} />
-                    <div className="space-y-1">
-                      <div className={`text-sm font-extrabold ${active ? 'text-primary' : completed ? 'text-on-surface' : 'text-secondary'}`}>{step.label}</div>
-                      <div className="text-xs text-secondary leading-relaxed">{step.desc}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {deferredPrompt && (
-            <button onClick={triggerInstall} className="w-full py-4 bg-primary text-on-primary font-bold rounded-full cursor-pointer hover:bg-primary/95 transition-all shadow-md flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-lg">download</span>
-              <span>Install App for Faster Access</span>
-            </button>
-          )}
-
-          <button onClick={() => setScreen('home')} className="w-full py-4 bg-surface-container-low border border-outline-variant/30 text-on-surface font-bold rounded-full cursor-pointer hover:bg-surface-container-high transition-colors flex items-center justify-center gap-2">
-            <span className="material-symbols-outlined text-lg">home</span>
-            <span>Back to Home</span>
-          </button>
-        </div>
-      )}
-
       {/* ─── 8. Profile Hub Screen ─── */}
       {screen === 'profile' && (
-        <div className="max-w-md mx-auto p-6 flex flex-col justify-between min-h-screen text-on-surface">
-          <header className="flex items-center gap-3 mb-6">
-            <button onClick={() => setScreen('home')} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer active-scale">
+        <div className="bg-[#1A1C1E] min-h-screen text-white pb-32">
+          {/* Header */}
+          <header className="sticky top-0 z-40 bg-[#1A1C1E]/80 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-white/5 px-4 text-white">
+            <button 
+              onClick={() => setScreen('home')} 
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white active:scale-95 transition cursor-pointer"
+            >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
-            <h1 className="text-lg font-bold">Profile Hub</h1>
+            <span className="text-sm font-black tracking-wider uppercase">Profile Hub</span>
+            <div className="w-10 h-10" />
           </header>
 
-          <main className="flex-1 space-y-6">
-            {/* User credentials */}
-            <div className="p-4 bg-surface-container-low rounded-2xl flex items-center gap-4 border border-outline-variant/20">
-              <div className="w-14 h-14 bg-primary-container rounded-full flex items-center justify-center font-bold text-on-primary-container text-xl uppercase shadow-sm">
-                {profileName ? profileName.slice(0, 2) : 'G'}
+          <main className="mt-6 px-4 max-w-md mx-auto space-y-6 text-left">
+            {/* User credentials details */}
+            <div className="p-5 bg-[#26282B] border border-white/5 rounded-3xl flex items-center gap-4 shadow-lg">
+              <div className="w-14 h-14 bg-[#FFD23F] rounded-full flex items-center justify-center font-black text-slate-950 text-xl uppercase shadow-sm">
+                {profileName ? profileName.slice(0, 2) : 'GS'}
               </div>
-              <div>
-                <h4 className="font-extrabold text-base">{profileName || 'Guest User'}</h4>
-                <p className="text-xs text-secondary">{profileEmail || profilePhone || 'Shopping anonymously'}</p>
+              <div className="space-y-0.5">
+                <h4 className="font-extrabold text-base text-white">{profileName || 'Guest Shopper'}</h4>
+                <p className="text-xs text-slate-400 font-semibold">{profileEmail || 'Shopping anonymously'}</p>
+                {currentUser ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mt-1">
+                    Registered Member
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 mt-1">
+                    Guest Account
+                  </span>
+                )}
               </div>
+            </div>
+
+            {/* Permanent Customer ID Section */}
+            <div className="bg-[#26282B] border border-white/5 rounded-3xl p-5 shadow-lg space-y-3">
+              <h3 className="font-black text-xs uppercase tracking-wider text-slate-400">Security Credentials</h3>
+              <div className="flex justify-between items-center bg-[#1A1C1E] p-3.5 rounded-2xl border border-white/5 text-xs">
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">StoreFlow Customer ID</p>
+                  <p className="font-mono mt-1 text-white font-bold">{localStorage.getItem('storeflow_customer_uuid')?.slice(-12) || 'Generating...'}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(localStorage.getItem('storeflow_customer_uuid') || '');
+                    alert('Customer ID copied to clipboard!');
+                  }}
+                  className="p-2 rounded-xl bg-white/10 text-[#FFD23F] hover:bg-white/15 cursor-pointer active:scale-95 transition text-white"
+                >
+                  <span className="material-symbols-outlined text-sm font-bold">content_copy</span>
+                </button>
+              </div>
+              {!currentUser && (
+                <div className="p-3.5 bg-[#FFD23F]/5 border border-[#FFD23F]/10 rounded-2xl text-[10px] text-slate-300 leading-relaxed font-semibold">
+                  💡 <strong>Important Note:</strong> Your orders are tied to this device. Please log in or sign up to link your history permanently.
+                </div>
+              )}
             </div>
 
             {/* Form actions */}
             <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-secondary uppercase px-1">Display Name</label>
+              <div className="space-y-1 px-1">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-wider">Display Name</label>
                 <input
                   type="text"
                   value={profileName}
                   onChange={e => setProfileName(e.target.value)}
-                  className="w-full px-4 h-12 bg-surface-container-low text-on-surface rounded-xl border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                  className="w-full px-4 h-12 bg-[#26282B] text-white rounded-2xl border border-white/5 focus:outline-none focus:border-white/20 text-xs font-bold"
                 />
               </div>
 
               {/* Dark mode toggler */}
-              <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-xl border border-outline-variant/10">
+              <div className="flex items-center justify-between p-4 bg-[#26282B] border border-white/5 rounded-2xl">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-lg">dark_mode</span>
-                  <span className="text-sm font-semibold">Dark Mode</span>
+                  <span className="material-symbols-outlined text-[#FFD23F] text-lg">dark_mode</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Dark Mode Accent</span>
                 </div>
                 <input
                   type="checkbox"
@@ -1808,93 +2315,185 @@ function App() {
                     setDarkMode(e.target.checked);
                     localStorage.setItem('storeflow_dark_mode', String(e.target.checked));
                   }}
-                  className="rounded text-primary focus:ring-primary h-5 w-5"
+                  className="rounded text-[#FFD23F] focus:ring-[#FFD23F] h-5 w-5 bg-slate-900 border-white/10"
                 />
               </div>
 
               {/* Saved list options */}
-              <button onClick={() => { setScreen('history'); loadOrdersHistory(); }} className="w-full p-4 bg-surface-container-low hover:bg-surface-container-high rounded-xl text-left font-semibold text-sm flex items-center justify-between cursor-pointer border border-outline-variant/10 active-scale">
+              <button 
+                onClick={() => { setScreen('history'); loadOrdersHistory(); }} 
+                className="w-full p-4 bg-[#26282B] border border-white/5 rounded-2xl text-left font-extrabold text-xs uppercase tracking-wider flex items-center justify-between cursor-pointer hover:bg-[#32353A] active:scale-98 transition text-white"
+              >
                 <span className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-lg">receipt_long</span>
+                  <span className="material-symbols-outlined text-[#FFD23F] text-lg">receipt_long</span>
                   <span>My Orders History</span>
                 </span>
-                <span className="material-symbols-outlined text-secondary text-lg">chevron_right</span>
+                <span className="material-symbols-outlined text-slate-400 text-lg">chevron_right</span>
               </button>
 
               {/* PWA Installer */}
               {deferredPrompt && (
-                <button onClick={triggerInstall} className="w-full p-4 bg-primary/10 hover:bg-primary/20 rounded-xl text-left font-semibold text-sm flex items-center justify-between cursor-pointer border border-primary/25 active-scale">
+                <button 
+                  onClick={triggerInstall} 
+                  className="w-full p-4 bg-[#FFD23F]/10 border border-[#FFD23F]/20 rounded-2xl text-left font-extrabold text-xs uppercase tracking-wider flex items-center justify-between cursor-pointer hover:bg-[#FFD23F]/15 active:scale-98 transition text-[#FFD23F]"
+                >
                   <span className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-lg">download</span>
-                    <span className="text-primary font-bold">Install StoreFlow Web App</span>
+                    <span className="material-symbols-outlined text-[#FFD23F] text-lg">download</span>
+                    <span>Install PWA App</span>
                   </span>
-                  <span className="material-symbols-outlined text-primary text-lg">chevron_right</span>
+                  <span className="material-symbols-outlined text-[#FFD23F] text-lg">chevron_right</span>
                 </button>
               )}
             </div>
           </main>
 
-          <footer className="py-6">
+          <footer className="py-6 px-4 max-w-md mx-auto">
             {currentUser ? (
-              <button onClick={handleLogout} className="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl active-scale cursor-pointer">
-                Log Out
+              <button onClick={handleLogout} className="w-full h-14 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-2xl active:scale-95 transition cursor-pointer uppercase tracking-wider text-xs">
+                Log Out Account
               </button>
             ) : (
-              <button onClick={() => setScreen('login')} className="w-full h-14 bg-on-background text-surface font-bold rounded-xl active-scale cursor-pointer">
-                Log In
+              <button onClick={() => setScreen('login')} className="w-full h-14 bg-white text-[#1A1C1E] font-black rounded-2xl active:scale-95 transition cursor-pointer uppercase tracking-wider text-xs">
+                Sign In / Register
               </button>
             )}
           </footer>
         </div>
       )}
-
       {/* ─── 9. Orders History Screen ─── */}
       {screen === 'history' && (
-        <div className="max-w-md mx-auto p-6 flex flex-col justify-between min-h-screen text-on-surface">
-          <header className="flex items-center gap-3 mb-6">
-            <button onClick={() => setScreen('home')} className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center cursor-pointer active-scale">
+        <div className="bg-[#1A1C1E] min-h-screen text-white pb-32">
+          {/* Header */}
+          <header className="sticky top-0 z-40 bg-[#1A1C1E]/80 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-white/5 px-4 text-white">
+            <button 
+              onClick={() => setScreen('home')} 
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white active:scale-95 transition cursor-pointer"
+            >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
-            <h1 className="text-lg font-bold">Orders History</h1>
+            <span className="text-sm font-black tracking-wider uppercase">Orders History</span>
+            <div className="w-10 h-10" />
           </header>
 
-          <main className="flex-1 space-y-4 overflow-y-auto">
+          <main className="mt-6 px-4 max-w-md mx-auto space-y-4 text-left">
             {ordersHistory.length === 0 ? (
-              <div className="text-center py-12 text-secondary flex flex-col items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-4xl text-outline-variant">receipt_long</span>
-                <p className="text-sm font-semibold">No orders recorded yet.</p>
+              <div className="text-center py-16 text-slate-400 flex flex-col items-center justify-center gap-3">
+                <span className="material-symbols-outlined text-5xl text-slate-600">receipt_long</span>
+                <p className="text-sm font-black uppercase tracking-wider">No orders placed yet</p>
+                <p className="text-xs text-slate-500 font-medium max-w-xs leading-relaxed">
+                  When you place an order, it will appear here instantly with live tracking updates.
+                </p>
               </div>
             ) : (
-              ordersHistory.map(o => (
-                <div key={o.id} className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/10 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-extrabold text-sm text-on-surface">Order #{o.order_number}</span>
-                    <span className="text-xs font-semibold text-secondary">{new Date(o.created_at).toLocaleDateString()}</span>
+              ordersHistory.map(o => {
+                let itemsSummary = [];
+                let instructions = '';
+                let landmark = '';
+                let paymentMethodText = 'Cash';
+                let storeNameText = 'Partner Store';
+                
+                if (o.notes) {
+                  try {
+                    const parsed = JSON.parse(o.notes);
+                    itemsSummary = parsed.items_summary || [];
+                    instructions = parsed.instructions || '';
+                    landmark = parsed.landmark || '';
+                    paymentMethodText = parsed.payment_method || 'Cash';
+                    storeNameText = parsed.store_name || 'StoreFlow Partner';
+                  } catch (e) {
+                    instructions = o.notes;
+                  }
+                }
+
+                // If itemsSummary is empty, fallback to order_items relation
+                if (itemsSummary.length === 0 && o.order_items) {
+                  itemsSummary = o.order_items.map((oi) => ({
+                    name: oi.product?.name || 'Product',
+                    quantity: oi.quantity,
+                    price: oi.price
+                  }));
+                }
+
+                const totalQty = itemsSummary.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+
+                return (
+                  <div key={o.id} className="bg-[#26282B] border border-white/5 rounded-3xl p-5 shadow-lg space-y-4">
+                    {/* Header: Store Name & Date */}
+                    <div className="flex justify-between items-start border-b border-white/5 pb-3">
+                      <div>
+                        <h4 className="font-extrabold text-sm text-white truncate max-w-[200px]">{storeNameText}</h4>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">#{o.order_number}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 font-bold block">{new Date(o.created_at).toLocaleDateString()}</span>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider mt-1 ${
+                          o.status === 'Completed' || o.status === 'Delivered' ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/35' :
+                          o.status === 'Rejected' || o.status === 'Cancelled' ? 'bg-rose-500/25 text-rose-400 border border-rose-500/35' :
+                          'bg-[#FFD23F]/25 text-[#FFD23F] border border-[#FFD23F]/35'
+                        }`}>
+                          {o.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Receipt Items list */}
+                    <div className="space-y-2 text-xs">
+                      <p className="font-bold text-[10px] text-slate-400 uppercase tracking-wider">Order Items</p>
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        {itemsSummary.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center text-slate-300">
+                            <span className="font-semibold text-white">
+                              {item.name} <span className="text-slate-400 font-mono text-[10px]">x{item.quantity}</span>
+                            </span>
+                            <span className="font-mono text-slate-400">₦{Number(item.price || 0).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Totals & Metadata */}
+                    <div className="bg-[#1A1C1E]/50 p-3 rounded-2xl border border-white/5 space-y-2 text-xs">
+                      <div className="flex justify-between text-slate-400 font-semibold">
+                        <span>Total Items</span>
+                        <span>{totalQty} items</span>
+                      </div>
+                      <div className="flex justify-between text-slate-400 font-semibold">
+                        <span>Payment Mode</span>
+                        <span className="capitalize">{paymentMethodText}</span>
+                      </div>
+                      <div className="flex justify-between text-white font-extrabold border-t border-white/5 pt-2">
+                        <span>Paid Total</span>
+                        <span className="text-[#FFD23F] font-black">₦{o.total.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2 pt-1 text-xs font-bold">
+                      <button
+                        onClick={() => {
+                          setOrderId(o.id);
+                          setOrderNumber(o.order_number);
+                          setOrderStatus(o.status);
+                          setScreen('tracking');
+                        }}
+                        className="flex-1 py-3 bg-[#26282B] border border-white/10 hover:bg-[#32353A] text-white rounded-xl text-center cursor-pointer uppercase tracking-wider transition"
+                      >
+                        Track Status
+                      </button>
+                      <button
+                        onClick={() => handleReorder(o)}
+                        className="flex-1 py-3 bg-[#FFD23F] text-slate-950 rounded-xl text-center cursor-pointer uppercase font-black tracking-wider transition hover:opacity-90 active:scale-98"
+                      >
+                        Reorder Items
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-secondary capitalize font-bold">Status: {o.status}</span>
-                    <span className="font-bold text-on-background">₦{o.total.toLocaleString()}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setOrderId(o.id);
-                        setOrderNumber(o.order_number);
-                        setOrderStatus(o.status);
-                        setScreen('tracking');
-                      }}
-                      className="flex-1 py-2 bg-primary-container text-on-primary-container text-xs font-bold rounded-lg cursor-pointer hover:opacity-90 active-scale"
-                    >
-                      Track Progress
-                    </button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </main>
         </div>
       )}
-
       {/* ─── 10. Store Not Found Screen ─── */}
       {screen === 'store_not_found' && (
         <main className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-background text-on-surface">
@@ -2155,19 +2754,45 @@ function App() {
                   </div>
                 )}
 
-                <button
-                  disabled={!isCheckoutFormValid}
-                  onClick={() => {
-                    const normalized = normalizeNigerianPhone(customerPhone);
-                    if (normalized) {
+                <div className="flex gap-2">
+                  {localStorage.getItem('storeflow_saved_checkout_phone') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerName(localStorage.getItem('storeflow_saved_checkout_name') || '');
+                        setCustomerPhone(localStorage.getItem('storeflow_saved_checkout_phone') || '');
+                        setDeliveryAddress(localStorage.getItem('storeflow_pref_address') || '');
+                        setDeliveryLandmark(localStorage.getItem('storeflow_saved_checkout_landmark') || '');
+                        setSpecialInstructions(localStorage.getItem('storeflow_saved_checkout_notes') || '');
+                      }}
+                      className="px-4 bg-[#26282B] border border-white/10 rounded-full font-bold text-xs hover:bg-[#32353A] transition cursor-pointer text-[#FFD23F]"
+                    >
+                      "It's Me" Prefill
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (!customerName.trim()) {
+                        alert('Please enter your name.');
+                        return;
+                      }
+                      const normalized = normalizeNigerianPhone(customerPhone);
+                      if (!normalized) {
+                        alert('Please enter a valid Nigerian mobile phone number (e.g. 080xxxxxxxx).');
+                        return;
+                      }
+                      if (deliveryType === 'delivery' && !deliveryAddress.trim()) {
+                        alert('Please enter a delivery address.');
+                        return;
+                      }
                       setCustomerPhone(normalized);
-                    }
-                    setCheckoutStep('payment');
-                  }}
-                  className="w-full bg-primary text-on-primary py-4 rounded-full font-bold shadow-md hover:bg-primary/95 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  Continue to Payment
-                </button>
+                      setCheckoutStep('payment');
+                    }}
+                    className="flex-1 bg-[#FFD23F] text-slate-950 py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md hover:opacity-90 active:scale-98 transition-all cursor-pointer"
+                  >
+                    Continue to Payment
+                  </button>
+                </div>
               </div>
             )}
 

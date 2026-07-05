@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoreFlow - Store Page</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fbf9f9;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#e3e2e2",
+                        "surface-container-low": "#f5f3f3",
+                        "surface-container-highest": "#e3e2e2",
+                        "surface-container-high": "#e9e8e7",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-background": "#1b1c1c",
+                        "tertiary-container": "#d9d9d9",
+                        "outline": "#7f775f",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#e5e2e1",
+                        "outline-variant": "#d0c6ab",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed-variant": "#474646",
+                        "on-tertiary-container": "#5d5f5f",
+                        "surface-tint": "#705d00",
+                        "tertiary": "#5d5f5f",
+                        "surface-container": "#efeded",
+                        "on-secondary-container": "#656464",
+                        "primary-fixed-dim": "#e9c400",
+                        "on-primary-fixed": "#221b00",
+                        "on-primary-fixed-variant": "#544600",
+                        "inverse-primary": "#e9c400",
+                        "surface": "#fbf9f9",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "primary-container": "#ffd600",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#dbdad9",
+                        "secondary": "#5f5e5e",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "secondary-container": "#e5e2e1",
+                        "on-surface": "#1b1c1c",
+                        "primary-fixed": "#ffe170",
+                        "on-primary": "#ffffff",
+                        "primary": "#705d00",
+                        "surface-bright": "#fbf9f9",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#e2e2e2",
+                        "background": "#fbf9f9",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-surface-variant": "#4d4632",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#303031",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#705d00",
+                        "inverse-on-surface": "#f2f0f0"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "stack-lg": "32px",
+                        "stack-sm": "8px",
+                        "gutter": "16px",
+                        "container-padding": "24px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "headline-xl-mobile": ["Plus Jakarta Sans"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-background min-h-screen pb-24">
+<!-- Top Navigation Anchor -->
+<header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-md flex justify-between items-center w-full px-gutter h-14 transition-all duration-300">
+<div class="flex items-center gap-3">
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+</div>
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-on-surface">favorite</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-low active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-on-surface">share</span>
+</button>
+</div>
+</header>
+<main class="max-w-[1200px] mx-auto">
+<!-- Store Hero Section -->
+<section class="px-gutter mb-6">
+<div class="relative w-full aspect-[21/9] rounded-xl overflow-hidden shadow-sm">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+<img class="w-full h-full object-cover" data-alt="A wide cinematic shot of a modern, upscale boutique grocery store interior with warm wood accents, minimalist black shelving, and rows of meticulously arranged organic products. The lighting is soft and golden, highlighting the premium graphite aesthetic of the design system. The scene is clean, organized, and evokes a sense of high-end efficiency and urban luxury." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFzu_8uDAWAMlHlVeiueI0OsaxeOipcvLtV8c1lwT-g6N65msOrb4M1MxWgVf3PIlizTOen8M2UJzZOFkxLB8Z_Z4WoQ4_Ui_uT2CsamMaCqjeOSm2Yu-9aPnnk2n1ZxCgrjdm4gvzmjCRGkfktMiOeKPSA_Cbp7UqJ8Kq6PB_bjBiHEsXWEXw46JhJJJXIXRmkNGAuxlZLrcS-PdHpfKOhrAXlJAcEWQV_zlwkudNEv_DzjSChi5mvQ"/>
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+<span class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-lg text-label-sm shadow-sm">Featured Partner</span>
+</div>
+</div>
+<div class="mt-4 flex justify-between items-start">
+<div>
+<h1 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background">FreshMart</h1>
+<div class="flex items-center gap-2 mt-1">
+<div class="flex items-center text-primary-fixed-dim">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-lg text-label-lg text-on-surface-variant ml-1">4.6 (320 ratings)</span>
+</div>
+</div>
+</div>
+</div>
+<div class="flex gap-4 mt-4 text-on-surface-variant font-body-md text-body-md">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+<span>20-30 min</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">delivery_dining</span>
+<span>Free delivery over ₦5,000</span>
+</div>
+</div>
+</section>
+<!-- StoreFlow Price Badge -->
+<section class="px-gutter mb-8">
+<div class="bg-surface-container-low rounded-xl p-4 flex items-center gap-4 border border-outline-variant/30">
+<div class="w-12 h-12 bg-primary-container rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container text-2xl">local_offer</span>
+</div>
+<div>
+<p class="font-label-lg text-label-lg text-on-surface">StoreFlow Prices</p>
+<p class="font-body-md text-body-md text-secondary">You get lower prices on items in this store 🎉</p>
+</div>
+</div>
+</section>
+<!-- Search and Category Chips -->
+<section class="sticky top-14 z-30 bg-surface/95 backdrop-blur-sm pt-2 pb-4">
+<div class="px-gutter">
+<div class="relative w-full h-14 bg-surface-container-low rounded-full flex items-center px-4 transition-all focus-within:ring-2 focus-within:ring-on-background/10">
+<span class="material-symbols-outlined text-secondary mr-3">search</span>
+<input class="bg-transparent border-none focus:ring-0 w-full text-body-lg font-body-lg placeholder:text-secondary-fixed-dim" placeholder="Search in store" type="text"/>
+<span class="material-symbols-outlined text-secondary ml-2">tune</span>
+</div>
+<div class="flex gap-2 mt-6 overflow-x-auto hide-scrollbar -mx-gutter px-gutter">
+<button class="whitespace-nowrap px-6 py-2 rounded-full bg-on-background text-surface font-label-lg text-label-lg transition-colors">All</button>
+<button class="whitespace-nowrap px-6 py-2 rounded-full bg-surface-container-high text-on-surface-variant font-label-lg text-label-lg hover:bg-surface-container-highest transition-colors">Groceries</button>
+<button class="whitespace-nowrap px-6 py-2 rounded-full bg-surface-container-high text-on-surface-variant font-label-lg text-label-lg hover:bg-surface-container-highest transition-colors">Drinks</button>
+<button class="whitespace-nowrap px-6 py-2 rounded-full bg-surface-container-high text-on-surface-variant font-label-lg text-label-lg hover:bg-surface-container-highest transition-colors">Snacks</button>
+<button class="whitespace-nowrap px-6 py-2 rounded-full bg-surface-container-high text-on-surface-variant font-label-lg text-label-lg hover:bg-surface-container-highest transition-colors">Household</button>
+</div>
+</div>
+</section>
+<!-- Popular Items Section -->
+<section class="px-gutter mt-4">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-headline-md text-headline-md text-on-background">Popular items</h2>
+<button class="text-primary font-label-lg text-label-lg">See all</button>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+<!-- Product Card 1 -->
+<div class="group relative bg-surface-container-lowest border border-outline-variant/10 rounded-xl p-3 hover:shadow-lg transition-all duration-300">
+<div class="relative w-full aspect-square bg-surface rounded-lg mb-3 overflow-hidden">
+<img class="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-500" data-alt="A clean, studio-lit commercial product shot of Indomie Chicken Flavor instant noodles in its iconic orange and green packaging. The image is crisp with a pure white background, showcasing the brand's graphic identity. The lighting is bright and even, highlighting the details of the packaging design for a premium grocery shopping app experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzcLS2XffDNKufXbHzPpOkWbuH91tH1WhYPKKSxkgzaXMj1AO_-o6GHVdDbGZ9zh0f22J3RltcDr1-zZce6gdmiHv95QsotrjMLZfdZotZCpixuXxviB45PHVy3Ni4lP5bZtszuCBQNZh5_zLcb2vfTA37P2OeTqhjfHi_ZVkzzTY5bpa_qdqLAy90Ypw8sEXxr5duj8AxiNxS1dYb2pC9D7oziYV3bn3nZYoKqlutiPLSaGvHcxLFVg"/>
+<button class="absolute bottom-2 right-2 w-8 h-8 bg-primary-container rounded-full flex items-center justify-center text-on-primary-container active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+<div class="space-y-1">
+<p class="font-label-lg text-label-lg text-on-surface truncate">Indomie Chicken</p>
+<p class="font-body-md text-body-md text-secondary">70g</p>
+<p class="font-headline-md text-headline-md text-on-background">₦480</p>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="group relative bg-surface-container-lowest border border-outline-variant/10 rounded-xl p-3 hover:shadow-lg transition-all duration-300">
+<div class="relative w-full aspect-square bg-surface rounded-lg mb-3 overflow-hidden">
+<img class="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-500" data-alt="A studio photograph of a 50cl bottle of Coca-Cola, featuring condensation droplets on the clear plastic bottle and the iconic red and white label. The lighting is sharp and high-contrast, creating a refreshing and premium feel. The background is a clean neutral white, fitting the minimalist modern corporate style of the store flow app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAraSVJUppxHchIoS1HPTU62rMyAP1xLs7cpAmCJSdPADjO0swkplsH4TpQebAOGNnRWUjgwb3yDfewhkYHmeW3dNQmfWhBnZw94fsjKtrh7VKXwL6hsVfdu7vJEyvsXHV7rUGMMlH88ZUh3RpgyEfy8Xr2kpW6d4JbiNGYryGCKgVwJj20hMnmm--Q8ZGKKMZncDMoR8PTne5HGIRkW7ueiGzMOGT5VT6ztpuYRKfcwnOGNPhflroBvw"/>
+<button class="absolute bottom-2 right-2 w-8 h-8 bg-primary-container rounded-full flex items-center justify-center text-on-primary-container active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+<div class="space-y-1">
+<p class="font-label-lg text-label-lg text-on-surface truncate">Coca Cola 50cl</p>
+<p class="font-body-md text-body-md text-secondary">Liquid</p>
+<p class="font-headline-md text-headline-md text-on-background">₦350</p>
+</div>
+</div>
+<!-- Product Card 3 -->
+<div class="group relative bg-surface-container-lowest border border-outline-variant/10 rounded-xl p-3 hover:shadow-lg transition-all duration-300">
+<div class="relative w-full aspect-square bg-surface rounded-lg mb-3 overflow-hidden">
+<img class="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-500" data-alt="A commercial product shot of a Golden Penny Semovita 1kg flour bag. The packaging is premium and colorful, displayed prominently against a minimalist white studio background. The lighting is bright and clean, emphasizing the quality of the staple food item for a high-end delivery service interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3IhlwPN3WVKJ_DyPRhKc0KUb8o8G41pfxZmbQBt1sEg0Kg4BINNKnjsffFTbSWW2gbMS1TdxXkT00Ex84T-XjNW81DHVkYFNCtY7UqG6Y1npoJOCcZIoXebNrRCfpXwp7GbC3PfZ32YRR-PC0C7F5igbkWMwoAotRNkE7Ld1TqwOURRCWtOtyBqXZU_0W2NPaWpp_iOVCPQFXj1KlSl8zIsHoEKAE9MyQwQOF5cWqQ7IT1IzKqvvmhg"/>
+<button class="absolute bottom-2 right-2 w-8 h-8 bg-primary-container rounded-full flex items-center justify-center text-on-primary-container active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+<div class="space-y-1">
+<p class="font-label-lg text-label-lg text-on-surface truncate">Golden Penny</p>
+<p class="font-body-md text-body-md text-secondary">1kg</p>
+<p class="font-headline-md text-headline-md text-on-background">₦850</p>
+</div>
+</div>
+<!-- Product Card 4 -->
+<div class="group relative bg-surface-container-lowest border border-outline-variant/10 rounded-xl p-3 hover:shadow-lg transition-all duration-300">
+<div class="relative w-full aspect-square bg-surface rounded-lg mb-3 overflow-hidden">
+<img class="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-500" data-alt="A studio shot of a Milo tin container (400g) with its distinctive green branding and active lifestyle imagery. The tin is centered in the frame on a clean white background, illuminated by soft professional lighting that highlights the metallic texture and vibrant colors. Perfect for a modern, high-quality grocery app product listing." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNhl4BW_ZQaHwmxOMsj1ro4kCUA5OHNsVHMobweeYvzvXFNzlvmRr0weI3iDv4XfXshJg7ZvkFQ7UbxIu6LFzyuIExv-Na_s-TfRMgRHYpDdsO7EwzeTJphMOb46duaGAG6t7enLXKtDwuHJIi_MoYd2qkbD4e0UC38W7P4EHNAzQOzsotPPElH1x6XYyP5orBM1i5JbkpXTSAnom-YKDpYmJb0O0zekAXux8GdcYWnoefSLWJoTI0Jg"/>
+<button class="absolute bottom-2 right-2 w-8 h-8 bg-primary-container rounded-full flex items-center justify-center text-on-primary-container active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+<div class="space-y-1">
+<p class="font-label-lg text-label-lg text-on-surface truncate">Milo Tin 400g</p>
+<p class="font-body-md text-body-md text-secondary">Cocoa Beverage</p>
+<p class="font-headline-md text-headline-md text-on-background">₦2,750</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Categories Browse (Grid) -->
+<section class="px-gutter mt-10">
+<h2 class="font-headline-md text-headline-md text-on-background mb-6">Browse Categories</h2>
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-surface-container-high h-28 rounded-2xl flex items-center justify-between px-5 group overflow-hidden relative active:scale-95 transition-transform">
+<span class="font-headline-md text-headline-md z-10">Fruits &amp; <br/> Veggies</span>
+<img class="absolute -right-4 -bottom-4 w-24 h-24 rotate-12 group-hover:scale-110 transition-transform opacity-80" data-alt="A vibrant, fresh assortment of organic fruits and vegetables including crisp apples, bright oranges, and leafy greens. The lighting is natural and bright, emphasizing freshness and quality within a minimalist aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAq9T9-EFiORUnm8qFlSxDj6M7tWN6I6xHRe7za__nZfurFjAqIGDBZ9sUDq0N0xSjeQs_AVhZVVAWULaN76qPagNJ5dPAWTScjuKjNgnY32N-5AL95QzM38n-S4NTPfYlEcyNa9HqL4eHWUP2430dJZ8qGNBKos8YCJoKXPp2yLLmSXGUi4dDHbGJDw4_q9Q81DjEO1d3oGWfzmSkGE-E8aZDSMrqWEVfkkd4u0ZcSQL3XdQGmwQDI-w"/>
+</div>
+<div class="bg-surface-container-high h-28 rounded-2xl flex items-center justify-between px-5 group overflow-hidden relative active:scale-95 transition-transform">
+<span class="font-headline-md text-headline-md z-10">Meats &amp; <br/> Seafood</span>
+<img class="absolute -right-4 -bottom-4 w-24 h-24 -rotate-6 group-hover:scale-110 transition-transform opacity-80" data-alt="Premium cuts of fresh steak and seafood presented on a clean slate board. High-end lighting and a sophisticated graphite palette highlight the quality of the products for an upscale urban shopper." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVZm4xVqgKRBTETyzUAPBUKLD_zHK4mM4UvDptm8nsVcuA9lqjqD2B_EHU2bI9eVjFNDS3fnPpbzuC6q-EMpYjMoSXu-1dckQBjgjaSKxDDaGJ_kYSs3xfewgw1cU2X8AJuX2v__A5xd_kwcxI8SUtFdx4Cn2ks0JPApLBea58K8pTMLwldfdpZchL18cWOmI_sutE4cXSLYPGQnRZKqbTgDTlk3qNT_-uMZfo0IVtL07QCRcd1mDs9Q"/>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (The Anchor) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-surface shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] rounded-t-xl md:hidden">
+<a class="flex flex-col items-center justify-center text-secondary" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-sm text-label-sm mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary relative after:content-[''] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-primary-container after:rounded-full" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span class="font-label-sm text-label-sm mt-1 font-bold">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="font-label-sm text-label-sm mt-1">Orders</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary relative" href="#">
+<span class="material-symbols-outlined">shopping_cart</span>
+<span class="font-label-sm text-label-sm mt-1">Cart</span>
+<span class="absolute -top-1 -right-1 bg-primary text-on-primary text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">3</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm mt-1">Profile</span>
+</a>
+</nav>
+<!-- Contextual FAB (Suppressed for this detailed page per rules, but included if needed on Dashboard) -->
+<script>
+        // Micro-interactions
+        document.querySelectorAll('.active\\:scale-95').forEach(button => {
+            button.addEventListener('mousedown', () => {
+                button.classList.add('scale-95');
+            });
+            button.addEventListener('mouseup', () => {
+                button.classList.remove('scale-95');
+            });
+        });
+
+        // Sticky header transition
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header');
+            if (window.scrollY > 20) {
+                header.classList.add('bg-surface', 'shadow-sm');
+                header.classList.remove('bg-surface/80');
+            } else {
+                header.classList.remove('bg-surface', 'shadow-sm');
+                header.classList.add('bg-surface/80');
+            }
+        });
+    </script>
+</body></html>

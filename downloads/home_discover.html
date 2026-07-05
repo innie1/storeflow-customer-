@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoreFlow | Discover</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Plus+Jakarta+Sans:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        ::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .premium-card-shadow {
+            box-shadow: 0px 4px 20px rgba(0,0,0,0.05);
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-variant": "#e3e2e2",
+                    "surface-container-low": "#f5f3f3",
+                    "surface-container-highest": "#e3e2e2",
+                    "surface-container-high": "#e9e8e7",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "on-background": "#1b1c1c",
+                    "tertiary-container": "#d9d9d9",
+                    "outline": "#7f775f",
+                    "on-secondary-fixed": "#1c1b1b",
+                    "on-error": "#ffffff",
+                    "secondary-fixed": "#e5e2e1",
+                    "outline-variant": "#d0c6ab",
+                    "error": "#ba1a1a",
+                    "on-secondary-fixed-variant": "#474646",
+                    "on-tertiary-container": "#5d5f5f",
+                    "surface-tint": "#705d00",
+                    "tertiary": "#5d5f5f",
+                    "surface-container": "#efeded",
+                    "on-secondary-container": "#656464",
+                    "primary-fixed-dim": "#e9c400",
+                    "on-primary-fixed": "#221b00",
+                    "on-primary-fixed-variant": "#544600",
+                    "inverse-primary": "#e9c400",
+                    "surface": "#fbf9f9",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "primary-container": "#ffd600",
+                    "on-error-container": "#93000a",
+                    "surface-dim": "#dbdad9",
+                    "secondary": "#5f5e5e",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#c8c6c5",
+                    "secondary-container": "#e5e2e1",
+                    "on-surface": "#1b1c1c",
+                    "primary-fixed": "#ffe170",
+                    "on-primary": "#ffffff",
+                    "primary": "#705d00",
+                    "surface-bright": "#fbf9f9",
+                    "error-container": "#ffdad6",
+                    "tertiary-fixed": "#e2e2e2",
+                    "background": "#fbf9f9",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-surface-variant": "#4d4632",
+                    "on-tertiary": "#ffffff",
+                    "inverse-surface": "#303031",
+                    "on-secondary": "#ffffff",
+                    "on-primary-container": "#705d00",
+                    "inverse-on-surface": "#f2f0f0"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "8px",
+                    "stack-lg": "32px",
+                    "stack-sm": "8px",
+                    "gutter": "16px",
+                    "container-padding": "24px",
+                    "stack-md": "16px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Plus Jakarta Sans"],
+                    "label-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-xl": ["Plus Jakarta Sans"],
+                    "headline-xl-mobile": ["Plus Jakarta Sans"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "label-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen pb-24">
+<!-- Top AppBar -->
+<header class="sticky top-0 z-50 bg-surface flex justify-between items-center w-full px-gutter h-14">
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center hover:bg-surface-container-low transition-colors rounded-full">
+<span class="material-symbols-outlined text-primary">menu</span>
+</button>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary">Deliver to</span>
+<div class="flex items-center gap-1">
+<span class="font-label-lg text-label-lg text-on-surface">Ikeja, Lagos</span>
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center hover:bg-surface-container-low transition-colors rounded-full">
+<span class="material-symbols-outlined text-primary">notifications</span>
+</button>
+</div>
+</header>
+<main class="max-w-[1200px] mx-auto px-gutter">
+<!-- Search Bar -->
+<section class="mt-4">
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-secondary">search</span>
+</div>
+<input class="w-full h-14 pl-12 pr-12 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-on-background transition-all font-body-md placeholder:text-secondary" placeholder="What do you need?" type="text"/>
+<div class="absolute inset-y-0 right-4 flex items-center">
+<span class="material-symbols-outlined text-secondary">tune</span>
+</div>
+</div>
+</section>
+<!-- Nearby Stores -->
+<section class="mt-stack-lg">
+<div class="flex justify-between items-center mb-stack-md">
+<h2 class="font-headline-md text-headline-md text-on-background">Nearby Stores</h2>
+<button class="font-label-lg text-label-lg text-primary">See all</button>
+</div>
+<div class="flex gap-4 overflow-x-auto no-scrollbar -mx-gutter px-gutter pb-4">
+<!-- Store Card 1 -->
+<div class="min-w-[280px] bg-surface-container-lowest rounded-xl overflow-hidden premium-card-shadow flex-shrink-0 group cursor-pointer transition-transform duration-200 active:scale-[0.98]">
+<div class="h-40 w-full relative">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="A high-resolution, gourmet grocery store interior with warm overhead lighting, rows of fresh vibrant produce, and artisanal bread displays. The aesthetic is clean, modern, and premium, using a neutral color palette of soft greys and blacks with pops of natural green from the vegetables." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuALem6O598XIk5SHLcNxk9jEvztyNk5WTTXV768_9XN7MNfkP6MWs3R1SII18IOMgalU86-bMPZCY1FrkrKozQpl1qg51kSwPpRQyVvLJM1vg4wMrySIzCCAI97ZSbfhsn1_KITUr4oklSG41IH2yCZd9lemPBZ-kPEA9t4Ap90_RM8FuhkwZO6R2SPW7iJFrhet4syPLaZ9UJQn1l7lII2aznoTjKE2I3ehRKAdZzLjPamkmOl22G9jQ')"></div>
+<div class="absolute top-3 left-3 bg-primary-container text-on-primary-container px-2 py-1 rounded-lg text-[10px] font-bold">FREE DELIVERY</div>
+</div>
+<div class="p-4">
+<div class="flex justify-between items-start mb-1">
+<h3 class="font-headline-md text-headline-md truncate">FreshMart</h3>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-lg text-label-lg">4.6</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-secondary font-label-sm text-label-sm">
+<span>20-30 min</span>
+<span>•</span>
+<span>Grocery</span>
+</div>
+</div>
+</div>
+<!-- Store Card 2 -->
+<div class="min-w-[280px] bg-surface-container-lowest rounded-xl overflow-hidden premium-card-shadow flex-shrink-0 group cursor-pointer transition-transform duration-200 active:scale-[0.98]">
+<div class="h-40 w-full relative">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="A stylish modern convenience store front at twilight with bright neon accents and a minimalist design. The storefront is primarily graphite black and glass, reflecting the city lights. Inside, perfectly organized shelves of snacks and bottled drinks are visible through the large windows." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCiPPMW7wOHOoimoLM9InKrblnbk_klRs-xXe6zSmOnh1vzfcWa2iiEiFBWRBbEf3oZWAPjnNIgLkaYDC72bvPChtWgjg_vmhnEer6bLgaCvPJuuT1_iUZtiTlKo8dGqiDLbTgLK636I7h5ke_WvYqHESCSLNcPvqvOXdk8zeUEwi72UCqP9m4GCbiTPf85--4Z7_LLtqTHpemPYHSMAXLPeC4n0x3-NPZ-qga20HWkIrinhIZGu00dLQ')"></div>
+<div class="absolute top-3 left-3 bg-primary-container text-on-primary-container px-2 py-1 rounded-lg text-[10px] font-bold">FREE DELIVERY</div>
+</div>
+<div class="p-4">
+<div class="flex justify-between items-start mb-1">
+<h3 class="font-headline-md text-headline-md truncate">QuickBuy Superstore</h3>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-lg text-label-lg">4.8</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-secondary font-label-sm text-label-sm">
+<span>15-25 min</span>
+<span>•</span>
+<span>Retail</span>
+</div>
+</div>
+</div>
+<!-- Store Card 3 -->
+<div class="min-w-[280px] bg-surface-container-lowest rounded-xl overflow-hidden premium-card-shadow flex-shrink-0 group cursor-pointer transition-transform duration-200 active:scale-[0.98]">
+<div class="h-40 w-full relative">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="A boutique premium liquor and specialty beverage store with dark wood shelving, atmospheric low-key lighting, and gold accents. The space feels luxurious and exclusive, showcasing fine wines and craft beers. The overall mood is sophisticated and elegant in a minimalist urban setting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAQbYxDzUgWQPnkWqUDjqxA5UvD4a-xYwdbn5I-D86-ABB08ugmE0-FaK09pMG5uVXOYgw7lmESpfFyzkq5Aq_oQUSaJBQGedD1Ax73cvg-go4MUHYlBMElTsuebDaOvbF7LPHsFP8qV0VD1FJz7v1xJi4Y7l8he_AM_dW0aSjmRcOtQhw3Rj7URXzY6zod6T3qi6uHODL6P3aZ7VdCvF16WP00EI3S3iUbWt9oewmGsoF0n0h_s1el4Q')"></div>
+</div>
+<div class="p-4">
+<div class="flex justify-between items-start mb-1">
+<h3 class="font-headline-md text-headline-md truncate">Prime Drinks</h3>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-lg text-label-lg">4.9</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-secondary font-label-sm text-label-sm">
+<span>10-20 min</span>
+<span>•</span>
+<span>Wines & Spirits</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Categories Grid -->
+<section class="mt-stack-lg">
+<div class="flex justify-between items-center mb-stack-md">
+<h2 class="font-headline-md text-headline-md text-on-background">Categories</h2>
+<button class="font-label-lg text-label-lg text-primary">See all</button>
+</div>
+<div class="grid grid-cols-4 md:grid-cols-8 gap-4">
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center group-hover:bg-primary-container transition-all">
+<span class="material-symbols-outlined text-on-surface text-3xl">shopping_basket</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface">Groceries</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center group-hover:bg-primary-container transition-all">
+<span class="material-symbols-outlined text-on-surface text-3xl">local_bar</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface">Drinks</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center group-hover:bg-primary-container transition-all">
+<span class="material-symbols-outlined text-on-surface text-3xl">fastfood</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface">Snacks</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center group-hover:bg-primary-container transition-all">
+<span class="material-symbols-outlined text-on-surface text-3xl">spa</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface">Personal Care</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center group-hover:bg-primary-container transition-all">
+<span class="material-symbols-outlined text-on-surface text-3xl">child_care</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface">Baby</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center group-hover:bg-primary-container transition-all">
+<span class="material-symbols-outlined text-on-surface text-3xl">pets</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface">Pets</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center group-hover:bg-primary-container transition-all">
+<span class="material-symbols-outlined text-on-surface text-3xl">clean_hands</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface">Cleaning</span>
+</div>
+<div class="flex flex-col items-center gap-2 cursor-pointer group">
+<div class="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center group-hover:bg-primary-container transition-all">
+<span class="material-symbols-outlined text-on-surface text-3xl">more_horiz</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface">More</span>
+</div>
+</div>
+</section>
+<!-- Today's Deals -->
+<section class="mt-stack-lg mb-stack-lg">
+<div class="flex justify-between items-center mb-stack-md">
+<h2 class="font-headline-md text-headline-md text-on-background">Today's Deals 🔥</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Deal Card 1 -->
+<div class="bg-surface-container-low rounded-xl p-4 flex gap-4 relative group cursor-pointer border border-transparent hover:border-on-background transition-all">
+<div class="w-24 h-24 bg-surface rounded-lg overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-contain p-2" data-alt="A stack of premium, branded snack packaging against a minimalist light grey background. The lighting is crisp and flat, emphasizing the clean design and vivid colors of the product. Modern luxury grocery aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFCxHnjxfxUmualNOOaNfHgm_ZzMgNpFbJ2UAiFqvtKajSzYZtBgO2rHbjOSBlfVvR9zH1qhBduSiqGZrK_3-G6bsJVBSaV74eHM2NDiEUgD51u4bhnjmSZtvw-PD-brOMSWKhEOiC5IM4XFoRdKzPzi5goSN2khtEsELStZp7tIfqM7fWD2KnW3819DXwmJRWwPtFXTrrsjgn7wnWZj49DxcnRjMJJjo4xfQajRBr7Sk-E8acKzmuwg"/>
+</div>
+<div class="flex flex-col justify-center">
+<span class="bg-error text-on-error w-fit px-2 py-0.5 rounded text-[10px] font-bold mb-1">-15%</span>
+<h4 class="font-label-lg text-label-lg text-on-surface">Indomie Chicken Noodles</h4>
+<p class="text-secondary font-label-sm text-label-sm mb-1">70g</p>
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md text-on-surface">₦480</span>
+<span class="text-secondary line-through font-label-sm text-label-sm">₦550</span>
+</div>
+</div>
+<button class="absolute bottom-4 right-4 w-10 h-10 bg-on-background text-surface rounded-full flex items-center justify-center hover:bg-primary transition-all">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<!-- Deal Card 2 -->
+<div class="bg-surface-container-low rounded-xl p-4 flex gap-4 relative group cursor-pointer border border-transparent hover:border-on-background transition-all">
+<div class="w-24 h-24 bg-surface rounded-lg overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-contain p-2" data-alt="A designer glass bottle of premium sparkling water with elegant minimal label design. Set against a clean, bright studio background with subtle soft shadows. Minimalist graphite and yellow color accents in the environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9hnKNkQeUNUI6bGIXbSW7tlJbSDMlXitaJD13HR4Khce07zzRBIKOL0o4nrZdHCXP3XW1SQPQ2atj1BDn35UXkL0TYL096bE_BVnTUhfZm2Ygfyl9X3Nzr1c9L6bYtwboyfKYnw10Mx-SJAfhVvFO0kTqMwzwK6Ib4xSkUocn2BF7gx4ZPoOVjreF6uJfLD7mVjXYKbItb6zzkefzTEwXtfJe3qxZcohHrkpmVpO1JTsnXp5M_U6NHA"/>
+</div>
+<div class="flex flex-col justify-center">
+<span class="bg-error text-on-error w-fit px-2 py-0.5 rounded text-[10px] font-bold mb-1">-10%</span>
+<h4 class="font-label-lg text-label-lg text-on-surface">Coca Cola Zero</h4>
+<p class="text-secondary font-label-sm text-label-sm mb-1">50cl</p>
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md text-on-surface">₦350</span>
+<span class="text-secondary line-through font-label-sm text-label-sm">₦400</span>
+</div>
+</div>
+<button class="absolute bottom-4 right-4 w-10 h-10 bg-on-background text-surface rounded-full flex items-center justify-center hover:bg-primary transition-all">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-surface dark:bg-background shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed relative after:content-[''] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-primary-container after:rounded-full scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-sm text-label-sm mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-colors" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-label-sm text-label-sm mt-1">Categories</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-colors" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="font-label-sm text-label-sm mt-1">Orders</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-colors relative" href="#">
+<span class="material-symbols-outlined">shopping_cart</span>
+<span class="font-label-sm text-label-sm mt-1">Cart</span>
+<span class="absolute -top-1 -right-1 bg-primary text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">3</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-colors" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm mt-1">Profile</span>
+</a>
+</nav>
+<script>
+        // Micro-interactions
+        document.querySelectorAll('nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                // If this wasn't a real app, we'd handle routing
+                // For demo, just toggle active visual state
+                document.querySelectorAll('nav a').forEach(l => {
+                    l.classList.remove('text-primary', 'after:content-[\'\']', 'scale-90');
+                    l.classList.add('text-secondary');
+                    const icon = l.querySelector('.material-symbols-outlined');
+                    if(icon) icon.style.fontVariationSettings = "'FILL' 0";
+                });
+                this.classList.add('text-primary', 'after:content-[\'\']', 'scale-90');
+                this.classList.remove('text-secondary');
+                const activeIcon = this.querySelector('.material-symbols-outlined');
+                if(activeIcon) activeIcon.style.fontVariationSettings = "'FILL' 1";
+            });
+        });
+
+        // Search bar interaction
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('scale-[1.01]');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('scale-[1.01]');
+        });
+    </script>
+</body></html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Order Review | StoreFlow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#e3e2e2",
+                        "surface-container-low": "#f5f3f3",
+                        "surface-container-highest": "#e3e2e2",
+                        "surface-container-high": "#e9e8e7",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-background": "#1b1c1c",
+                        "tertiary-container": "#d9d9d9",
+                        "outline": "#7f775f",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#e5e2e1",
+                        "outline-variant": "#d0c6ab",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed-variant": "#474646",
+                        "on-tertiary-container": "#5d5f5f",
+                        "surface-tint": "#705d00",
+                        "tertiary": "#5d5f5f",
+                        "surface-container": "#efeded",
+                        "on-secondary-container": "#656464",
+                        "primary-fixed-dim": "#e9c400",
+                        "on-primary-fixed": "#221b00",
+                        "on-primary-fixed-variant": "#544600",
+                        "inverse-primary": "#e9c400",
+                        "surface": "#fbf9f9",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "primary-container": "#ffd600",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#dbdad9",
+                        "secondary": "#5f5e5e",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "secondary-container": "#e5e2e1",
+                        "on-surface": "#1b1c1c",
+                        "primary-fixed": "#ffe170",
+                        "on-primary": "#ffffff",
+                        "primary": "#705d00",
+                        "surface-bright": "#fbf9f9",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#e2e2e2",
+                        "background": "#fbf9f9",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-surface-variant": "#4d4632",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#303031",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#705d00",
+                        "inverse-on-surface": "#f2f0f0"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "stack-lg": "32px",
+                        "stack-sm": "8px",
+                        "gutter": "16px",
+                        "container-padding": "24px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "headline-xl-mobile": ["Plus Jakarta Sans"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #fbf9f9;
+            color: #1b1c1c;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .checkout-step-line {
+            height: 2px;
+            background: #e5e2e1;
+            flex-grow: 1;
+        }
+        .active-step-line {
+            background: #1b1c1c;
+        }
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 12px 0;
+            border-bottom: 1px solid #efeded;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background">
+<!-- Top AppBar - Following JSON guidelines -->
+<header class="bg-surface sticky top-0 z-50 flex justify-between items-center w-full px-gutter h-14">
+<button class="text-primary p-1 active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-on-background">Review Order</h1>
+<button class="text-primary p-1 active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined">help</span>
+</button>
+</header>
+<main class="max-w-md mx-auto pb-32">
+<!-- Progress Stepper -->
+<div class="px-container-padding py-6 flex items-center justify-between">
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-on-background flex items-center justify-center text-surface">
+<span class="material-symbols-outlined text-[18px]">local_shipping</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-background">Delivery</span>
+</div>
+<div class="checkout-step-line active-step-line mx-2"></div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-on-background flex items-center justify-center text-surface">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-background">Address</span>
+</div>
+<div class="checkout-step-line active-step-line mx-2"></div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-on-background flex items-center justify-center text-surface">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-background">Payment</span>
+</div>
+<div class="checkout-step-line active-step-line mx-2"></div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">fact_check</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-background font-bold">Review</span>
+</div>
+</div>
+<!-- Order Summary Section -->
+<section class="bg-surface-container-lowest mx-gutter rounded-xl shadow-sm overflow-hidden mb-6">
+<div class="px-gutter py-4 border-b border-surface-container">
+<h2 class="font-headline-md text-headline-md text-on-background">Order summary</h2>
+</div>
+<div class="px-gutter">
+<!-- Product Items -->
+<div class="item-row">
+<div class="flex-1">
+<p class="font-label-lg text-label-lg text-on-background">Indomie Chicken (2)</p>
+<p class="font-body-md text-body-md text-secondary">70g</p>
+</div>
+<span class="font-label-lg text-label-lg text-on-background">₦960</span>
+</div>
+<div class="item-row">
+<div class="flex-1">
+<p class="font-label-lg text-label-lg text-on-background">Coca Cola 50cl (1)</p>
+<p class="font-body-md text-body-md text-secondary">50cl Bottle</p>
+</div>
+<span class="font-label-lg text-label-lg text-on-background">₦350</span>
+</div>
+<div class="item-row">
+<div class="flex-1">
+<p class="font-label-lg text-label-lg text-on-background">Golden Penny Semovita 1kg (1)</p>
+<p class="font-body-md text-body-md text-secondary">1kg Pack</p>
+</div>
+<span class="font-label-lg text-label-lg text-on-background">₦850</span>
+</div>
+<!-- Price Breakdown -->
+<div class="py-4 space-y-2">
+<div class="flex justify-between">
+<span class="font-body-md text-body-md text-secondary">Subtotal</span>
+<span class="font-body-md text-body-md text-on-background">₦2,160</span>
+</div>
+<div class="flex justify-between">
+<span class="font-body-md text-body-md text-secondary">Delivery fee</span>
+<span class="font-body-md text-body-md text-primary font-bold">FREE</span>
+</div>
+<div class="flex justify-between pt-2 border-t border-surface-container">
+<span class="font-headline-md text-headline-md text-on-background">Total</span>
+<span class="font-headline-md text-headline-md text-on-background">₦2,160</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Delivery Address -->
+<section class="mx-gutter mb-6">
+<h3 class="font-label-lg text-label-lg text-secondary mb-2">Deliver to</h3>
+<div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex items-start gap-3 border border-surface-container">
+<div class="p-2 rounded-lg bg-surface-container-high">
+<span class="material-symbols-outlined text-on-surface">home</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-1">
+<p class="font-label-lg text-label-lg text-on-background">Home</p>
+<button class="text-primary font-bold text-label-sm">Change</button>
+</div>
+<p class="font-body-md text-body-md text-secondary leading-snug">
+                        23 Allen Avenue, Ikeja,<br/>Lagos, Nigeria.
+                    </p>
+</div>
+</div>
+</section>
+<!-- Payment Method -->
+<section class="mx-gutter mb-10">
+<h3 class="font-label-lg text-label-lg text-secondary mb-2">Payment method</h3>
+<div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex items-center gap-3 border border-surface-container">
+<div class="p-2 rounded-lg bg-surface-container-high">
+<span class="material-symbols-outlined text-on-surface">credit_card</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center">
+<div>
+<p class="font-label-lg text-label-lg text-on-background">Card</p>
+<p class="font-body-md text-body-md text-secondary">**** 4242</p>
+</div>
+<button class="text-primary font-bold text-label-sm">Change</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Actions Container - Floating/Fixed -->
+<div class="fixed bottom-0 left-0 w-full bg-surface border-t border-surface-container-high px-gutter py-6 z-50">
+<div class="max-w-md mx-auto">
+<button class="w-full bg-on-background text-surface py-4 rounded-xl font-headline-md flex items-center justify-center gap-2 active:scale-[0.98] transition-all hover:bg-neutral-800" id="placeOrderBtn">
+                Place Order
+                <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Success Overlay (Hidden by default) -->
+<div class="fixed inset-0 z-[60] bg-on-background/80 flex items-center justify-center p-gutter hidden opacity-0 transition-opacity duration-300" id="successOverlay">
+<div class="bg-surface w-full max-w-sm rounded-3xl p-8 flex flex-col items-center text-center transform scale-90 transition-transform duration-300">
+<div class="w-20 h-20 bg-primary-container rounded-full flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-[40px] text-on-primary-container">check_circle</span>
+</div>
+<h2 class="font-headline-xl-mobile text-headline-xl-mobile mb-2">Order Success!</h2>
+<p class="font-body-lg text-body-lg text-secondary mb-8">Your order has been placed successfully and will be delivered in 20-30 mins.</p>
+<button class="w-full bg-on-background text-surface py-4 rounded-xl font-headline-md" onclick="window.location.reload()">Track My Order</button>
+</div>
+</div>
+<script>
+        document.getElementById('placeOrderBtn').addEventListener('click', () => {
+            const overlay = document.getElementById('successOverlay');
+            const modal = overlay.querySelector('div');
+            
+            overlay.classList.remove('hidden');
+            setTimeout(() => {
+                overlay.classList.remove('opacity-0');
+                modal.classList.remove('scale-90');
+                modal.classList.add('scale-100');
+            }, 10);
+        });
+    </script>
+</body></html>

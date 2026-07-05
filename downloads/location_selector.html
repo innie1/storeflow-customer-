@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoreFlow - Select Location</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-variant": "#e3e2e2",
+                    "surface-container-low": "#f5f3f3",
+                    "surface-container-highest": "#e3e2e2",
+                    "surface-container-high": "#e9e8e7",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "on-background": "#1b1c1c",
+                    "tertiary-container": "#d9d9d9",
+                    "outline": "#7f775f",
+                    "on-secondary-fixed": "#1c1b1b",
+                    "on-error": "#ffffff",
+                    "secondary-fixed": "#e5e2e1",
+                    "outline-variant": "#d0c6ab",
+                    "error": "#ba1a1a",
+                    "on-secondary-fixed-variant": "#474646",
+                    "on-tertiary-container": "#5d5f5f",
+                    "surface-tint": "#705d00",
+                    "tertiary": "#5d5f5f",
+                    "surface-container": "#efeded",
+                    "on-secondary-container": "#656464",
+                    "primary-fixed-dim": "#e9c400",
+                    "on-primary-fixed": "#221b00",
+                    "on-primary-fixed-variant": "#544600",
+                    "inverse-primary": "#e9c400",
+                    "surface": "#fbf9f9",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "primary-container": "#ffd600",
+                    "on-error-container": "#93000a",
+                    "surface-dim": "#dbdad9",
+                    "secondary": "#5f5e5e",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#c8c6c5",
+                    "secondary-container": "#e5e2e1",
+                    "on-surface": "#1b1c1c",
+                    "primary-fixed": "#ffe170",
+                    "on-primary": "#ffffff",
+                    "primary": "#705d00",
+                    "surface-bright": "#fbf9f9",
+                    "error-container": "#ffdad6",
+                    "tertiary-fixed": "#e2e2e2",
+                    "background": "#fbf9f9",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-surface-variant": "#4d4632",
+                    "on-tertiary": "#ffffff",
+                    "inverse-surface": "#303031",
+                    "on-secondary": "#ffffff",
+                    "on-primary-container": "#705d00",
+                    "inverse-on-surface": "#f2f0f0"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "8px",
+                    "stack-lg": "32px",
+                    "stack-sm": "8px",
+                    "gutter": "16px",
+                    "container-padding": "24px",
+                    "stack-md": "16px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Plus Jakarta Sans"],
+                    "label-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-xl": ["Plus Jakarta Sans"],
+                    "headline-xl-mobile": ["Plus Jakarta Sans"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "label-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fbf9f9;
+        }
+        .bento-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .bento-card:active {
+            transform: scale(0.98);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col items-center">
+<!-- Header / TopAppBar -->
+<header class="w-full max-w-md mx-auto sticky top-0 z-50 bg-surface flex justify-between items-center px-gutter h-14">
+<button aria-label="Go back" class="p-2 rounded-full hover:bg-surface-container-low transition-colors active:scale-95">
+<span class="material-symbols-outlined text-primary">arrow_back</span>
+</button>
+<span class="font-headline-md text-headline-md-mobile font-bold text-on-background">StoreFlow</span>
+<div class="w-10"></div> <!-- Spacer for symmetry -->
+</header>
+<main class="w-full max-w-md mx-auto flex-1 px-container-padding pb-32">
+<!-- Animated Visual Anchor -->
+<div class="mt-8 mb-6 overflow-hidden rounded-xl h-48 relative">
+
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="bg-primary-container p-4 rounded-full shadow-lg">
+<span class="material-symbols-outlined text-on-primary-container scale-150" style="font-variation-settings: 'FILL' 1;">location_on</span>
+</div>
+</div>
+</div>
+<!-- Headline & Description -->
+<section class="mb-stack-lg text-center md:text-left">
+<h1 class="font-headline-xl-mobile text-headline-xl-mobile mb-2">Select your location</h1>
+<p class="font-body-md text-body-md text-secondary">We'll show you stores and delivery options available in your specific area.</p>
+</section>
+<!-- Search Bar -->
+<div class="relative mb-stack-md">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-secondary">search</span>
+</div>
+<input class="w-full h-[56px] pl-12 pr-4 bg-surface-container-low border-none rounded-xl font-body-md focus:ring-2 focus:ring-on-background transition-all" placeholder="Search for street, city or zip" type="text"/>
+</div>
+<!-- GPS Action -->
+<button class="w-full flex items-center p-4 bg-surface-container-lowest border border-surface-container-high rounded-xl mb-stack-lg bento-card shadow-sm hover:bg-surface-container-low group">
+<div class="bg-primary-container/20 p-2 rounded-lg mr-4 group-hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">my_location</span>
+</div>
+<div class="text-left">
+<p class="font-label-lg text-label-lg text-on-background">Use my current location</p>
+<p class="font-label-sm text-label-sm text-secondary">Accurate to within 10 meters</p>
+</div>
+</button>
+<!-- Recent Locations Section -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-label-lg text-label-lg text-secondary uppercase tracking-wider">Recent locations</h2>
+</div>
+<div class="space-y-3">
+<!-- Location Item 1 -->
+<div class="flex items-start p-4 bg-surface border border-surface-container-high rounded-xl hover:bg-surface-container-lowest cursor-pointer transition-all bento-card">
+<span class="material-symbols-outlined text-secondary mr-4 mt-1">history</span>
+<div class="flex-1">
+<p class="font-label-lg text-label-lg text-on-background">Ikeja, Lagos</p>
+<p class="font-body-md text-body-md text-secondary">Lagos State, Nigeria</p>
+</div>
+</div>
+<!-- Location Item 2 -->
+<div class="flex items-start p-4 bg-surface border border-surface-container-high rounded-xl hover:bg-surface-container-lowest cursor-pointer transition-all bento-card">
+<span class="material-symbols-outlined text-secondary mr-4 mt-1">history</span>
+<div class="flex-1">
+<p class="font-label-lg text-label-lg text-on-background">Yaba, Lagos</p>
+<p class="font-body-md text-body-md text-secondary">Lagos State, Nigeria</p>
+</div>
+</div>
+<!-- Location Item 3 -->
+<div class="flex items-start p-4 bg-surface border border-surface-container-high rounded-xl hover:bg-surface-container-lowest cursor-pointer transition-all bento-card">
+<span class="material-symbols-outlined text-secondary mr-4 mt-1">history</span>
+<div class="flex-1">
+<p class="font-label-lg text-label-lg text-on-background">Victoria Island, Lagos</p>
+<p class="font-body-md text-body-md text-secondary">Lagos State, Nigeria</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Map Placeholder Suggestion -->
+<div class="mt-8 rounded-2xl overflow-hidden border border-surface-container-high h-40 relative group">
+<div class="absolute inset-0 bg-surface-container-high animate-pulse flex items-center justify-center">
+<img class="w-full h-full object-cover grayscale opacity-60" data-alt="A clean, minimalist topographical map of a metropolitan city like Lagos with subtle graphite tones and yellow marker accents. The style is professional, high-contrast, and modern, fitting a premium logistics app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6y4N18CIkHFWl-SsNEcfSs2vktsu2eEeP7R6Pr7fYovqoV-1LlZmA7lP5-dfwa1iiulKs-D83umypwKJAyiSqmMqngW2a9JVJrag_ecq0mdrd7UceFs3TSBSpfP0ctMj9Vlw0whR33qR7s1l2TqAwoDbs0QsC0CAXjco_32qObjtlg3xQu6fZ-tWG-LKDeToS_daBwnsJk_K8hxJ-usdnWmsp7dOzKBfhO7Ro-0GgLc2ysXrjtkmPdg"/>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+<div class="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur-md p-3 rounded-lg flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-background">Explore map view</span>
+<span class="material-symbols-outlined text-primary">chevron_right</span>
+</div>
+</div>
+</main>
+<!-- Fixed Action Button Area -->
+<div class="fixed bottom-0 left-0 w-full p-container-padding bg-gradient-to-t from-background via-background to-transparent pt-10 flex justify-center z-50">
+<button class="w-full max-w-md h-14 bg-[#1b1c1c] text-white rounded-xl font-label-lg text-label-lg shadow-xl active:scale-95 transition-all duration-150">
+            Confirm Location
+        </button>
+</div>
+<!-- Hidden Navigation Suppressed per Task Requirements for Transactional/Focused screens -->
+<script>
+        // Micro-interaction for search input
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('scale-[1.02]');
+            searchInput.parentElement.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('scale-[1.02]');
+        });
+
+        // Toggle ripples/feedback for bento cards
+        const cards = document.querySelectorAll('.bento-card');
+        cards.forEach(card => {
+            card.addEventListener('mousedown', () => {
+                card.classList.add('brightness-95');
+            });
+            card.addEventListener('mouseup', () => {
+                card.classList.remove('brightness-95');
+            });
+            card.addEventListener('mouseleave', () => {
+                card.classList.remove('brightness-95');
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoreFlow Checkout - Delivery</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-variant": "#e3e2e2",
+                    "surface-container-low": "#f5f3f3",
+                    "surface-container-highest": "#e3e2e2",
+                    "surface-container-high": "#e9e8e7",
+                    "tertiary-fixed-dim": "#c6c6c7",
+                    "on-background": "#1b1c1c",
+                    "tertiary-container": "#d9d9d9",
+                    "outline": "#7f775f",
+                    "on-secondary-fixed": "#1c1b1b",
+                    "on-error": "#ffffff",
+                    "secondary-fixed": "#e5e2e1",
+                    "outline-variant": "#d0c6ab",
+                    "error": "#ba1a1a",
+                    "on-secondary-fixed-variant": "#474646",
+                    "on-tertiary-container": "#5d5f5f",
+                    "surface-tint": "#705d00",
+                    "tertiary": "#5d5f5f",
+                    "surface-container": "#efeded",
+                    "on-secondary-container": "#656464",
+                    "primary-fixed-dim": "#e9c400",
+                    "on-primary-fixed": "#221b00",
+                    "on-primary-fixed-variant": "#544600",
+                    "inverse-primary": "#e9c400",
+                    "surface": "#fbf9f9",
+                    "on-tertiary-fixed": "#1a1c1c",
+                    "primary-container": "#ffd600",
+                    "on-error-container": "#93000a",
+                    "surface-dim": "#dbdad9",
+                    "secondary": "#5f5e5e",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#c8c6c5",
+                    "secondary-container": "#e5e2e1",
+                    "on-surface": "#1b1c1c",
+                    "primary-fixed": "#ffe170",
+                    "on-primary": "#ffffff",
+                    "primary": "#705d00",
+                    "surface-bright": "#fbf9f9",
+                    "error-container": "#ffdad6",
+                    "tertiary-fixed": "#e2e2e2",
+                    "background": "#fbf9f9",
+                    "on-tertiary-fixed-variant": "#454747",
+                    "on-surface-variant": "#4d4632",
+                    "on-tertiary": "#ffffff",
+                    "inverse-surface": "#303031",
+                    "on-secondary": "#ffffff",
+                    "on-primary-container": "#705d00",
+                    "inverse-on-surface": "#f2f0f0"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "8px",
+                    "stack-lg": "32px",
+                    "stack-sm": "8px",
+                    "gutter": "16px",
+                    "container-padding": "24px",
+                    "stack-md": "16px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Plus Jakarta Sans"],
+                    "label-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-xl": ["Plus Jakarta Sans"],
+                    "headline-xl-mobile": ["Plus Jakarta Sans"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "label-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .checkout-step-active { color: #1b1c1c; font-weight: 600; }
+        .checkout-step-inactive { color: #5f5e5e; }
+        .radio-custom:checked + label { border-color: #1b1c1c; background-color: #f5f3f3; }
+        .radio-custom:checked + label .radio-circle { border-color: #705d00; background-color: #705d00; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- Top AppBar (Mobile Style - Suppressing Main Nav for Transactional Flow) -->
+<header class="sticky top-0 z-40 bg-surface px-gutter h-14 flex justify-between items-center w-full">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-low transition-colors duration-150 active:scale-95">
+<span class="material-symbols-outlined text-primary">arrow_back</span>
+</button>
+<h1 class="font-headline-md text-headline-md-mobile text-on-background font-bold">Checkout</h1>
+<div class="w-10"></div> <!-- Spacer for alignment -->
+</header>
+<main class="max-w-md mx-auto px-container-padding pb-32">
+<!-- Progress Indicator -->
+<section class="mt-stack-md flex justify-between items-start mb-stack-lg relative">
+<!-- Connector Line -->
+<div class="absolute top-4 left-0 w-full h-[2px] bg-surface-container-high -z-10">
+<div class="h-full bg-primary-container w-1/4"></div>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">local_shipping</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-background font-bold">Delivery</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary">Address</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary">Payment</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-high text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">rate_review</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary">Review</span>
+</div>
+</section>
+<!-- Delivery Options -->
+<section class="mb-stack-lg">
+<h2 class="font-headline-md text-headline-md text-on-background mb-4">Delivery option</h2>
+<div class="space-y-3">
+<!-- Delivery Toggle -->
+<div class="relative">
+<input checked="" class="hidden radio-custom" id="delivery_opt" name="delivery_type" type="radio"/>
+<label class="flex items-center justify-between p-4 border border-surface-variant rounded-xl cursor-pointer hover:bg-surface-container-lowest transition-all" for="delivery_opt">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface">directions_bike</span>
+</div>
+<div>
+<p class="font-label-lg text-label-lg text-on-surface">Delivery</p>
+<p class="font-body-md text-body-md text-secondary">20–30 min</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="font-label-lg text-label-lg text-on-surface">FREE</span>
+<div class="w-5 h-5 rounded-full border-2 border-surface-variant radio-circle flex items-center justify-center">
+<div class="w-2 h-2 rounded-full bg-white"></div>
+</div>
+</div>
+</label>
+</div>
+<!-- Pickup Toggle -->
+<div class="relative">
+<input class="hidden radio-custom" id="pickup_opt" name="delivery_type" type="radio"/>
+<label class="flex items-center justify-between p-4 border border-surface-variant rounded-xl cursor-pointer hover:bg-surface-container-lowest transition-all" for="pickup_opt">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface">storefront</span>
+</div>
+<div>
+<p class="font-label-lg text-label-lg text-on-surface">Pickup</p>
+<p class="font-body-md text-body-md text-secondary">Pick up from store</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="font-label-lg text-label-lg text-on-surface">FREE</span>
+<div class="w-5 h-5 rounded-full border-2 border-surface-variant radio-circle flex items-center justify-center">
+<div class="w-2 h-2 rounded-full bg-white"></div>
+</div>
+</div>
+</label>
+</div>
+</div>
+</section>
+<!-- Deliver To -->
+<section class="mb-stack-lg">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-headline-md text-headline-md text-on-background">Deliver to</h2>
+<button class="text-primary font-label-lg text-label-lg hover:underline transition-all">Change</button>
+</div>
+<div class="p-4 bg-surface-container-low rounded-xl border border-transparent flex items-start gap-4">
+<div class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">home</span>
+</div>
+<div class="flex-1">
+<p class="font-label-lg text-label-lg text-on-surface">Home</p>
+<p class="font-body-md text-body-md text-secondary leading-relaxed">23 Allen Avenue, Ikeja,<br/>Lagos, Nigeria</p>
+</div>
+</div>
+</section>
+<!-- Delivery Notes -->
+<section class="mb-stack-lg">
+<h2 class="font-headline-md text-headline-md text-on-background mb-4">Delivery notes <span class="text-secondary font-normal">(optional)</span></h2>
+<textarea class="w-full min-h-[100px] p-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-on-background text-on-surface font-body-md resize-none transition-all duration-200" placeholder="E.g. Gate code, apartment, etc."></textarea>
+</section>
+<!-- Fixed Action Button (Contextual for Transactional Checkout) -->
+<div class="fixed bottom-0 left-0 w-full p-container-padding bg-surface/80 backdrop-blur-md z-50">
+<div class="max-w-md mx-auto">
+<button class="w-full h-14 bg-on-background text-white rounded-full font-label-lg text-label-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all shadow-lg" onclick="location.href='#payment'">
+                    Continue to Payment
+                    <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Side Navigation / Drawer (Mockup for Desktop) -->
+<aside class="fixed inset-y-0 left-0 w-80 bg-surface shadow-lg z-[60] transform -translate-x-full transition-transform duration-300 md:hidden" id="main-drawer">
+<div class="flex flex-col h-full p-container-padding">
+<div class="flex items-center gap-4 mb-stack-lg">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a young man with a friendly expression, wearing a stylish minimalist black polo shirt. The background is a clean, softly lit architectural interior with graphite gray tones and natural light, reflecting a modern urban lifestyle." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXntjQCJUEZSBJsZm9FmkYa4KeW-y-Pd1hmoQvVK92UxnqNPnLZ_xVbGRFkRMuq8m34cDvr2LkhZdS3kzQyEP0pUx1D6DCOWceDk7P0JYAdMlZWOPRBb64LXpn6T89RwKfY6cSpG5o2nBi-iDYV-9cl4tcHnniYyUTkLUSUglQcMCtczWoQVdWHreZ7j1BAoqwvmvbz7IIL4-jZ6jtEgAA3nDwmVUCQe9AJ6lrX376AMuDfpezpsevzw"/>
+</div>
+<div>
+<p class="font-headline-md text-headline-md font-black text-on-background">John Doe</p>
+<p class="font-body-md text-body-md text-secondary">0801 234 5678</p>
+</div>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center gap-4 p-4 text-on-surface-variant font-label-lg rounded-lg hover:bg-surface-container-low transition-all" href="#">
+<span class="material-symbols-outlined">location_on</span> My Addresses
+                </a>
+<a class="flex items-center gap-4 p-4 text-on-surface-variant font-label-lg rounded-lg hover:bg-surface-container-low transition-all" href="#">
+<span class="material-symbols-outlined">payments</span> Payment Methods
+                </a>
+<a class="flex items-center gap-4 p-4 text-on-surface-variant font-label-lg rounded-lg hover:bg-surface-container-low transition-all" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span> StoreFlow Wallet
+                </a>
+<a class="flex items-center gap-4 p-4 text-on-surface-variant font-label-lg rounded-lg hover:bg-surface-container-low transition-all" href="#">
+<span class="material-symbols-outlined">favorite</span> My Favorites
+                </a>
+<a class="flex items-center gap-4 p-4 text-on-surface-variant font-label-lg rounded-lg hover:bg-surface-container-low transition-all" href="#">
+<span class="material-symbols-outlined">workspace_premium</span> Rewards
+                </a>
+<div class="my-4 border-t border-surface-variant"></div>
+<a class="flex items-center gap-4 p-4 text-on-surface-variant font-label-lg rounded-lg hover:bg-surface-container-low transition-all" href="#">
+<span class="material-symbols-outlined">help</span> Help &amp; Support
+                </a>
+</nav>
+</div>
+</aside>
+<!-- Navigation suppressed as per 'Linear/Transactional' rule for checkout pages -->
+<script>
+        // Simple Interaction Logic
+        document.querySelectorAll('input[name="delivery_type"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                // Potential for animation or state updates
+            });
+        });
+
+        // Toggle Drawer logic (mock for menu icon)
+        const menuBtn = document.querySelector('header button:first-child');
+        const drawer = document.getElementById('main-drawer');
+        let drawerOpen = false;
+
+        menuBtn.addEventListener('click', (e) => {
+            // Note: Since this is transactional, usually back goes back, but for demo we show menu handling logic
+            // In a real checkout, the back button is prioritized over menu.
+        });
+    </script>
+</body></html>

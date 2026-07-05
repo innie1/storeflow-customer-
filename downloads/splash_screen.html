@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoreFlow - Everything you need, delivered fast.</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Plus Jakarta Sans & Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "surface-variant": "#e3e2e2",
+                  "surface-container-low": "#f5f3f3",
+                  "surface-container-highest": "#e3e2e2",
+                  "surface-container-high": "#e9e8e7",
+                  "tertiary-fixed-dim": "#c6c6c7",
+                  "on-background": "#1b1c1c",
+                  "tertiary-container": "#d9d9d9",
+                  "outline": "#7f775f",
+                  "on-secondary-fixed": "#1c1b1b",
+                  "on-error": "#ffffff",
+                  "secondary-fixed": "#e5e2e1",
+                  "outline-variant": "#d0c6ab",
+                  "error": "#ba1a1a",
+                  "on-secondary-fixed-variant": "#474646",
+                  "on-tertiary-container": "#5d5f5f",
+                  "surface-tint": "#705d00",
+                  "tertiary": "#5d5f5f",
+                  "surface-container": "#efeded",
+                  "on-secondary-container": "#656464",
+                  "primary-fixed-dim": "#e9c400",
+                  "on-primary-fixed": "#221b00",
+                  "on-primary-fixed-variant": "#544600",
+                  "inverse-primary": "#e9c400",
+                  "surface": "#fbf9f9",
+                  "on-tertiary-fixed": "#1a1c1c",
+                  "primary-container": "#ffd600",
+                  "on-error-container": "#93000a",
+                  "surface-dim": "#dbdad9",
+                  "secondary": "#5f5e5e",
+                  "surface-container-lowest": "#ffffff",
+                  "secondary-fixed-dim": "#c8c6c5",
+                  "secondary-container": "#e5e2e1",
+                  "on-surface": "#1b1c1c",
+                  "primary-fixed": "#ffe170",
+                  "on-primary": "#ffffff",
+                  "primary": "#705d00",
+                  "surface-bright": "#fbf9f9",
+                  "error-container": "#ffdad6",
+                  "tertiary-fixed": "#e2e2e2",
+                  "background": "#fbf9f9",
+                  "on-tertiary-fixed-variant": "#454747",
+                  "on-surface-variant": "#4d4632",
+                  "on-tertiary": "#ffffff",
+                  "inverse-surface": "#303031",
+                  "on-secondary": "#ffffff",
+                  "on-primary-container": "#705d00",
+                  "inverse-on-surface": "#f2f0f0"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.25rem",
+                  "lg": "0.5rem",
+                  "xl": "0.75rem",
+                  "full": "9999px"
+          },
+          "spacing": {
+                  "base": "8px",
+                  "stack-lg": "32px",
+                  "stack-sm": "8px",
+                  "gutter": "16px",
+                  "container-padding": "24px",
+                  "stack-md": "16px"
+          },
+          "fontFamily": {
+                  "headline-lg": ["Plus Jakarta Sans"],
+                  "label-sm": ["Inter"],
+                  "body-md": ["Inter"],
+                  "headline-xl": ["Plus Jakarta Sans"],
+                  "headline-xl-mobile": ["Plus Jakarta Sans"],
+                  "body-lg": ["Inter"],
+                  "headline-md": ["Plus Jakarta Sans"],
+                  "label-lg": ["Inter"]
+          },
+          "fontSize": {
+                  "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                  "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                  "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                  "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                  "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                  "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                  "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                  "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      line-height: 1;
+      text-transform: none;
+      letter-spacing: normal;
+      word-wrap: normal;
+      white-space: nowrap;
+      direction: ltr;
+    }
+
+    /* Custom Fade-In Animation for Splash */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-up {
+      animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    
+    .stagger-1 { animation-delay: 0.1s; }
+    .stagger-2 { animation-delay: 0.2s; }
+    .stagger-3 { animation-delay: 0.3s; }
+
+    /* Glassmorphism subtle effect */
+    .glass-dark {
+      background: rgba(27, 28, 28, 0.85);
+      backdrop-filter: blur(8px);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-on-background text-surface selection:bg-primary selection:text-on-background min-h-screen flex flex-col items-center justify-center overflow-hidden">
+<!-- Splash Screen Container -->
+<main class="relative w-full max-w-[430px] h-[932px] bg-on-background flex flex-col justify-between items-center py-20 px-10 overflow-hidden shadow-2xl">
+<!-- Background Atmospheric Effect -->
+<div class="absolute inset-0 pointer-events-none opacity-20">
+
+</div>
+<!-- Center Content (Logo & Brand) -->
+<div class="flex-1 flex flex-col items-center justify-center text-center z-10">
+<!-- Logo Container -->
+<div class="animate-fade-up stagger-1 mb-6 flex items-center justify-center w-24 h-24 bg-surface rounded-[28%] rotate-12 shadow-xl">
+<span class="material-symbols-outlined text-[64px] text-on-background -rotate-12" style="font-variation-settings: 'FILL' 1;">
+          inventory_2
+        </span>
+</div>
+<!-- Brand Name -->
+<h1 class="animate-fade-up stagger-2 font-headline-xl-mobile text-headline-xl-mobile text-surface tracking-tight">
+        StoreFlow
+      </h1>
+<!-- Tagline -->
+<p class="animate-fade-up stagger-3 mt-3 font-body-lg text-body-lg text-surface-variant max-w-[200px] leading-relaxed">
+        Everything you need, delivered fast.
+      </p>
+</div>
+<!-- Bottom Illustrations/Icons -->
+<div class="animate-fade-up stagger-3 flex flex-col items-center gap-12 w-full z-10">
+<!-- Icon Row -->
+<div class="flex justify-center gap-10 opacity-40">
+<div class="flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-surface text-[28px]">storefront</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-surface text-[28px]">delivery_dining</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-surface text-[28px]">qr_code_2</span>
+</div>
+</div>
+<!-- Interactive Progress Loader (Simulated) -->
+<div class="w-full max-w-[140px] h-1 bg-surface-variant/20 rounded-full overflow-hidden">
+<div class="h-full bg-primary-container w-0 transition-all duration-3000 ease-out" id="loader"></div>
+</div>
+</div>
+</main>
+<!-- Script for Splash Micro-interaction -->
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const loader = document.getElementById('loader');
+      setTimeout(() => {
+        loader.style.width = '100%';
+      }, 500);
+
+      // Simple click-to-proceed simulation for the demo environment
+      document.body.addEventListener('click', () => {
+        console.log('Navigating to Onboarding...');
+        // In a real app, this would trigger navigation
+      });
+
+      // Subtle parallax on mouse move
+      document.addEventListener('mousemove', (e) => {
+        const moveX = (e.clientX - window.innerWidth / 2) / 50;
+        const moveY = (e.clientY - window.innerHeight / 2) / 50;
+        const logo = document.querySelector('.animate-fade-up.stagger-1');
+        if (logo) {
+          logo.style.transform = `translate(${moveX}px, ${moveY}px) rotate(12deg)`;
+        }
+      });
+    });
+  </script>
+<!-- Content for Screen Reader/SEO -->
+<div class="sr-only">
+<h2>StoreFlow</h2>
+<p>Premium Graphite aesthetic grocery and essentials delivery app. Delivering everything you need in 30 minutes or less.</p>
+</div>
+</body></html>

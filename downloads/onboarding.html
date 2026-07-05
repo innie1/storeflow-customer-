@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoreFlow - Welcome</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "surface-variant": "#e3e2e2",
+                  "surface-container-low": "#f5f3f3",
+                  "surface-container-highest": "#e3e2e2",
+                  "surface-container-high": "#e9e8e7",
+                  "tertiary-fixed-dim": "#c6c6c7",
+                  "on-background": "#1b1c1c",
+                  "tertiary-container": "#d9d9d9",
+                  "outline": "#7f775f",
+                  "on-secondary-fixed": "#1c1b1b",
+                  "on-error": "#ffffff",
+                  "secondary-fixed": "#e5e2e1",
+                  "outline-variant": "#d0c6ab",
+                  "error": "#ba1a1a",
+                  "on-secondary-fixed-variant": "#474646",
+                  "on-tertiary-container": "#5d5f5f",
+                  "surface-tint": "#705d00",
+                  "tertiary": "#5d5f5f",
+                  "surface-container": "#efeded",
+                  "on-secondary-container": "#656464",
+                  "primary-fixed-dim": "#e9c400",
+                  "on-primary-fixed": "#221b00",
+                  "on-primary-fixed-variant": "#544600",
+                  "inverse-primary": "#e9c400",
+                  "surface": "#fbf9f9",
+                  "on-tertiary-fixed": "#1a1c1c",
+                  "primary-container": "#ffd600",
+                  "on-error-container": "#93000a",
+                  "surface-dim": "#dbdad9",
+                  "secondary": "#5f5e5e",
+                  "surface-container-lowest": "#ffffff",
+                  "secondary-fixed-dim": "#c8c6c5",
+                  "secondary-container": "#e5e2e1",
+                  "on-surface": "#1b1c1c",
+                  "primary-fixed": "#ffe170",
+                  "on-primary": "#ffffff",
+                  "primary": "#705d00",
+                  "surface-bright": "#fbf9f9",
+                  "error-container": "#ffdad6",
+                  "tertiary-fixed": "#e2e2e2",
+                  "background": "#fbf9f9",
+                  "on-tertiary-fixed-variant": "#454747",
+                  "on-surface-variant": "#4d4632",
+                  "on-tertiary": "#ffffff",
+                  "inverse-surface": "#303031",
+                  "on-secondary": "#ffffff",
+                  "on-primary-container": "#705d00",
+                  "inverse-on-surface": "#f2f0f0"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.25rem",
+                  "lg": "0.5rem",
+                  "xl": "0.75rem",
+                  "full": "9999px"
+          },
+          "spacing": {
+                  "base": "8px",
+                  "stack-lg": "32px",
+                  "stack-sm": "8px",
+                  "gutter": "16px",
+                  "container-padding": "24px",
+                  "stack-md": "16px"
+          },
+          "fontFamily": {
+                  "headline-lg": ["Plus Jakarta Sans"],
+                  "label-sm": ["Inter"],
+                  "body-md": ["Inter"],
+                  "headline-xl": ["Plus Jakarta Sans"],
+                  "headline-xl-mobile": ["Plus Jakarta Sans"],
+                  "body-lg": ["Inter"],
+                  "headline-md": ["Plus Jakarta Sans"],
+                  "label-lg": ["Inter"]
+          },
+          "fontSize": {
+                  "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                  "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                  "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                  "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                  "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                  "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                  "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                  "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    
+    .fade-in-up {
+      animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .dot-active {
+      width: 24px;
+      background-color: #1b1c1c;
+      transition: width 0.3s ease;
+    }
+
+    /* Hide scrollbar for clean aesthetic */
+    body::-webkit-scrollbar { display: none; }
+    body { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen flex flex-col items-center justify-between overflow-x-hidden">
+<!-- Header Area (Status Bar Space) -->
+<div class="w-full h-12 flex items-center justify-end px-container-padding">
+<button class="font-label-lg text-label-lg text-secondary hover:text-on-surface transition-colors">Skip</button>
+</div>
+<!-- Main Content Container -->
+<main class="flex-1 w-full max-w-md px-container-padding flex flex-col items-center justify-center text-center space-y-stack-lg">
+<!-- Branding & Message -->
+<div class="space-y-stack-sm fade-in-up" style="animation-delay: 0.1s;">
+<h1 class="font-headline-xl-mobile text-headline-xl-mobile text-on-background">
+        Welcome to<br/>StoreFlow
+      </h1>
+<p class="font-body-lg text-body-lg text-secondary max-w-[280px] mx-auto">
+        Your favorite stores, delivered to your door in 30 minutes.
+      </p>
+</div>
+<!-- Central Visual Anchor (Asymmetric Bento-ish Card) -->
+<div class="relative w-full aspect-square flex items-center justify-center fade-in-up" style="animation-delay: 0.2s;">
+<!-- Decorative Backdrop Elements -->
+<div class="absolute inset-0 bg-surface-container-low rounded-[40px] rotate-3 scale-95 opacity-50"></div>
+<div class="absolute inset-0 bg-surface-container rounded-[40px] -rotate-3 scale-90 opacity-30"></div>
+<!-- Primary Image Card -->
+<div class="relative z-10 w-full h-full bg-white rounded-[40px] shadow-sm overflow-hidden flex items-center justify-center p-8">
+<div class="w-full h-full bg-cover bg-center rounded-2xl transform hover:scale-105 transition-transform duration-700" data-alt="A high-end, professionally photographed 3D render of minimalist paper shopping bags and luxury containers arranged in a clean, isometric composition. The color palette is strictly monochromatic graphite grey, charcoal black, and crisp white, highlighting the premium 'StoreFlow' brand aesthetic. Soft studio lighting creates elegant shadows on a neutral light grey background, emphasizing a sense of efficiency and urban luxury." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDqOVy4Qz9h-3rrA4QjtMif0NFdiQx8MP6W-YhT_kpIfRfOGfci_B4Xc9XLeWSafM-YqlExuIeOPtgv4axxkmJPWtOydIXtAo86zx5AnnoGPt0yViyi2oCJAS4daz9Mh07eaV4aJPzZz7WZnjp_7l5oDmOSOJstc_mvowOIXnl5L-vSjdmi1GbTe36GnOgDJZDBewq7CAYcn2Y9bJlUnFmSrNbwRXfmqYHrhMyJIfbPz8kHRI6SS8t1eg')">
+</div>
+</div>
+</div>
+<!-- Page Indicators (Autonomously determining step 2/4) -->
+<div class="flex items-center justify-center space-x-2 fade-in-up" style="animation-delay: 0.3s;">
+<div class="h-1.5 w-1.5 rounded-full bg-surface-container-highest"></div>
+<div class="h-1.5 dot-active rounded-full"></div>
+<div class="h-1.5 w-1.5 rounded-full bg-surface-container-highest"></div>
+<div class="h-1.5 w-1.5 rounded-full bg-surface-container-highest"></div>
+</div>
+</main>
+<!-- CTA Actions Footer -->
+<footer class="w-full max-w-md px-container-padding pb-12 space-y-stack-md fade-in-up" style="animation-delay: 0.4s;">
+<!-- Primary CTA -->
+<button class="w-full h-14 bg-on-background text-surface rounded-xl font-headline-md text-headline-md transition-all active:scale-95 hover:bg-opacity-90 flex items-center justify-center" onclick="this.classList.add('scale-95')">
+      Get Started
+    </button>
+<!-- Secondary CTA -->
+<button class="w-full h-14 bg-transparent border-2 border-surface-container-highest text-on-background rounded-xl font-headline-md text-headline-md transition-all active:scale-95 hover:bg-surface-container-low flex items-center justify-center" onclick="this.classList.add('scale-95')">
+      Log in
+    </button>
+<!-- Micro-interaction / Decorative -->
+<div class="pt-4 flex justify-center">
+<div class="w-16 h-1 bg-surface-container-highest rounded-full"></div>
+</div>
+</footer>
+<!-- Micro-interaction Script -->
+<script>
+    document.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('touchstart', () => btn.classList.add('scale-95'));
+      btn.addEventListener('touchend', () => btn.classList.remove('scale-95'));
+    });
+    
+    // Ambient floating effect for the main visual
+    const visual = document.querySelector('.relative.z-10');
+    if(visual) {
+      document.addEventListener('mousemove', (e) => {
+        const xAxis = (window.innerWidth / 2 - e.pageX) / 45;
+        const yAxis = (window.innerHeight / 2 - e.pageY) / 45;
+        visual.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+      });
+    }
+  </script>
+</body></html>

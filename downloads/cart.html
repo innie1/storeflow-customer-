@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoreFlow - Shopping Cart</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#e3e2e2",
+                        "surface-container-low": "#f5f3f3",
+                        "surface-container-highest": "#e3e2e2",
+                        "surface-container-high": "#e9e8e7",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-background": "#1b1c1c",
+                        "tertiary-container": "#d9d9d9",
+                        "outline": "#7f775f",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#e5e2e1",
+                        "outline-variant": "#d0c6ab",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed-variant": "#474646",
+                        "on-tertiary-container": "#5d5f5f",
+                        "surface-tint": "#705d00",
+                        "tertiary": "#5d5f5f",
+                        "surface-container": "#efeded",
+                        "on-secondary-container": "#656464",
+                        "primary-fixed-dim": "#e9c400",
+                        "on-primary-fixed": "#221b00",
+                        "on-primary-fixed-variant": "#544600",
+                        "inverse-primary": "#e9c400",
+                        "surface": "#fbf9f9",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "primary-container": "#ffd600",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#dbdad9",
+                        "secondary": "#5f5e5e",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "secondary-container": "#e5e2e1",
+                        "on-surface": "#1b1c1c",
+                        "primary-fixed": "#ffe170",
+                        "on-primary": "#ffffff",
+                        "primary": "#705d00",
+                        "surface-bright": "#fbf9f9",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#e2e2e2",
+                        "background": "#fbf9f9",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-surface-variant": "#4d4632",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#303031",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#705d00",
+                        "inverse-on-surface": "#f2f0f0"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "stack-lg": "32px",
+                        "stack-sm": "8px",
+                        "gutter": "16px",
+                        "container-padding": "24px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "headline-xl-mobile": ["Plus Jakarta Sans"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "14px", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-xl-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        body {
+            background-color: #fbf9f9;
+            color: #1b1c1c;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-body-md antialiased overflow-x-hidden">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-40 bg-surface dark:bg-background flex justify-between items-center w-full px-gutter h-14">
+<div class="flex items-center gap-4">
+<button class="active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed">menu</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-on-background dark:text-on-surface">StoreFlow</h1>
+</div>
+<div class="flex items-center gap-3">
+<button class="active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed">notifications</span>
+</button>
+</div>
+</header>
+<main class="max-w-[1200px] mx-auto pb-32">
+<!-- Cart Header -->
+<section class="px-gutter pt-stack-md flex justify-between items-baseline">
+<h2 class="font-headline-md text-headline-md text-on-background">Your Cart (3)</h2>
+<button class="font-label-lg text-label-lg text-secondary">Edit</button>
+</section>
+<!-- Cart Items List -->
+<section class="mt-stack-md flex flex-col gap-1 px-gutter">
+<!-- Item 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-4 flex gap-4 items-center shadow-sm border border-surface-container">
+<div class="w-16 h-16 rounded-lg bg-surface-container-low flex-shrink-0 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional studio product photograph of a red and orange package of Indomie Chicken instant noodles. The packaging is vibrant and sits against a clean, white background in a minimalist light-mode aesthetic, emphasizing the modern, premium retail focus of StoreFlow." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDy9hMK_G3jEW26tsomzD5UeUNH5X0Wtu8d83FqxD89KxaDTOJ9qUy7co2KwMs57BGRET2xSyKhVXyP5hUlPYvLaJPkxpknZZ-jHL_OC5TfEJmLYLSKZpONhpssJT8JPZDhvwmx9G-Sfp1wag9qSqLB6BZDP7vo_Nrb_fDT1_ORW8xaPqQOoYGji-VSQtMt0BJ4pshxAKjX9-7YZ6lcTtP77sXIx0GDn8I6d53mw791Xy-1DODvShI26w"/>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h3 class="font-label-lg text-label-lg text-on-background">Indomie Chicken</h3>
+<span class="font-label-sm text-label-sm text-secondary">70g</span>
+</div>
+<div class="flex justify-between items-center mt-2">
+<span class="font-headline-md text-headline-md text-on-background">₦480</span>
+<div class="flex items-center gap-4 bg-surface-container-low rounded-full px-3 py-1">
+<button class="w-6 h-6 flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined !text-[18px]">remove</span></button>
+<span class="font-label-lg text-label-lg">2</span>
+<button class="w-6 h-6 flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined !text-[18px]">add</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-4 flex gap-4 items-center shadow-sm border border-surface-container mt-2">
+<div class="w-16 h-16 rounded-lg bg-surface-container-low flex-shrink-0 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A clean, high-resolution commercial shot of a 50cl Coca-Cola plastic bottle with condensation droplets on its surface. The lighting is bright and airy, matching a premium graphite and light-mode UI theme. The bottle is perfectly centered in the frame against a soft grey backdrop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZTocQmSat8gJC-qMnhAYaDJj9lnMI8NtS3D8H03lyOOPi3vNAcoIOaOTdjpzNPil765ulwC9comuGiACdG-4cEB-Nk6-junpEwSpWnbC5BqzyLMLjK7I8p6NTsFivqOiQY-x8zOPvlCrfSzY6UtPhafn0pJ7Fnyu0Xvt-Xc5WauBOP9zjY8z7aDdmLNoOnoJezTMkUsaVCesUDVnzb4w1fj10_umcP0G7V-D257JCSIYiAaZng6Z5vA"/>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h3 class="font-label-lg text-label-lg text-on-background">Coca Cola 50cl</h3>
+<span class="font-label-sm text-label-sm text-secondary">Drink</span>
+</div>
+<div class="flex justify-between items-center mt-2">
+<span class="font-headline-md text-headline-md text-on-background">₦350</span>
+<div class="flex items-center gap-4 bg-surface-container-low rounded-full px-3 py-1">
+<button class="w-6 h-6 flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined !text-[18px]">remove</span></button>
+<span class="font-label-lg text-label-lg">1</span>
+<button class="w-6 h-6 flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined !text-[18px]">add</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-4 flex gap-4 items-center shadow-sm border border-surface-container mt-2">
+<div class="w-16 h-16 rounded-lg bg-surface-container-low flex-shrink-0 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A minimalist studio photograph of a large yellow and green bag of Golden Penny Semovita flour. The lighting is soft, warm, and professional, characteristic of a premium urban grocery app. The composition is clean, keeping the focus entirely on the quality of the product packaging." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAsMY_NbkG9-cX4iQJl_bIazl4wx8mJoOtf-VJg06CysvPRfAC_QGYG64ylKk_cyA0TUZYZ9qpM8MIEXXA0tR8K2UEcWVUdQithPUx6MtU_y2bGVNHEZ6yXUcEf9b8rILodTtBY4tO8U8f5wnn0ZgL7b_qmqEKp9YmuZXGQi8y2OIGNrfG_UHexaFJQQLJ0AOWv1qeJluKTc_a03PBVO0TwfOssqroVWIbkTqXjyY8HxwdCm_Fri7HUwA"/>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h3 class="font-label-lg text-label-lg text-on-background">Golden Penny Semovita</h3>
+<span class="font-label-sm text-label-sm text-secondary">1kg</span>
+</div>
+<div class="flex justify-between items-center mt-2">
+<span class="font-headline-md text-headline-md text-on-background">₦850</span>
+<div class="flex items-center gap-4 bg-surface-container-low rounded-full px-3 py-1">
+<button class="w-6 h-6 flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined !text-[18px]">remove</span></button>
+<span class="font-label-lg text-label-lg">1</span>
+<button class="w-6 h-6 flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined !text-[18px]">add</span></button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Upsell Recommendations -->
+<section class="mt-stack-lg px-gutter">
+<h2 class="font-headline-md text-headline-md text-on-background mb-4">You may also like</h2>
+<div class="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 no-scrollbar">
+<!-- Suggestion 1 -->
+<div class="bg-white rounded-xl p-4 min-w-[140px] shadow-sm border border-surface-container relative">
+<img class="w-24 h-24 object-contain mx-auto" data-alt="A crisp product shot of a Milo Tin 400g, glowing under soft commercial lighting. The iconic green tin stands out against a white surface in a minimalist, modern setting. High contrast and clean design suitable for a premium urban shopping app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnxucCtL02iKNn6GQypypAcjrFIdkCytv_kAjtgl8gIP-1JllAWC8cfkqkV6QXxRLRPQ5-xLUJegsQepXs3WI-6lqz1lC7ooXBgmD5xHhOI8MDTpTTKgNxZz2RCchfjlmnHgQBtdDZSW5HphIHs2Me5v1by2-7OCXZ9tnePVdBItovMMJV6XTeq6B3PSlre0z533_5BdHzQw3kKf2c9huuxSeH1di6Zdkq2CWw6en7PwJwRjYUUroGUQ"/>
+<p class="mt-2 font-label-lg text-label-lg">Milo Tin 400g</p>
+<p class="font-headline-md text-headline-md">₦2,750</p>
+<button class="absolute bottom-4 right-4 bg-on-background text-white rounded-full w-8 h-8 flex items-center justify-center">
+<span class="material-symbols-outlined !text-[20px]">add</span>
+</button>
+</div>
+<!-- Suggestion 2 -->
+<div class="bg-white rounded-xl p-4 min-w-[140px] shadow-sm border border-surface-container relative">
+<img class="w-24 h-24 object-contain mx-auto" data-alt="A high-end commercial photo of a Bournvita chocolate drink container. The packaging is rich in purple and orange tones, set in a bright, modern light-mode studio. The background is a very subtle cloud grey, emphasizing the product's premium feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA76vthaM9yKA76EpulN3AP0d11Tiyx-25dC8xkWgcDqflHcAbkCg9sdcOzGRtIR6i796kNzkxFsY4I-diuIcIzy4M1O9kPC6kLZuxwUMdCrlzk6gK_TlMwd3wuQzFxEVAvkWf7c_XEVwIFY4jLIshAEbce6wrxWuPa3saVJZ6lrmPe6osq_vvvvOoCjRV4FMP7ICJgvKHQHhty6qHLfS7G7yc2uEXp-PofzO5goGyU5jdHEQHfUftjxw"/>
+<p class="mt-2 font-label-lg text-label-lg">Bournvita 500g</p>
+<p class="font-headline-md text-headline-md">₦2,450</p>
+<button class="absolute bottom-4 right-4 bg-on-background text-white rounded-full w-8 h-8 flex items-center justify-center">
+<span class="material-symbols-outlined !text-[20px]">add</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Order Summary -->
+<section class="mt-stack-lg px-gutter">
+<div class="bg-surface-container-lowest rounded-2xl p-6 border border-surface-container shadow-sm">
+<div class="flex justify-between items-center mb-3">
+<span class="font-body-md text-body-md text-secondary">Subtotal</span>
+<span class="font-headline-md text-headline-md text-on-background">₦2,160</span>
+</div>
+<div class="flex justify-between items-center mb-3">
+<span class="font-body-md text-body-md text-secondary">Delivery fee</span>
+<span class="font-headline-md text-headline-md text-primary font-bold">FREE</span>
+</div>
+<div class="h-px bg-surface-container my-4"></div>
+<div class="flex justify-between items-center">
+<span class="font-headline-md text-headline-md text-on-background">Total</span>
+<span class="font-headline-xl-mobile text-headline-xl-mobile text-on-background font-bold">₦2,160</span>
+</div>
+</div>
+</section>
+<!-- Action Button -->
+<div class="mt-stack-lg px-gutter pb-8">
+<button class="w-full bg-primary-container text-on-primary-container h-14 rounded-xl font-bold text-lg shadow-sm hover:scale-[0.98] transition-transform active:scale-95 duration-150">
+                Proceed to Checkout
+            </button>
+</div>
+</main>
+<!-- Bottom Nav Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-surface dark:bg-background rounded-t-xl shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] md:hidden">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-all" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-sm text-label-sm">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-all" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-label-sm text-label-sm">Categories</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-all" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span class="font-label-sm text-label-sm">Orders</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed relative after:content-[''] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-primary-container after:rounded-full scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shopping_cart</span>
+<span class="font-label-sm text-label-sm">Cart</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container-lowest transition-all" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm">Profile</span>
+</a>
+</nav>
+<!-- Interactive Layer / Micro-interaction script -->
+<script>
+        // Simple scale micro-interaction for item quantity buttons
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                this.classList.add('scale-95');
+                setTimeout(() => this.classList.remove('scale-95'), 100);
+            });
+        });
+    </script>
+</body></html>
