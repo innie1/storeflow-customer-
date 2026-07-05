@@ -75,6 +75,70 @@ function App() {
   // Dynamic Pricing Configuration
   const [priceMode, setPriceMode] = useState<'retail' | 'wholesale'>('retail');
 
+  const isStoreOpenState = useMemo(() => {
+    if (store?.status === 'inactive') return false;
+    if (!store?.data || !store.data.marketplaceSettings) {
+      return store?.status === 'active';
+    }
+    const ms = store.data.marketplaceSettings;
+    
+    // 1. Manual switches
+    if (ms.storeOpen === false || ms.temporaryClosure === true || ms.temporarilyHidden === true) {
+      return false;
+    }
+
+    // 2. Business Days check
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    if (Array.isArray(ms.businessDays) && !ms.businessDays.includes(dayOfWeek)) {
+      return false;
+    }
+
+    // 3. Opening/Closing hours check
+    if (ms.openingTime && ms.closingTime) {
+      const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      if (timeStr < ms.openingTime || timeStr > ms.closingTime) {
+        return false;
+      }
+    }
+
+    return true;
+  }, [store]);
+
+  const paymentMethodsList = useMemo(() => {
+    const ms = store?.data?.marketplaceSettings;
+    const list = [];
+    
+    if (!ms) {
+      return [
+        { key: 'opay', icon: 'phone_android', label: 'OPay Wallet', sub: `Instant transfer via OPay (${store?.profile?.phone || '08123456789'})` },
+        { key: 'transfer', icon: 'credit_card', label: 'Bank Transfer', sub: 'Access Bank: 1234567890 (StoreFlow)' },
+        { key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash' }
+      ];
+    }
+
+    if (ms.paymentWalletEnabled !== false) {
+      list.push({ key: 'opay', icon: 'phone_android', label: 'Digital Wallet', sub: `Instant transfer via OPay (${store?.profile?.phone || '08123456789'})` });
+    }
+    if (ms.paymentTransferEnabled !== false) {
+      list.push({ key: 'transfer', icon: 'credit_card', label: 'Bank Transfer', sub: `${ms.bankName || 'Access Bank'}: ${ms.bankAccountNumber || '1234567890'} (${ms.bankAccountName || store.storeName})` });
+    }
+    if (ms.paymentCashEnabled !== false) {
+      list.push({ key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash or POS on arrival' });
+    }
+    if (ms.paymentCardEnabled === true) {
+      list.push({ key: 'card', icon: 'credit_card', label: 'Debit/Credit Card', sub: 'Pay securely online' });
+    }
+    if (ms.paymentPosEnabled === true) {
+      list.push({ key: 'pos', icon: 'point_of_sale', label: 'POS Terminal', sub: 'Swipe card on delivery/pickup' });
+    }
+
+    if (list.length === 0) {
+      list.push({ key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash' });
+    }
+    return list;
+  }, [store]);
+
   const isRetailEnabled = useMemo(() => {
     if (!store?.data || !store.data.managerSettings) return true;
     const settings = store.data.managerSettings;
@@ -145,6 +209,8 @@ function App() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryType, setDeliveryType] = useState<'pickup' | 'delivery'>('pickup');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [deliveryLandmark, setDeliveryLandmark] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'opay'>('cash');
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -152,6 +218,41 @@ function App() {
   const [orderStatus, setOrderStatus] = useState('Pending');
   const [orderCopied, setOrderCopied] = useState(false);
   const [ordersHistory, setOrdersHistory] = useState<Order[]>([]);
+
+  const normalizeNigerianPhone = useCallback((num: string): string => {
+    const cleaned = num.replace(/\D/g, '');
+    if (cleaned.startsWith('234') && cleaned.length === 13) {
+      return '+' + cleaned;
+    } else if (cleaned.startsWith('0') && cleaned.length === 11) {
+      return '+234' + cleaned.substring(1);
+    } else if (cleaned.length === 10) {
+      return '+234' + cleaned;
+    } else if ((cleaned.startsWith('8') || cleaned.startsWith('7') || cleaned.startsWith('9')) && cleaned.length === 10) {
+      return '+234' + cleaned;
+    }
+    return '';
+  }, []);
+
+  const isCheckoutFormValid = useMemo(() => {
+    const ms = store?.data?.marketplaceSettings;
+    if (!ms) {
+      return !!customerName && !!customerPhone && (deliveryType !== 'delivery' || !!deliveryAddress);
+    }
+    
+    if (ms.reqCustomerName !== false && !customerName.trim()) return false;
+    if (ms.reqCustomerPhone !== false) {
+      const norm = normalizeNigerianPhone(customerPhone);
+      if (!norm) return false;
+    }
+    if (ms.reqCustomerEmail === true && !customerEmail.trim()) return false;
+    if (deliveryType === 'delivery') {
+      if (ms.reqCustomerAddress !== false && !deliveryAddress.trim()) return false;
+      if (ms.reqCustomerLandmark === true && !deliveryLandmark.trim()) return false;
+    }
+    if (ms.reqCustomerNotes === true && !specialInstructions.trim()) return false;
+    
+    return true;
+  }, [store, customerName, customerPhone, customerEmail, deliveryAddress, deliveryLandmark, specialInstructions, deliveryType, normalizeNigerianPhone]);
 
   // PWA Install trigger
   const [_showInstallPrompt, _setShowInstallPrompt] = useState(false);
@@ -472,6 +573,58 @@ function App() {
       clearInterval(timer);
     };
   }, [orderId, screen]);
+
+  // Real-time store updates tracking
+  useEffect(() => {
+    if (!store?.id) return;
+
+    const channel = supabase
+      .channel(`store-updates-${store.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        filter: `id=eq.${store.id}`,
+        schema: 'public',
+        table: 'stores'
+      }, (payload: any) => {
+        console.log('[StoreFlow Realtime] Store updated payload received:', payload);
+        if (payload.new) {
+          setStore(payload.new);
+          
+          if (payload.new.data && Array.isArray(payload.new.data.products)) {
+            const prods = payload.new.data.products.map((p: any) => {
+              const whPrice = p.sellingPrice ?? p.selling_price ?? 0;
+              const isCartonSingle = p.isCartonSingleEnabled === true;
+              const rtPrice = isCartonSingle ? (p.singleSellingPrice ?? (p.singlesPerCarton ? Math.round(whPrice / p.singlesPerCarton) : whPrice)) : whPrice;
+              return {
+                id: p.id || p.productId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+                store_id: payload.new.id,
+                barcode: p.barcode || '',
+                name: p.name || p.productName || 'Product',
+                description: p.description || '',
+                selling_price: whPrice,
+                wholesale_price: whPrice,
+                retail_price: rtPrice,
+                quantity: p.quantity ?? 0,
+                category: p.category || 'General',
+                image: p.image || '',
+                status: p.discontinued ? 'inactive' : 'active'
+              };
+            }).filter((p: any) => p.status === 'active');
+            setProducts(prods);
+            
+            let cats = ['All'];
+            const uniq = Array.from(new Set(prods.map((p: any) => p.category).filter((c: any) => !!c))) as string[];
+            cats = ['All', ...uniq];
+            setCategories(cats);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [store?.id]);
 
   // ─── URL Routing / Deep Links ──────────────────────────────────────────────
 
@@ -1330,13 +1483,24 @@ function App() {
           </header>
 
           <main className="mt-4 px-4 md:px-gutter">
-            {/* Warning Banner if closed */}
-            {store?.status === 'inactive' && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm flex items-center gap-3">
-                <span className="material-symbols-outlined text-xl shrink-0">warning</span>
-                <span><strong>Closed Alert</strong>: This store is currently closed. You can view the items, but checkout will be disabled.</span>
+            {store?.data?.marketplaceSettings?.marketplaceListingEnabled === false || store?.data?.marketplaceSettings?.temporarilyHidden === true ? (
+              <div className="flex flex-col items-center justify-center py-20 px-6 text-center space-y-4 max-w-md mx-auto text-on-surface">
+                <span className="text-6xl">🔒</span>
+                <h2 className="text-xl font-bold">Store Temporarily Offline</h2>
+                <p className="text-sm text-secondary">The merchant has temporarily disabled the marketplace listing or hidden this store. Please try again later.</p>
+                <button onClick={() => setScreen('home')} className="px-6 py-2.5 bg-primary text-on-primary rounded-full text-xs font-bold shadow-md cursor-pointer">
+                  Go Back Home
+                </button>
               </div>
-            )}
+            ) : (
+              <>
+                {/* Warning Banner if closed */}
+                {!isStoreOpenState && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl text-sm flex items-center gap-3">
+                    <span className="material-symbols-outlined text-xl shrink-0">warning</span>
+                    <span><strong>Closed Alert</strong>: This store is currently closed. You can view the items, but checkout will be disabled.</span>
+                  </div>
+                )}
 
             {/* Hero */}
             <section className="mb-6">
@@ -1497,7 +1661,9 @@ function App() {
                 })}
               </div>
             </section>
-          </main>
+          </>
+        )}
+      </main>
 
           {/* Sticky Cart Bar */}
           {totalItemsCount > 0 && (
@@ -1880,7 +2046,7 @@ function App() {
                     </div>
                   </div>
                   <button
-                    disabled={cart.length === 0 || store?.status === 'inactive'}
+                    disabled={cart.length === 0 || !isStoreOpenState || store?.data?.marketplaceSettings?.onlineOrdersEnabled === false}
                     onClick={() => setCheckoutStep('checkout')}
                     className="w-full bg-primary text-on-primary py-4 rounded-full font-bold shadow-md hover:bg-primary/95 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
                   >
@@ -1911,29 +2077,46 @@ function App() {
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-secondary uppercase px-1">Full Name</label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={e => setCustomerName(e.target.value)}
-                    className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
-                    placeholder="Enter full name"
-                  />
-                </div>
+                {(store?.data?.marketplaceSettings?.reqCustomerName !== false) && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-secondary uppercase px-1">Full Name</label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={e => setCustomerName(e.target.value)}
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                      placeholder="Enter full name"
+                    />
+                  </div>
+                )}
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-secondary uppercase px-1">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={customerPhone}
-                    onChange={e => setCustomerPhone(e.target.value)}
-                    className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
-                    placeholder="e.g. 08123456789"
-                  />
-                </div>
+                {(store?.data?.marketplaceSettings?.reqCustomerPhone !== false) && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-secondary uppercase px-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={e => setCustomerPhone(e.target.value)}
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                      placeholder="e.g. 08123456789"
+                    />
+                  </div>
+                )}
 
-                {deliveryType === 'delivery' && (
+                {(store?.data?.marketplaceSettings?.reqCustomerEmail === true) && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-secondary uppercase px-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={e => setCustomerEmail(e.target.value)}
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                      placeholder="Enter email address"
+                    />
+                  </div>
+                )}
+
+                {deliveryType === 'delivery' && (store?.data?.marketplaceSettings?.reqCustomerAddress !== false) && (
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-secondary uppercase px-1">Delivery Address</label>
                     <input
@@ -1946,20 +2129,41 @@ function App() {
                   </div>
                 )}
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-secondary uppercase px-1">Special Instructions</label>
-                  <input
-                    type="text"
-                    value={specialInstructions}
-                    onChange={e => setSpecialInstructions(e.target.value)}
-                    className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
-                    placeholder="e.g. Leave with guard"
-                  />
-                </div>
+                {deliveryType === 'delivery' && (store?.data?.marketplaceSettings?.reqCustomerLandmark === true) && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-secondary uppercase px-1">Landmark / Near Bus Stop</label>
+                    <input
+                      type="text"
+                      value={deliveryLandmark}
+                      onChange={e => setDeliveryLandmark(e.target.value)}
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                      placeholder="Nearest landmark"
+                    />
+                  </div>
+                )}
+
+                {(store?.data?.marketplaceSettings?.reqCustomerNotes !== false) && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-secondary uppercase px-1">Special Instructions</label>
+                    <input
+                      type="text"
+                      value={specialInstructions}
+                      onChange={e => setSpecialInstructions(e.target.value)}
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/30 text-sm font-semibold outline-none"
+                      placeholder="e.g. Leave with guard"
+                    />
+                  </div>
+                )}
 
                 <button
-                  disabled={!customerName || !customerPhone || (deliveryType === 'delivery' && !deliveryAddress)}
-                  onClick={() => setCheckoutStep('payment')}
+                  disabled={!isCheckoutFormValid}
+                  onClick={() => {
+                    const normalized = normalizeNigerianPhone(customerPhone);
+                    if (normalized) {
+                      setCustomerPhone(normalized);
+                    }
+                    setCheckoutStep('payment');
+                  }}
                   className="w-full bg-primary text-on-primary py-4 rounded-full font-bold shadow-md hover:bg-primary/95 transition-all cursor-pointer disabled:opacity-50"
                 >
                   Continue to Payment
@@ -1977,11 +2181,7 @@ function App() {
                 </div>
 
                 <div className="space-y-3">
-                  {[
-                    { key: 'opay', icon: 'phone_android', label: 'OPay Wallet', sub: 'Instant transfer via OPay (08123456789)' },
-                    { key: 'transfer', icon: 'credit_card', label: 'Bank Transfer', sub: 'Access Bank: 1234567890 (StoreFlow)' },
-                    { key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash' }
-                  ].map(opt => (
+                  {paymentMethodsList.map(opt => (
                     <div
                       key={opt.key}
                       onClick={() => setPaymentMethod(opt.key as any)}
