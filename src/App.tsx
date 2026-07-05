@@ -285,9 +285,9 @@ function App() {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sid);
       let query = supabase.from('stores').select('*');
       if (isUuid) {
-        query = query.or(`id.eq.${sid},store_id.eq.${sid}`);
+        query = query.or(`id.eq.${sid},store_id.eq.${sid},access_code.eq.${sid}`);
       } else {
-        query = query.eq('store_id', sid);
+        query = query.or(`store_id.eq.${sid},access_code.eq.${sid}`);
       }
       
       const { data: storeData, error: storeErr } = await query.maybeSingle();
@@ -355,7 +355,14 @@ function App() {
         setScreen('store_not_found');
       }
     } catch (err: any) {
-      console.error(`[StoreFlow QR] Critical error loading store detail for ID: "${sid}":`, err);
+      console.error(`[StoreFlow QR] Critical error loading store detail for ID: "${sid}":`, {
+        message: err?.message,
+        stack: err?.stack,
+        details: err?.details,
+        hint: err?.hint,
+        code: err?.code,
+        raw: err
+      });
       setErrorText('Offline Mode: Displaying offline catalog.');
       // Attempt local storage fallback if we have a match
       const matched = allStores.find(s => s.id === sid);
