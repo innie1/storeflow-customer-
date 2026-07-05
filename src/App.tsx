@@ -302,40 +302,52 @@ function App() {
       if (storeData) {
         setStore(storeData);
         const resolvedStoreUuid = storeData.id;
-        console.log(`[StoreFlow QR] Querying active products for store UUID: "${resolvedStoreUuid}"...`);
-        const { data: prodData, error: prodErr } = await supabase
-          .from('products')
-          .select('*')
-          .eq('store_id', resolvedStoreUuid)
-          .eq('status', 'active');
+        console.log(`[StoreFlow QR] Store data loaded:`, storeData);
 
-        if (prodErr) {
-          console.error(`[StoreFlow QR] Error querying products for store UUID: "${resolvedStoreUuid}":`, prodErr);
-          throw prodErr;
+        // Extract products from storeData.data.products (JSONB) or query public.products table
+        let prods: any[] = [];
+        if (storeData.data && Array.isArray((storeData.data as any).products)) {
+          console.log(`[StoreFlow QR] Extracting products from store JSONB payload...`);
+          prods = (storeData.data as any).products.map((p: any) => ({
+            id: p.id || p.productId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+            store_id: resolvedStoreUuid,
+            barcode: p.barcode || '',
+            name: p.name || p.productName || 'Product',
+            description: p.description || '',
+            selling_price: p.sellingPrice ?? p.selling_price ?? 0,
+            quantity: p.quantity ?? 0,
+            category: p.category || 'General',
+            image: p.image || '',
+            status: p.discontinued ? 'inactive' : 'active'
+          })).filter((p: any) => p.status === 'active');
+          console.log(`[StoreFlow QR] Extracted ${prods.length} products from JSONB.`);
         }
 
-        const prods = prodData || [];
-        console.log(`[StoreFlow QR] Products loaded successfully. Count: ${prods.length}`);
+        // If no products found in JSONB, attempt query on products table
+        if (prods.length === 0) {
+          console.log(`[StoreFlow QR] Querying public.products table for store UUID: "${resolvedStoreUuid}"...`);
+          const { data: prodData, error: prodErr } = await supabase
+            .from('products')
+            .select('*')
+            .eq('store_id', resolvedStoreUuid)
+            .eq('status', 'active');
+
+          if (prodErr) {
+            console.error(`[StoreFlow QR] Error querying products for store UUID: "${resolvedStoreUuid}":`, prodErr);
+            throw prodErr;
+          }
+          prods = prodData || [];
+          console.log(`[StoreFlow QR] Query response from products table:`, prods);
+        }
+
+        console.log(`[StoreFlow QR] Final products loaded successfully. Count: ${prods.length}`);
         setProducts(prods);
         localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));
 
-        console.log(`[StoreFlow QR] Querying categories for store UUID: "${resolvedStoreUuid}"...`);
-        const { data: catData, error: catErr } = await supabase
-          .from('categories')
-          .select('name')
-          .eq('store_id', resolvedStoreUuid);
-
-        if (catErr) {
-          console.warn(`[StoreFlow QR] Optional categories fetch error for store UUID: "${resolvedStoreUuid}":`, catErr);
-        }
-
+        // Dynamically compute categories list
         let cats = ['All'];
-        if (catData && catData.length > 0) {
-          cats = ['All', ...catData.map((c: any) => c.name)];
-        } else {
-          const uniq = Array.from(new Set(prods.map(p => p.category).filter((c): c is string => !!c)));
-          cats = ['All', ...uniq];
-        }
+        const uniq = Array.from(new Set(prods.map(p => p.category).filter((c): c is string => !!c)));
+        cats = ['All', ...uniq];
         setCategories(cats);
         localStorage.setItem('storeflow_cached_categories', JSON.stringify(cats));
       } else {
