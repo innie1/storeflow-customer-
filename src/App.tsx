@@ -15,6 +15,8 @@ interface Product {
   brand?: string;
   cost_price?: number;
   selling_price: number;
+  wholesale_price?: number;
+  retail_price?: number;
   quantity: number;
   unit?: string;
   image?: string;
@@ -62,13 +64,48 @@ function App() {
     return 'splash';
   });
   const [_storeId, setStoreId] = useState<string | null>(null);
-  const [store, setStore] = useState<Store | null>(null);
+  const [store, setStore] = useState<any>(null);
   const [allStores, setAllStores] = useState<Store[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [deepLinkedProductId, setDeepLinkedProductId] = useState<string | null>(null);
+
+  // Dynamic Pricing Configuration
+  const [priceMode, setPriceMode] = useState<'retail' | 'wholesale'>('retail');
+
+  const isRetailEnabled = useMemo(() => {
+    if (!store?.data || !store.data.managerSettings) return true;
+    const settings = store.data.managerSettings;
+    return settings.retailPricingEnabled !== false;
+  }, [store]);
+
+  const isWholesaleEnabled = useMemo(() => {
+    if (store?.data?.managerSettings) {
+      const settings = store.data.managerSettings;
+      if (settings.wholesalePricingEnabled === false) return false;
+      if (settings.wholesalePricingEnabled === true) return true;
+    }
+    if (store?.retailType === 'provision_wholesale') return true;
+    return products.some(p => p.wholesale_price !== p.retail_price);
+  }, [store, products]);
+
+  // Sync pricing modes
+  useEffect(() => {
+    if (isWholesaleEnabled && !isRetailEnabled) {
+      setPriceMode('wholesale');
+    } else {
+      setPriceMode('retail');
+    }
+  }, [isRetailEnabled, isWholesaleEnabled]);
+
+  const getPrice = useCallback((p: Product) => {
+    if (priceMode === 'wholesale') {
+      return p.wholesale_price ?? p.selling_price;
+    }
+    return p.retail_price ?? p.selling_price;
+  }, [priceMode]);
 
   // Connection/Offline state
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -308,18 +345,25 @@ function App() {
         let prods: any[] = [];
         if (storeData.data && Array.isArray((storeData.data as any).products)) {
           console.log(`[StoreFlow QR] Extracting products from store JSONB payload...`);
-          prods = (storeData.data as any).products.map((p: any) => ({
-            id: p.id || p.productId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-            store_id: resolvedStoreUuid,
-            barcode: p.barcode || '',
-            name: p.name || p.productName || 'Product',
-            description: p.description || '',
-            selling_price: p.sellingPrice ?? p.selling_price ?? 0,
-            quantity: p.quantity ?? 0,
-            category: p.category || 'General',
-            image: p.image || '',
-            status: p.discontinued ? 'inactive' : 'active'
-          })).filter((p: any) => p.status === 'active');
+          prods = (storeData.data as any).products.map((p: any) => {
+            const whPrice = p.sellingPrice ?? p.selling_price ?? 0;
+            const isCartonSingle = p.isCartonSingleEnabled === true;
+            const rtPrice = isCartonSingle ? (p.singleSellingPrice ?? (p.singlesPerCarton ? Math.round(whPrice / p.singlesPerCarton) : whPrice)) : whPrice;
+            return {
+              id: p.id || p.productId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+              store_id: resolvedStoreUuid,
+              barcode: p.barcode || '',
+              name: p.name || p.productName || 'Product',
+              description: p.description || '',
+              selling_price: whPrice,
+              wholesale_price: whPrice,
+              retail_price: rtPrice,
+              quantity: p.quantity ?? 0,
+              category: p.category || 'General',
+              image: p.image || '',
+              status: p.discontinued ? 'inactive' : 'active'
+            };
+          }).filter((p: any) => p.status === 'active');
           console.log(`[StoreFlow QR] Extracted ${prods.length} products from JSONB.`);
         }
 
@@ -336,7 +380,11 @@ function App() {
             console.error(`[StoreFlow QR] Error querying products for store UUID: "${resolvedStoreUuid}":`, prodErr);
             throw prodErr;
           }
-          prods = prodData || [];
+          prods = (prodData || []).map((p: any) => ({
+            ...p,
+            wholesale_price: p.wholesale_price ?? p.selling_price ?? 0,
+            retail_price: p.retail_price ?? p.selling_price ?? 0
+          }));
           console.log(`[StoreFlow QR] Query response from products table:`, prods);
         }
 
@@ -661,7 +709,7 @@ function App() {
 
   const getQty = (productId: string) => cart.find(i => i.product.id === productId)?.quantity ?? 0;
 
-  const subtotal = useMemo(() => cart.reduce((s, i) => s + i.product.selling_price * i.quantity, 0), [cart]);
+  const subtotal = useMemo(() => cart.reduce((s, i) => s + getPrice(i.product) * i.quantity, 0), [cart, getPrice]);
   const deliveryFee = useMemo(() => (deliveryType === 'pickup' || subtotal === 0) ? 0 : subtotal >= 5000 ? 0 : 500, [deliveryType, subtotal]);
   const total = subtotal + deliveryFee;
   const totalItemsCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
@@ -680,7 +728,8 @@ function App() {
         delivery_type: deliveryType,
         address: deliveryType === 'delivery' ? deliveryAddress : '',
         payment_method: paymentMethod,
-        instructions: specialInstructions
+        instructions: specialInstructions,
+        pricing_mode: priceMode
       });
 
       const orderPayload = {
@@ -708,8 +757,8 @@ function App() {
             order_id: oid,
             product_id: item.product.id,
             quantity: item.quantity,
-            price: item.product.selling_price,
-            subtotal: item.product.selling_price * item.quantity
+            price: getPrice(item.product),
+            subtotal: getPrice(item.product) * item.quantity
           }))
         );
 
@@ -722,8 +771,8 @@ function App() {
           items: cart.map(item => ({
             product_id: item.product.id,
             quantity: item.quantity,
-            price: item.product.selling_price,
-            subtotal: item.product.selling_price * item.quantity
+            price: getPrice(item.product),
+            subtotal: getPrice(item.product) * item.quantity
           }))
         });
         localStorage.setItem('storeflow_pending_sync_orders', JSON.stringify(offlineQueue));
@@ -1239,7 +1288,7 @@ function App() {
                     </div>
                     <div className="space-y-1">
                       <p className="font-bold text-sm text-on-surface truncate">{p.name}</p>
-                      <p className="font-extrabold text-base text-on-background">₦{p.selling_price.toLocaleString()}</p>
+                      <p className="font-extrabold text-base text-on-background">₦{getPrice(p).toLocaleString()}</p>
                     </div>
                   </div>
                 ))}
@@ -1328,16 +1377,41 @@ function App() {
             </section>
 
             {/* StoreFlow Price Badge */}
-            <section className="mb-8">
-              <div className="bg-surface-container-low rounded-xl p-4 flex items-center gap-4 border border-outline-variant/30">
-                <div className="w-12 h-12 bg-primary-container rounded-lg flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-on-primary-container text-2xl">local_offer</span>
-                </div>
-                <div>
-                  <p className="font-bold text-on-surface">StoreFlow Prices</p>
-                  <p className="text-sm text-secondary mt-0.5">You get lower prices on items in this store 🎉</p>
+            <section className="mb-8 space-y-4">
+              <div className="bg-surface-container-low rounded-xl p-4 flex items-center justify-between border border-outline-variant/30">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-primary-container rounded-lg flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-on-primary-container text-2xl">local_offer</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-on-surface">StoreFlow Prices</p>
+                    <p className="text-sm text-secondary mt-0.5">
+                      {priceMode === 'wholesale' ? '📦 Wholesale Mode (selling in cartons)' : '🥛 Retail Mode (selling in singles)'}
+                    </p>
+                  </div>
                 </div>
               </div>
+
+              {isRetailEnabled && isWholesaleEnabled && (
+                <div className="flex p-1 rounded-full bg-surface-container-high border border-outline-variant/20 text-xs font-bold w-full max-w-[320px] mx-auto">
+                  <button
+                    onClick={() => setPriceMode('retail')}
+                    className={`flex-1 py-2.5 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      priceMode === 'retail' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:text-on-surface'
+                    }`}
+                  >
+                    <span>🥛 Retail Prices</span>
+                  </button>
+                  <button
+                    onClick={() => setPriceMode('wholesale')}
+                    className={`flex-1 py-2.5 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      priceMode === 'wholesale' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:text-on-surface'
+                    }`}
+                  >
+                    <span>📦 Wholesale Prices</span>
+                  </button>
+                </div>
+              )}
             </section>
 
             {/* Search and Category Chips */}
@@ -1395,11 +1469,6 @@ function App() {
                               {p.name.slice(0, 2).toUpperCase()}
                             </div>
                           )}
-                          {p.quantity <= 10 && p.quantity > 0 && (
-                            <div className="absolute top-2 left-2 bg-error text-on-error px-2 py-0.5 rounded text-[10px] font-bold">
-                              LOW STOCK
-                            </div>
-                          )}
                           <button
                             onClick={e => {
                               e.stopPropagation();
@@ -1416,7 +1485,7 @@ function App() {
                         </div>
                       </div>
                       <div className="flex justify-between items-center mt-3 px-1">
-                        <span className="font-extrabold text-base text-on-background">₦{p.selling_price.toLocaleString()}</span>
+                        <span className="font-extrabold text-base text-on-background">₦{getPrice(p).toLocaleString()}</span>
                         {qtyInCart > 0 && (
                           <div className="flex items-center gap-1.5 bg-surface-container-high rounded-full px-2 py-1">
                             <span className="text-[10px] font-bold text-on-surface-variant">{qtyInCart} in cart</span>
@@ -1709,9 +1778,9 @@ function App() {
               <div>
                 <h2 className="text-xl font-extrabold text-on-background font-headline-lg">{selectedProduct.name}</h2>
                 <div className="flex justify-between items-center mt-2">
-                  <span className="text-xl font-extrabold text-primary">{store?.currency || '₦'}{selectedProduct.selling_price.toLocaleString()}</span>
+                  <span className="text-xl font-extrabold text-primary">{store?.currency || '₦'}{getPrice(selectedProduct).toLocaleString()}</span>
                   <span className={`text-xs font-semibold ${selectedProduct.quantity > 0 ? 'text-primary' : 'text-error'}`}>
-                    {selectedProduct.quantity > 0 ? `In Stock (${selectedProduct.quantity} left)` : 'Out of Stock'}
+                    {selectedProduct.quantity > 0 ? 'Available' : 'Out of Stock'}
                   </span>
                 </div>
               </div>
@@ -1782,7 +1851,7 @@ function App() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-sm text-on-surface truncate">{item.product.name}</h4>
-                        <span className="text-xs text-secondary mt-0.5 block">₦{item.product.selling_price} each</span>
+                        <span className="text-xs text-secondary mt-0.5 block">₦{getPrice(item.product)} each</span>
                       </div>
                       <div className="flex items-center gap-3 bg-surface-container-low rounded-full p-1 border border-outline-variant/20 shrink-0">
                         <button onClick={() => addToCart(item.product, -1)} className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
