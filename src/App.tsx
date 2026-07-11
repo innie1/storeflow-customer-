@@ -475,6 +475,13 @@ function App() {
     localStorage.setItem('storeflow_cached_cart', JSON.stringify(cart));
   }, [cart]);
 
+  // Reset checkout step to shopping when cart is opened
+  useEffect(() => {
+    if (isCartOpen) {
+      setCheckoutStep('shopping');
+    }
+  }, [isCartOpen]);
+
   // Handle Online/Offline Status
   useEffect(() => {
     const handleOnline = () => {
@@ -691,6 +698,8 @@ function App() {
 
       if (storeData) {
         setStore(storeData);
+        // Clear cart items that belong to other stores
+        setCart(prev => prev.filter(item => item.product.store_id === storeData.id));
         // Sync browser URL to represent the active store (so refreshes work)
         const storeSlug = storeData.store_id || storeData.access_code || storeData.id;
         const targetPath = `/s/${storeSlug}`;
@@ -4341,6 +4350,22 @@ function App() {
                   </button>
                 </div>
 
+                {/* Compact Order Summary */}
+                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-[#1A1C1E]">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-black uppercase tracking-wider text-gray-400">Order Summary ({totalItemsCount})</span>
+                    <span className="text-xs font-black text-[#1A1C1E]">₦{total.toLocaleString()}</span>
+                  </div>
+                  <div className="max-h-24 overflow-y-auto space-y-2 pr-1">
+                    {cart.map(item => (
+                      <div key={item.product.id} className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-[#1A1C1E] truncate max-w-[200px]">{item.product.name} <span className="text-gray-400 font-semibold">x{item.quantity}</span></span>
+                        <span className="font-black text-gray-600">₦{(getPrice(item.product) * item.quantity).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 {/* ─── It'sMe Prefill Button ─── */}
                 <button
                   onClick={applyItsMeToCheckout}
@@ -4491,6 +4516,22 @@ function App() {
                   <button onClick={() => setCheckoutStep('checkout')} className="w-8 h-8 rounded-full bg-gray-100 text-[#1A1C1E] flex items-center justify-center cursor-pointer hover:bg-gray-200">
                     <span className="material-symbols-outlined text-base">arrow_back</span>
                   </button>
+                </div>
+
+                {/* Compact Order Summary */}
+                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-[#1A1C1E]">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-black uppercase tracking-wider text-gray-400">Order Summary ({totalItemsCount})</span>
+                    <span className="text-xs font-black text-[#1A1C1E]">₦{total.toLocaleString()}</span>
+                  </div>
+                  <div className="max-h-24 overflow-y-auto space-y-2 pr-1">
+                    {cart.map(item => (
+                      <div key={item.product.id} className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-[#1A1C1E] truncate max-w-[200px]">{item.product.name} <span className="text-gray-400 font-semibold">x{item.quantity}</span></span>
+                        <span className="font-black text-gray-600">₦{(getPrice(item.product) * item.quantity).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="space-y-3">
