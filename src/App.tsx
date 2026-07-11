@@ -151,6 +151,15 @@ function App() {
     }
   }, [store?.id]);
 
+  useEffect(() => {
+    const rootScreens = ['home', 'explore', 'onboarding', 'login', 'location'];
+    if (rootScreens.includes(screen)) {
+      if (window.location.pathname !== '/') {
+        window.history.pushState(null, '', '/');
+      }
+    }
+  }, [screen]);
+
   const toggleStoreFavorite = () => {
     if (!store?.id) return;
     const next = !isStoreFavorited;
@@ -645,11 +654,14 @@ function App() {
       let storeErr = null;
       let queryUsed = '';
 
+      const cleanSid = sid.trim();
+      const upperSid = cleanSid.toUpperCase();
+
       // 5. If the URL contains SF-TTEC9S (or starts with SF-), the query must search the stores.store_id column first
-      if (sid.toUpperCase().startsWith('SF-')) {
-        queryUsed = `supabase.from('stores').select('*').eq('store_id', '${sid}')`;
+      if (cleanSid.toUpperCase().startsWith('SF-')) {
+        queryUsed = `supabase.from('stores').select('*').ilike('store_id', '${cleanSid}')`;
         console.log(`[StoreFlow QR] Prioritizing query on stores.store_id column first: ${queryUsed}`);
-        const res = await supabase.from('stores').select('*').eq('store_id', sid).maybeSingle();
+        const res = await supabase.from('stores').select('*').ilike('store_id', cleanSid).maybeSingle();
         storeData = res.data;
         storeErr = res.error;
       }
@@ -658,9 +670,9 @@ function App() {
       if (!storeData && !storeErr) {
         let orFilter = '';
         if (isUuid) {
-          orFilter = `id.eq.${sid},store_id.eq.${sid},store_id.eq.SF-${sid.toUpperCase()},access_code.eq.${sid},qr_code.ilike.%/store/${sid},qr_code.ilike.%/s/${sid}`;
+          orFilter = `id.eq.${cleanSid},store_id.ilike.${cleanSid},store_id.ilike.SF-${cleanSid},access_code.ilike.${cleanSid},qr_code.ilike.%/store/${cleanSid},qr_code.ilike.%/s/${cleanSid}`;
         } else {
-          orFilter = `store_id.eq.${sid},store_id.eq.SF-${sid.toUpperCase()},access_code.eq.${sid},qr_code.ilike.%/store/${sid},qr_code.ilike.%/s/${sid}`;
+          orFilter = `store_id.ilike.${cleanSid},store_id.ilike.SF-${cleanSid},access_code.ilike.${cleanSid},qr_code.ilike.%/store/${cleanSid},qr_code.ilike.%/s/${cleanSid}`;
         }
         queryUsed = `supabase.from('stores').select('*').or('${orFilter}')`;
         console.log(`[StoreFlow QR] Running fallback OR query: ${queryUsed}`);
@@ -680,6 +692,13 @@ function App() {
 
       if (storeData) {
         setStore(storeData);
+        // Sync browser URL to represent the active store (so refreshes work)
+        const storeSlug = storeData.store_id || storeData.access_code || storeData.id;
+        const targetPath = `/s/${storeSlug}`;
+        if (window.location.pathname !== targetPath) {
+          window.history.pushState(null, '', targetPath);
+        }
+
         try {
           const scanned = JSON.parse(localStorage.getItem('storeflow_scanned_stores') || '[]');
           if (!scanned.includes(storeData.id)) {
