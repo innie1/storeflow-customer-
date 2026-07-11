@@ -140,6 +140,8 @@ function App() {
   const [showInStockOnly, setShowInStockOnly] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [cartAnimated, setCartAnimated] = useState(false);
   const [isStoreFavorited, setIsStoreFavorited] = useState(false);
   
@@ -619,6 +621,8 @@ function App() {
   };
 
   const loadStoreDetails = async (sid: string) => {
+    // Reset user rating state for new store
+    setUserRating(null);
     // 1. Log the exact Store ID extracted from the URL.
     console.log(`[StoreFlow QR] Exact Store ID extracted from URL: "${sid}"`);
     setLoading(true);
@@ -1780,7 +1784,7 @@ function App() {
 
   function renderScanner() {
     return (
-      <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center">
         {/* Manual Input Fallback Dialog */}
         {showManualInput && (
           <div className="absolute inset-0 z-[60] bg-black/90 flex items-center justify-center p-6 animate-fade-in">
@@ -2085,8 +2089,8 @@ function App() {
   );
 
   const renderStoreHeader = () => {
-    const rating = store?.data?.marketplaceSettings?.rating || 4.8;
-    const reviewsCount = store?.data?.marketplaceSettings?.reviewsCount || 320;
+    const rating = store?.data?.marketplaceSettings?.rating;
+    const reviewsCount = store?.data?.marketplaceSettings?.reviewsCount || 0;
     const showVerified = store?.data?.marketplaceSettings?.verified !== false;
     return (
       <div className="relative">
@@ -2161,24 +2165,33 @@ function App() {
             <div 
               onClick={() => setShowReviewsModal(true)}
               className="flex items-center justify-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-              title="View Reviews"
+              title={rating ? "View Reviews" : "Rate this store"}
             >
-              <div className="flex items-center gap-0.5 text-[#FFD23F]">
-                {Array.from({ length: 5 }).map((_, s) => {
-                  const fill = rating >= s + 1 ? 1 : rating >= s + 0.5 ? 0.5 : 0;
-                  return (
-                    <span 
-                      key={s} 
-                      className={`material-symbols-outlined text-base font-bold ${fill === 1 ? 'font-variation-fill' : ''}`}
-                      style={fill === 1 ? { fontVariationSettings: "'FILL' 1" } : undefined}
-                    >
-                      {fill === 0.5 ? 'star_half' : 'star'}
-                    </span>
-                  );
-                })}
-              </div>
-              <span className="text-xs font-black text-[#1A1C1E]">{rating.toFixed(1)}</span>
-              <span className="text-xs text-gray-400 font-bold">({reviewsCount.toLocaleString()} reviews)</span>
+              {rating ? (
+                <>
+                  <div className="flex items-center gap-0.5 text-[#FFD23F]">
+                    {Array.from({ length: 5 }).map((_, s) => {
+                      const fill = rating >= s + 1 ? 1 : rating >= s + 0.5 ? 0.5 : 0;
+                      return (
+                        <span 
+                          key={s} 
+                          className={`material-symbols-outlined text-base font-bold ${fill === 1 ? 'font-variation-fill' : ''}`}
+                          style={fill === 1 ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                        >
+                          {fill === 0.5 ? 'star_half' : 'star'}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <span className="text-xs font-black text-[#1A1C1E]">{rating.toFixed(1)}</span>
+                  <span className="text-xs text-gray-400 font-bold">({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</span>
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20 text-xs font-black hover:bg-amber-500/25 transition-all">
+                  <span className="material-symbols-outlined text-xs font-variation-fill" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                  <span>Rate this store</span>
+                </div>
+              )}
             </div>
 
             <p className="text-sm text-gray-500 font-medium max-w-sm mx-auto leading-relaxed pt-1">
@@ -2508,10 +2521,54 @@ function App() {
 
   const renderReviewsModal = () => {
     if (!showReviewsModal) return null;
-    const rating = store?.data?.marketplaceSettings?.rating || 4.8;
+    const rating = store?.data?.marketplaceSettings?.rating;
+    const reviewsCount = store?.data?.marketplaceSettings?.reviewsCount || 0;
+
+    const handleRateStore = async (stars: number) => {
+      if (isSubmittingRating || !store) return;
+      setIsSubmittingRating(true);
+      try {
+        const prevRating = store.data?.marketplaceSettings?.rating || 0;
+        const prevCount = store.data?.marketplaceSettings?.reviewsCount || 0;
+        const newCount = prevCount + 1;
+        const newRating = prevRating > 0 ? (prevRating * prevCount + stars) / newCount : stars;
+
+        const updatedData = {
+          ...store.data,
+          marketplaceSettings: {
+            ...store.data?.marketplaceSettings,
+            rating: parseFloat(newRating.toFixed(2)),
+            reviewsCount: newCount
+          }
+        };
+
+        const updatedStore = {
+          ...store,
+          data: updatedData
+        };
+
+        // Update database
+        const { error } = await supabase
+          .from('stores')
+          .update({ data: updatedData })
+          .eq('id', store.id);
+
+        if (error) throw error;
+
+        setStore(updatedStore);
+        setUserRating(stars);
+        alert(`Thank you for rating this store ${stars} stars!`);
+      } catch (err: any) {
+        console.error('Failed to submit rating:', err);
+        alert('Failed to submit rating: ' + (err.message || err));
+      } finally {
+        setIsSubmittingRating(false);
+      }
+    };
+
     return (
       <div 
-        className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center animate-fade-in" 
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center animate-fade-in" 
         onClick={() => setShowReviewsModal(false)}
       >
         <div 
@@ -2530,30 +2587,77 @@ function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-6 pb-6">
-            <div className="bg-gray-50 rounded-[20px] p-5 flex items-center gap-6 border border-gray-100/50">
-              <div className="text-center shrink-0">
-                <h1 className="text-4xl font-black text-[#1A1C1E]">{rating.toFixed(1)}</h1>
-                <p className="text-[9px] text-gray-400 font-extrabold mt-1 uppercase tracking-wider">Out of 5.0</p>
-              </div>
-              
-              <div className="flex-1 space-y-1">
-                {[
-                  { stars: 5, pct: '85%' },
-                  { stars: 4, pct: '10%' },
-                  { stars: 3, pct: '3%' },
-                  { stars: 2, pct: '1%' },
-                  { stars: 1, pct: '1%' }
-                ].map(item => (
-                  <div key={item.stars} className="flex items-center gap-2 text-xs">
-                    <span className="w-3 text-right font-bold text-gray-500">{item.stars}</span>
-                    <span className="text-amber-400 font-bold">★</span>
-                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#1A1C1E] rounded-full" style={{ width: item.pct }} />
+            {rating ? (
+              <div className="bg-gray-50 rounded-[20px] p-5 flex items-center gap-6 border border-gray-100/50">
+                <div className="text-center shrink-0">
+                  <h1 className="text-4xl font-black text-[#1A1C1E]">{rating.toFixed(1)}</h1>
+                  <p className="text-[9px] text-gray-400 font-extrabold mt-1 uppercase tracking-wider">Out of 5.0</p>
+                </div>
+                
+                <div className="flex-1 space-y-1">
+                  {[
+                    { stars: 5, pct: '85%' },
+                    { stars: 4, pct: '10%' },
+                    { stars: 3, pct: '3%' },
+                    { stars: 2, pct: '1%' },
+                    { stars: 1, pct: '1%' }
+                  ].map(item => (
+                    <div key={item.stars} className="flex items-center gap-2 text-xs">
+                      <span className="w-3 text-right font-bold text-gray-500">{item.stars}</span>
+                      <span className="text-amber-400 font-bold">★</span>
+                      <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-[#1A1C1E] rounded-full" style={{ width: item.pct }} />
+                      </div>
+                      <span className="w-8 text-right font-medium text-gray-400">{item.pct}</span>
                     </div>
-                    <span className="w-8 text-right font-medium text-gray-400">{item.pct}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+            ) : (
+              <div className="bg-gray-50 rounded-[20px] p-6 text-center border border-gray-100/50 space-y-2">
+                <div className="text-4xl">⭐</div>
+                <p className="text-sm font-extrabold text-[#1A1C1E]">No Ratings Yet</p>
+                <p className="text-xs text-gray-400 max-w-[240px] mx-auto leading-relaxed">
+                  Be the first to rate this store and help others in the community discover it!
+                </p>
+              </div>
+            )}
+
+            {/* Interactive Rating Selector */}
+            <div className="border-t border-gray-100 pt-5 text-center space-y-3">
+              <p className="text-xs font-black text-[#1A1C1E] uppercase tracking-wider">
+                {userRating ? 'Your Rating' : 'Rate this Store'}
+              </p>
+              <div className="flex justify-center gap-2">
+                {Array.from({ length: 5 }).map((_, s) => {
+                  const starVal = s + 1;
+                  const active = userRating ? userRating >= starVal : false;
+                  return (
+                    <button
+                      key={s}
+                      disabled={userRating !== null || isSubmittingRating}
+                      onClick={() => handleRateStore(starVal)}
+                      className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                        active 
+                          ? 'bg-amber-400 text-white shadow-md' 
+                          : 'bg-gray-50 text-gray-400 hover:text-amber-400 hover:bg-amber-50'
+                      } cursor-pointer disabled:cursor-default`}
+                    >
+                      <span 
+                        className={`material-symbols-outlined text-2xl font-bold ${active ? 'font-variation-fill' : ''}`}
+                        style={active ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                      >
+                        star
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {userRating && (
+                <p className="text-xs text-emerald-600 font-bold">
+                  Submitted! Thank you for your feedback.
+                </p>
+              )}
             </div>
 
             <div className="text-xs text-gray-500 leading-relaxed space-y-2 border-t border-gray-100 pt-4">
@@ -3459,10 +3563,9 @@ function App() {
             </div>
           )}
 
-          {/* Filter Sort Drawer Modal */}
           {showFilterModal && (
             <div 
-              className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center animate-fade-in"
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center animate-fade-in"
               onClick={() => setShowFilterModal(false)}
             >
               <div 
@@ -4076,9 +4179,8 @@ function App() {
         </main>
       )}
 
-      {/* ─── Product Details Modal Sheet ─── */}
       {selectedProduct && screen === 'store' && (
-        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setSelectedProduct(null)}>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setSelectedProduct(null)}>
           <div className="bg-surface w-full rounded-t-3xl overflow-hidden p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1 bg-outline-variant/30 rounded-full mx-auto mb-5"></div>
             <div className="flex justify-between items-start mb-4">
@@ -4140,7 +4242,7 @@ function App() {
 
       {/* ─── Cart Drawer Sheet ─── */}
       {isCartOpen && (
-        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setIsCartOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setIsCartOpen(false)}>
           <div className="bg-white w-full rounded-t-3xl overflow-hidden p-6 animate-slide-up flex flex-col max-h-[85vh] text-[#1A1C1E]" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-5"></div>
             
@@ -4402,7 +4504,7 @@ function App() {
 
       {/* ─── ⚡ Quick Order Overlay Sheet ─── */}
       {showQuickOrder && (
-        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowQuickOrder(false)}>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowQuickOrder(false)}>
           <div className="bg-white w-full rounded-t-3xl overflow-hidden p-6 animate-slide-up space-y-6 text-[#1A1C1E]" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
             <div className="flex justify-between items-center text-left">
