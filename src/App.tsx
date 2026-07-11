@@ -4243,17 +4243,32 @@ function App() {
               )}
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-4 w-full">
               {getQty(selectedProduct.id) > 0 ? (
-                <div className="flex-1 flex justify-between items-center bg-surface-container-low rounded-full p-1.5 border border-outline-variant/20">
-                  <button onClick={() => addToCart(selectedProduct, -1)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
-                    <span className="material-symbols-outlined text-lg">remove</span>
+                <>
+                  <div className="flex justify-between items-center bg-surface-container-low rounded-2xl p-2 border border-outline-variant/10">
+                    <span className="text-xs font-bold text-secondary px-2">Quantity in Cart</span>
+                    <div className="flex items-center gap-4">
+                      <button onClick={() => addToCart(selectedProduct, -1)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer border border-gray-100">
+                        <span className="material-symbols-outlined text-lg">remove</span>
+                      </button>
+                      <span className="font-extrabold text-base text-on-surface">{getQty(selectedProduct.id)}</span>
+                      <button onClick={() => addToCart(selectedProduct, 1)} className="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
+                        <span className="material-symbols-outlined text-lg">add</span>
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedProduct(null);
+                      setIsCartOpen(true);
+                    }}
+                    className="w-full bg-[#1A1C1E] hover:bg-black text-[#FFD23F] py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-sm font-black">shopping_cart</span>
+                    <span>Continue to Checkout</span>
                   </button>
-                  <span className="font-extrabold text-base text-on-surface">{getQty(selectedProduct.id)}</span>
-                  <button onClick={() => addToCart(selectedProduct, 1)} className="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
-                    <span className="material-symbols-outlined text-lg">add</span>
-                  </button>
-                </div>
+                </>
               ) : (
                 <button
                   disabled={selectedProduct.quantity <= 0 || store?.status === 'inactive'}
@@ -4271,7 +4286,7 @@ function App() {
       {/* ─── Cart Drawer Sheet ─── */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setIsCartOpen(false)}>
-          <div className="bg-white w-full rounded-t-3xl overflow-hidden p-6 animate-slide-up flex flex-col max-h-[85vh] text-[#1A1C1E]" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full rounded-t-3xl overflow-hidden p-6 flex flex-col max-h-[85vh] text-[#1A1C1E]" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-5"></div>
             
             {checkoutStep === 'shopping' && (
