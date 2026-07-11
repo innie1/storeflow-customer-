@@ -142,7 +142,6 @@ function App() {
   const [showReviewsModal, setShowReviewsModal] = useState(false);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
-  const [cartAnimated, setCartAnimated] = useState(false);
   const [isStoreFavorited, setIsStoreFavorited] = useState(false);
   
   useEffect(() => {
@@ -2016,14 +2015,7 @@ function App() {
     });
   };
 
-  // Cart bump animation on add
-  useEffect(() => {
-    if (totalItemsCount > 0) {
-      setCartAnimated(true);
-      const t = setTimeout(() => setCartAnimated(false), 300);
-      return () => clearTimeout(t);
-    }
-  }, [totalItemsCount]);
+
 
   // Touch event handlers for pull-to-refresh
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -3574,7 +3566,7 @@ function App() {
 
           {/* 10. Bottom Cart Bar */}
           {totalItemsCount > 0 && (
-            <div className={`fixed bottom-20 left-0 right-0 z-40 w-full max-w-screen-xl mx-auto px-4 ${cartAnimated ? 'animate-cart-pop' : ''}`}>
+            <div className="fixed bottom-20 left-0 right-0 z-40 w-full max-w-screen-xl mx-auto px-4">
               <button
                 onClick={() => setIsCartOpen(true)}
                 className="w-full bg-[#1A1C1E] border border-white/5 text-white py-4 px-6 rounded-full flex justify-between items-center shadow-2xl active:scale-98 transition-all cursor-pointer font-black"
@@ -4263,7 +4255,7 @@ function App() {
                       setSelectedProduct(null);
                       setIsCartOpen(true);
                     }}
-                    className="w-full bg-[#1A1C1E] hover:bg-black text-[#FFD23F] py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full bg-black hover:bg-black/90 text-[#FFD23F] py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-outlined text-sm font-black">shopping_cart</span>
                     <span>Continue to Checkout</span>
@@ -4348,7 +4340,7 @@ function App() {
                   <button
                     disabled={cart.length === 0 || !isStoreOpenState || store?.data?.marketplaceSettings?.onlineOrdersEnabled === false}
                     onClick={() => setCheckoutStep('checkout')}
-                    className="w-full py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md transition-all cursor-pointer bg-[#1A1C1E] text-[#FFD23F] hover:bg-black disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                    className="w-full py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md transition-all cursor-pointer bg-black text-[#FFD23F] hover:bg-black/90 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
                   >
                     Continue to Checkout
                   </button>
