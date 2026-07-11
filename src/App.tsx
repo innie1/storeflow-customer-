@@ -4338,7 +4338,7 @@ function App() {
                     </div>
                   </div>
                   <button
-                    disabled={cart.length === 0 || !isStoreOpenState || store?.data?.marketplaceSettings?.onlineOrdersEnabled === false}
+                    disabled={cart.length === 0}
                     onClick={() => setCheckoutStep('checkout')}
                     className="w-full py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md transition-all cursor-pointer bg-black text-[#FFD23F] hover:bg-black/90 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
                   >
