@@ -655,7 +655,6 @@ function App() {
       let queryUsed = '';
 
       const cleanSid = sid.trim();
-      const upperSid = cleanSid.toUpperCase();
 
       // 5. If the URL contains SF-TTEC9S (or starts with SF-), the query must search the stores.store_id column first
       if (cleanSid.toUpperCase().startsWith('SF-')) {
@@ -2611,6 +2610,7 @@ function App() {
                 <div className="text-center shrink-0">
                   <h1 className="text-4xl font-black text-[#1A1C1E]">{rating.toFixed(1)}</h1>
                   <p className="text-[9px] text-gray-400 font-extrabold mt-1 uppercase tracking-wider">Out of 5.0</p>
+                  <p className="text-[8px] text-gray-400 font-bold mt-0.5">({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</p>
                 </div>
                 
                 <div className="flex-1 space-y-1">
