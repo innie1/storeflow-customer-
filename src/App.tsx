@@ -545,20 +545,6 @@ function App() {
   // Check user session on app mount
   useEffect(() => {
     checkSession();
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          for (const registration of registrations) {
-            registration.unregister().then((success) => {
-              if (success) {
-                console.log('[StoreFlow SW] Unregistered service worker on localhost');
-                window.location.reload();
-              }
-            });
-          }
-        });
-      }
-    }
   }, []);
 
   const syncItsMeProfileWithCloud = async (user: any) => {
@@ -620,7 +606,6 @@ function App() {
   // ─── Fetch Stores & Dynamic Products ────────────────────────────────────────
 
   const loadStoresData = async () => {
-    setLoading(true);
     try {
       const { data, error } = await supabase.from('stores').select('*');
       if (error) throw error;
@@ -630,8 +615,6 @@ function App() {
       }
     } catch (e) {
       console.warn('Supabase loading error, running offline fallback:', e);
-    } finally {
-      setLoading(false);
     }
   };
 
