@@ -84,6 +84,11 @@ export function parseRoute(): RouteResult {
 export function parseQRCode(raw: string): RouteResult {
   const s = raw.trim();
 
+  // If the scanned text starts with "SF-" (case-insensitive), treat it as a StoreFlow Store ID
+  if (s.toUpperCase().startsWith('SF-')) {
+    return { storeId: s.toUpperCase(), productId: null };
+  }
+
   // Try decoding as secure StoreFlow QR first
   const decoded = decodeQRData(s);
   if (decoded && decoded.storeId) {

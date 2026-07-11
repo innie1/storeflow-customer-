@@ -629,9 +629,9 @@ function App() {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sid);
       let query = supabase.from('stores').select('*');
       if (isUuid) {
-        query = query.or(`id.eq.${sid},store_id.eq.${sid},access_code.eq.${sid}`);
+        query = query.or(`id.eq.${sid},store_id.eq.${sid},store_id.eq.SF-${sid.toUpperCase()},access_code.eq.${sid}`);
       } else {
-        query = query.or(`store_id.eq.${sid},access_code.eq.${sid}`);
+        query = query.or(`store_id.eq.${sid},store_id.eq.SF-${sid.toUpperCase()},access_code.eq.${sid}`);
       }
       
       const { data: storeData, error: storeErr } = await query.maybeSingle();
@@ -952,7 +952,7 @@ function App() {
           const { data: storeData } = await supabase
             .from('stores')
             .select('id')
-            .or(`id.eq.${parsedStoreId},store_id.eq.${parsedStoreId},access_code.eq.${parsedStoreId}`)
+            .or(`id.eq.${parsedStoreId},store_id.eq.${parsedStoreId},store_id.eq.SF-${parsedStoreId.toUpperCase()},access_code.eq.${parsedStoreId}`)
             .maybeSingle();
 
           if (storeData) {
@@ -1007,6 +1007,7 @@ function App() {
 
       // 5. Unrecognized code fallback
       setScanError(`Code "${codeValue}" not recognized in StoreFlow.`);
+      setShowManualInput(true);
     }, 700);
   };
 
@@ -1112,6 +1113,7 @@ function App() {
         }
       } catch {
         setScanError('Camera access denied. Please grant permissions.');
+        setShowManualInput(true);
       }
     }
   }, []);
