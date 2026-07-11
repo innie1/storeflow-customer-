@@ -3459,7 +3459,7 @@ function App() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-5 gap-y-7">
                       {filteredProducts.map(p => {
                         const qtyInCart = getQty(p.id);
                         const isOutOfStock = p.quantity <= 0;
@@ -3477,7 +3477,7 @@ function App() {
                           <div
                             key={p.id}
                             onClick={() => setSelectedProduct(p)}
-                            className="bg-white border border-gray-100 rounded-[24px] p-3 flex flex-col justify-between shadow-sm relative group cursor-pointer hover:border-gray-200 transition-all text-left active-scale"
+                            className="bg-white border border-gray-100 rounded-[24px] p-[18px] flex flex-col justify-between shadow-sm relative group cursor-pointer hover:border-gray-200 transition-colors text-left"
                           >
                             <div className="relative">
                               {/* Badges Container */}
@@ -3509,14 +3509,14 @@ function App() {
                                   e.stopPropagation();
                                   toggleFavorite(p.id);
                                 }}
-                                className="absolute top-1 right-1 z-10 w-7 h-7 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm cursor-pointer text-gray-400 hover:text-rose-500 active-scale"
+                                className="absolute top-1 right-1 z-10 w-7 h-7 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm cursor-pointer text-gray-400 hover:text-rose-500 transition-transform"
                               >
                                 <span className={`material-symbols-outlined text-base ${isFavorited ? 'text-rose-500 font-variation-fill' : ''}`} style={isFavorited ? { fontVariationSettings: "'FILL' 1" } : undefined}>
                                   favorite
                                 </span>
                               </button>
 
-                              <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-2xl mb-3 overflow-hidden flex items-center justify-center">
+                              <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-2xl mb-4 overflow-hidden flex items-center justify-center">
                                 {p.image ? (
                                   <img src={p.image} className="w-full h-full object-contain p-2" alt="" />
                                 ) : (
@@ -3530,7 +3530,7 @@ function App() {
                               </div>
                             </div>
 
-                            <div className="mt-3.5 flex items-center justify-between">
+                            <div className="mt-4 flex items-center justify-between">
                               <div className="flex flex-col">
                                 <span className="font-black text-sm text-[#1A1C1E]">₦{getPrice(p).toLocaleString()}</span>
                                 {hasDiscount && (
@@ -3540,12 +3540,12 @@ function App() {
                               {isOutOfStock ? (
                                 <span className="text-[9px] font-black text-rose-500 uppercase">Sold Out</span>
                               ) : qtyInCart > 0 ? (
-                                <div className="flex items-center gap-1.5 bg-[#1A1C1E] text-white rounded-full p-0.5 shadow-sm" onClick={e => e.stopPropagation()}>
-                                  <button onClick={() => addToCart(p, -1)} className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-white active:scale-90 cursor-pointer">
+                                <div className="flex items-center gap-2 bg-[#1A1C1E] text-white rounded-full p-1 shadow-md" onClick={e => e.stopPropagation()}>
+                                  <button onClick={() => addToCart(p, -1)} className="w-6.5 h-6.5 rounded-full bg-white/10 flex items-center justify-center text-white active:scale-95 cursor-pointer">
                                     <span className="material-symbols-outlined text-xs">remove</span>
                                   </button>
-                                  <span className="text-xs font-black px-0.5">{qtyInCart}</span>
-                                  <button onClick={() => addToCart(p, 1)} className="w-5 h-5 rounded-full bg-[#FFD23F] text-slate-950 flex items-center justify-center active:scale-90 cursor-pointer">
+                                  <span className="text-xs font-black px-1">{qtyInCart}</span>
+                                  <button onClick={() => addToCart(p, 1)} className="w-6.5 h-6.5 rounded-full bg-[#FFD23F] text-slate-950 flex items-center justify-center active:scale-95 cursor-pointer">
                                     <span className="material-symbols-outlined text-xs font-bold">add</span>
                                   </button>
                                 </div>
@@ -3555,7 +3555,7 @@ function App() {
                                     e.stopPropagation();
                                     addToCart(p, 1);
                                   }}
-                                  className="w-7 h-7 bg-[#FFD23F] hover:bg-[#FFD23F]/95 text-slate-950 rounded-full flex items-center justify-center active:scale-90 transition shadow-sm cursor-pointer animate-fade-in"
+                                  className="w-8 h-8 bg-[#FFD23F] hover:bg-[#FFD23F]/95 text-slate-950 rounded-full flex items-center justify-center active:scale-95 transition shadow-sm cursor-pointer"
                                 >
                                   <span className="material-symbols-outlined text-sm font-bold">add</span>
                                 </button>
@@ -4209,7 +4209,7 @@ function App() {
 
       {selectedProduct && screen === 'store' && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setSelectedProduct(null)}>
-          <div className="bg-surface w-full rounded-t-3xl overflow-hidden p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
+          <div className="bg-surface w-full rounded-t-3xl overflow-hidden p-6" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1 bg-outline-variant/30 rounded-full mx-auto mb-5"></div>
             <div className="flex justify-between items-start mb-4">
               <span className="text-xs font-bold text-secondary uppercase tracking-wider">{selectedProduct.category || 'Product Details'}</span>
@@ -4333,7 +4333,7 @@ function App() {
                   <button
                     disabled={cart.length === 0 || !isStoreOpenState || store?.data?.marketplaceSettings?.onlineOrdersEnabled === false}
                     onClick={() => setCheckoutStep('checkout')}
-                    className="w-full bg-[#1A1C1E] hover:bg-black text-[#FFD23F] py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md active:scale-98 transition-all cursor-pointer disabled:opacity-50"
+                    className="w-full py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md transition-all cursor-pointer bg-[#1A1C1E] text-[#FFD23F] hover:bg-black disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
                   >
                     Continue to Checkout
                   </button>
