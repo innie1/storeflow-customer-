@@ -619,29 +619,60 @@ function App() {
   };
 
   const loadStoreDetails = async (sid: string) => {
-    console.log(`[StoreFlow QR] Store ID received from URL/QR: "${sid}"`);
+    // 1. Log the exact Store ID extracted from the URL.
+    console.log(`[StoreFlow QR] Exact Store ID extracted from URL: "${sid}"`);
     setLoading(true);
     setProductsLoading(true);
     setErrorText(null);
     try {
-      console.log(`[StoreFlow QR] Executing database query for store ID: "${sid}"...`);
-      
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sid);
-      let query = supabase.from('stores').select('*');
-      if (isUuid) {
-        query = query.or(`id.eq.${sid},store_id.eq.${sid},store_id.eq.SF-${sid.toUpperCase()},access_code.eq.${sid}`);
-      } else {
-        query = query.or(`store_id.eq.${sid},store_id.eq.SF-${sid.toUpperCase()},access_code.eq.${sid}`);
-      }
       
-      const { data: storeData, error: storeErr } = await query.maybeSingle();
+      // 2. Log the exact Supabase query description / structure used to find the store.
+      // 3. Verify whether it searches by: store_id, id, qr_code, access_code
+      console.log(`[StoreFlow QR] Constructing query for store ID "${sid}":`);
+      console.log(` - Searching stores.store_id (text) for "${sid}"`);
+      if (isUuid) {
+        console.log(` - Searching stores.id (UUID) for "${sid}"`);
+      }
+      console.log(` - Searching stores.qr_code for matches containing "${sid}"`);
+      console.log(` - Searching stores.access_code for "${sid}"`);
+
+      let storeData = null;
+      let storeErr = null;
+      let queryUsed = '';
+
+      // 5. If the URL contains SF-TTEC9S (or starts with SF-), the query must search the stores.store_id column first
+      if (sid.toUpperCase().startsWith('SF-')) {
+        queryUsed = `supabase.from('stores').select('*').eq('store_id', '${sid}')`;
+        console.log(`[StoreFlow QR] Prioritizing query on stores.store_id column first: ${queryUsed}`);
+        const res = await supabase.from('stores').select('*').eq('store_id', sid).maybeSingle();
+        storeData = res.data;
+        storeErr = res.error;
+      }
+
+      // If not found or not prioritized, use fallback/full query searching store_id, id, access_code, and qr_code
+      if (!storeData && !storeErr) {
+        let orFilter = '';
+        if (isUuid) {
+          orFilter = `id.eq.${sid},store_id.eq.${sid},store_id.eq.SF-${sid.toUpperCase()},access_code.eq.${sid},qr_code.ilike.%/store/${sid},qr_code.ilike.%/s/${sid}`;
+        } else {
+          orFilter = `store_id.eq.${sid},store_id.eq.SF-${sid.toUpperCase()},access_code.eq.${sid},qr_code.ilike.%/store/${sid},qr_code.ilike.%/s/${sid}`;
+        }
+        queryUsed = `supabase.from('stores').select('*').or('${orFilter}')`;
+        console.log(`[StoreFlow QR] Running fallback OR query: ${queryUsed}`);
+        const res = await supabase.from('stores').select('*').or(orFilter).maybeSingle();
+        storeData = res.data;
+        storeErr = res.error;
+      }
+
+      // 4. Return and log the full Supabase response and any errors.
+      console.log(`[StoreFlow QR] Full Supabase response - Data:`, storeData);
+      console.log(`[StoreFlow QR] Full Supabase response - Error:`, storeErr);
 
       if (storeErr) {
         console.error(`[StoreFlow QR] Database query error for store ID: "${sid}":`, storeErr);
         throw storeErr;
       }
-
-      console.log(`[StoreFlow QR] Query result for store:`, storeData);
 
       if (storeData) {
         setStore(storeData);
@@ -720,6 +751,43 @@ function App() {
       } else {
         console.warn(`[StoreFlow QR] Store ID: "${sid}" not found in database.`);
         setScreen('store_not_found');
+
+        // 7. If no row is returned, print exactly why (wrong column, RLS, missing row, or filter mismatch)
+        console.log(`[StoreFlow QR] Diagnostics - Why was no row returned?`);
+        try {
+          // A. Test connection & check if RLS or permissions blocked the request
+          const { count, error: countErr } = await supabase
+            .from('stores')
+            .select('*', { count: 'exact', head: true });
+
+          if (countErr) {
+            console.log(` - Reason: RLS (Row Level Security) or Database Permission error. Cannot count stores. Error detail:`, countErr);
+          } else {
+            console.log(` - Table accessibility: Verified. We have access to the stores table. Total rows count: ${count}`);
+            if (count === 0) {
+              console.log(` - Reason: Missing row. The stores table in the database is completely empty.`);
+            } else {
+              // B. Check if it's a filter mismatch or a truly missing row by searching loosely
+              const cleanSid = sid.replace(/^SF-/i, '');
+              const { data: looseData, error: looseErr } = await supabase
+                .from('stores')
+                .select('id, store_id, access_code, qr_code')
+                .or(`store_id.ilike.%${cleanSid}%,access_code.ilike.%${cleanSid}%,qr_code.ilike.%${cleanSid}%`);
+              
+              if (looseErr) {
+                console.log(` - Loose search error:`, looseErr);
+              }
+
+              if (looseData && looseData.length > 0) {
+                console.log(` - Reason: Filter mismatch. A similar row was found but did not match strict filters:`, looseData);
+              } else {
+                console.log(` - Reason: Missing row. No row exists in the database stores table matching the ID "${sid}" (searched store_id, access_code, qr_code).`);
+              }
+            }
+          }
+        } catch (diagErr) {
+          console.error(`[StoreFlow QR] Diagnostic routine failed:`, diagErr);
+        }
       }
     } catch (err: any) {
       console.error(`[StoreFlow QR] Critical error loading store detail for ID: "${sid}":`, err);
@@ -949,11 +1017,29 @@ function App() {
       if (parsedStoreId) {
         try {
           setLoading(true);
-          const { data: storeData } = await supabase
-            .from('stores')
-            .select('id')
-            .or(`id.eq.${parsedStoreId},store_id.eq.${parsedStoreId},store_id.eq.SF-${parsedStoreId.toUpperCase()},access_code.eq.${parsedStoreId}`)
-            .maybeSingle();
+          let storeData = null;
+          let storeErr = null;
+
+          if (parsedStoreId.toUpperCase().startsWith('SF-')) {
+            console.log(`[StoreFlow QR] Scan/Manual: Prioritizing query on stores.store_id first for Store ID: "${parsedStoreId}"`);
+            const res = await supabase
+              .from('stores')
+              .select('id')
+              .eq('store_id', parsedStoreId)
+              .maybeSingle();
+            storeData = res.data;
+            storeErr = res.error;
+          }
+
+          if (!storeData && !storeErr) {
+            const res = await supabase
+              .from('stores')
+              .select('id')
+              .or(`id.eq.${parsedStoreId},store_id.eq.${parsedStoreId},store_id.eq.SF-${parsedStoreId.toUpperCase()},access_code.eq.${parsedStoreId}`)
+              .maybeSingle();
+            storeData = res.data;
+            storeErr = res.error;
+          }
 
           if (storeData) {
             setStoreId(storeData.id);
