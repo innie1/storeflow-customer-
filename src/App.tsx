@@ -62,9 +62,14 @@ interface Order {
   order_items?: OrderItem[];
 }
 
-const STATUS_ORDER = ['Pending', 'Preparing', 'Ready', 'Completed'];
-const isStatusAtLeast = (current: string, target: string) =>
-  STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(target);
+const STATUS_ORDER = ['Pending', 'Accepted', 'Preparing', 'Ready', 'Completed'];
+const isStatusAtLeast = (current: string, target: string) => {
+  const curIdx = STATUS_ORDER.indexOf(current);
+  const tgtIdx = STATUS_ORDER.indexOf(target);
+  const normCur = curIdx === -1 ? (current === 'Pending Approval' ? 0 : -1) : curIdx;
+  const normTgt = tgtIdx === -1 ? (target === 'Pending Approval' ? 0 : -1) : tgtIdx;
+  return normCur >= normTgt;
+};
 
 // ─── It'sMe Identity ─────────────────────────────────────────────────────────
 
@@ -841,6 +846,22 @@ function App() {
 
   // ─── Real-time order status tracking ────────────────────────────────────────
 
+  // Load order status initially when transitioning to tracking screen
+  useEffect(() => {
+    if (!orderId || screen !== 'tracking') return;
+
+    supabase
+      .from('orders')
+      .select('status')
+      .eq('id', orderId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!error && data?.status) {
+          setOrderStatus(data.status);
+        }
+      });
+  }, [orderId, screen]);
+
   useEffect(() => {
     if (!orderId || screen !== 'tracking') return;
 
@@ -853,18 +874,8 @@ function App() {
       })
       .subscribe();
 
-    const timer = setInterval(() => {
-      setOrderStatus(cur => {
-        if (cur === 'Pending') return 'Preparing';
-        if (cur === 'Preparing') return 'Ready';
-        if (cur === 'Ready') return 'Completed';
-        return cur;
-      });
-    }, 20000);
-
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(timer);
     };
   }, [orderId, screen]);
 
@@ -1498,25 +1509,48 @@ function App() {
       };
 
       if (isOnline) {
-        const { data: newOrder, error: orderErr } = await supabase
-          .from('orders')
-          .insert(orderPayload)
-          .select().single();
+        const itemsPayload = cart.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: getPrice(item.product),
+          subtotal: getPrice(item.product) * item.quantity
+        }));
+
+        // Step 8: Atomic Transaction Order Placement
+        const { data: orderUuid, error: orderErr } = await supabase
+          .rpc('place_order_atomic', {
+            p_store_id: store?.id || '',
+            p_customer_name: customerName,
+            p_customer_phone: customerPhone,
+            p_order_number: genOrderNo,
+            p_status: 'Pending',
+            p_subtotal: subtotal,
+            p_total: total,
+            p_notes: notes,
+            p_items: itemsPayload
+          });
 
         if (orderErr) throw orderErr;
-        const oid = newOrder?.id || Date.now().toString();
+        if (!orderUuid) throw new Error("Database failed to return Order ID.");
 
-        await supabase.from('order_items').insert(
-          cart.map(item => ({
-            order_id: oid,
-            product_id: item.product.id,
-            quantity: item.quantity,
-            price: getPrice(item.product),
-            subtotal: getPrice(item.product) * item.quantity
-          }))
-        );
+        setOrderId(orderUuid);
 
-        setOrderId(oid);
+        // Step 3: Create Notification
+        const notificationPayload = {
+          store_id: store?.id || '',
+          title: 'New Order',
+          message: `${customerName} placed Order #${genOrderNo} containing ${totalItemsCount} items.`,
+          type: 'new_order',
+          is_read: false
+        };
+
+        const { error: notificationErr } = await supabase
+          .from('notifications')
+          .insert(notificationPayload);
+
+        if (notificationErr) {
+          console.warn("Failed to create order notification in db:", notificationErr);
+        }
       } else {
         // Offline Order Caching Queue
         const offlineQueue = JSON.parse(localStorage.getItem('storeflow_pending_sync_orders') || '[]');
