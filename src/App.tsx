@@ -180,9 +180,14 @@ function App() {
   const [priceMode, setPriceMode] = useState<'retail' | 'wholesale'>('retail');
 
   const isStoreOpenState = useMemo(() => {
-    if (store?.status === 'inactive') return false;
+    // NOTE: the stores table has no "status" column — it's "subscription_status".
+    // Using store?.status here always evaluated to undefined, which made every
+    // store appear closed regardless of merchant settings.
+    if (store?.subscription_status === 'inactive' || store?.subscription_status === 'cancelled') return false;
     if (!store?.data || !store.data.marketplaceSettings) {
-      return store?.status === 'active';
+      // No marketplace hours/toggle configured yet by the merchant — default to open
+      // rather than defaulting to closed, since most merchants never touch this screen.
+      return true;
     }
     const ms = store.data.marketplaceSettings;
     
@@ -4280,7 +4285,7 @@ function App() {
                 </>
               ) : (
                 <button
-                  disabled={selectedProduct.quantity <= 0 || store?.status === 'inactive'}
+                  disabled={selectedProduct.quantity <= 0 || store?.subscription_status === 'inactive' || store?.subscription_status === 'cancelled'}
                   onClick={() => { addToCart(selectedProduct, 1); setSelectedProduct(null); }}
                   className="flex-1 bg-primary text-on-primary py-4 rounded-full font-bold shadow-md hover:bg-primary/95 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
                 >
