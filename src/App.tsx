@@ -552,6 +552,27 @@ function App() {
     checkSession();
   }, []);
 
+  // Keep the full stores list fresh in the background (Home "Your Stores" / Explore)
+  // without interrupting whatever the user is doing.
+  useEffect(() => {
+    const storesChannel = supabase
+      .channel('stores-list-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stores' }, () => {
+        loadStoresData();
+      })
+      .subscribe();
+
+    // Safety-net poll in case realtime is unavailable on the network
+    const pollId = setInterval(() => {
+      if (navigator.onLine) loadStoresData();
+    }, 60000);
+
+    return () => {
+      supabase.removeChannel(storesChannel);
+      clearInterval(pollId);
+    };
+  }, []);
+
   const syncItsMeProfileWithCloud = async (user: any) => {
     if (!user) return;
     try {
@@ -827,12 +848,13 @@ function App() {
   };
 
   const loadOrdersHistory = async () => {
-    if (!currentUser) return;
+    const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
+    if (!lookupPhone) return;
     try {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
-        .eq('customer_phone', currentUser.phone || customerPhone)
+        .eq('customer_phone', lookupPhone)
         .order('created_at', { ascending: false });
       if (error) throw error;
       if (data) {
