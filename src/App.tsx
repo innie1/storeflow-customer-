@@ -114,6 +114,35 @@ function saveItsMeProfile(profile: ItsMe) {
   return updated;
 }
 
+// ─── Shared store-open logic (used by store cards AND the store detail page,
+// so they never disagree the way "Closed" on Home vs "Open" on the store
+// page used to) ────────────────────────────────────────────────────────────
+// The merchant app's "logo" field is often a design STYLE NAME (e.g.
+// "minimalist", "classic") from its built-in logo generator, not an actual
+// uploaded image URL. Treating any truthy string as an <img src> silently
+// fails to load and leaves a blank circle. Only real URLs should be rendered
+// as an <img>; anything else should fall back to a generated initials badge.
+function isLogoImageUrl(logo?: string | null): boolean {
+  if (!logo) return false;
+  return logo.startsWith('http://') || logo.startsWith('https://') || logo.startsWith('data:');
+}
+
+function computeStoreOpen(s: any): boolean {
+  if (!s) return false;
+  if (s.subscription_status === 'inactive' || s.subscription_status === 'cancelled') return false;
+  const ms = s?.data?.marketplaceSettings;
+  if (!ms) return true; // merchant never configured hours — default to open
+  if (ms.storeOpen === false || ms.temporaryClosure === true || ms.temporarilyHidden === true) return false;
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  if (Array.isArray(ms.businessDays) && !ms.businessDays.includes(dayOfWeek)) return false;
+  if (ms.openingTime && ms.closingTime) {
+    const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    if (timeStr < ms.openingTime || timeStr > ms.closingTime) return false;
+  }
+  return true;
+}
+
 function App() {
   // Navigation & State Management
   const [screen, setScreen] = useState<'splash' | 'onboarding' | 'login' | 'location' | 'home' | 'explore' | 'store' | 'tracking' | 'profile' | 'history' | 'store_not_found'>(() => {
@@ -578,6 +607,57 @@ function App() {
     };
   }, []);
 
+  // Keep the customer's own order history fresh in the background so the
+  // "Orders" nav badge and statuses (accepted/rejected/preparing) update on
+  // their own, without the customer needing to open the Orders tab.
+  useEffect(() => {
+    const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
+    if (!lookupPhone) return;
+
+    loadOrdersHistory();
+
+    const ordersChannel = supabase
+      .channel('customer-orders-updates-' + lookupPhone)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `customer_phone=eq.${lookupPhone}` }, (payload: any) => {
+        loadOrdersHistory();
+        // Notify the customer when their order's status actually changes
+        if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
+          const statusLabel: Record<string, string> = {
+            Accepted: 'was accepted! 🎉',
+            Preparing: 'is being prepared 👨‍🍳',
+            Ready: 'is ready for pickup/delivery 📦',
+            Completed: 'has been completed ✅',
+            Rejected: 'was declined by the store 😔',
+            Cancelled: 'was cancelled',
+          };
+          const label = statusLabel[payload.new?.status];
+          if (label) {
+            const orderNum = payload.new?.order_number || '';
+            const message = `Order ${orderNum ? '#' + orderNum : ''} ${label}`.trim();
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              try { new Notification('StoreFlow', { body: message, icon: '/icons/icon-192.png' }); } catch {}
+            }
+          }
+        }
+      })
+      .subscribe();
+
+    const pollId = setInterval(() => {
+      if (navigator.onLine) loadOrdersHistory();
+    }, 30000);
+
+    return () => {
+      supabase.removeChannel(ordersChannel);
+      clearInterval(pollId);
+    };
+  }, [currentUser?.phone, customerPhone]);
+
+  // Orders still in progress — drives the badge on the bottom-nav "Orders" tab
+  const activeOrdersCount = useMemo(
+    () => ordersHistory.filter((o: any) => ['Pending', 'Accepted', 'Preparing', 'Ready'].includes(o.status)).length,
+    [ordersHistory]
+  );
+
   const syncItsMeProfileWithCloud = async (user: any) => {
     if (!user) return;
     try {
@@ -654,8 +734,32 @@ function App() {
     setUserRating(null);
     // 1. Log the exact Store ID extracted from the URL.
     console.log(`[StoreFlow QR] Exact Store ID extracted from URL: "${sid}"`);
-    setLoading(true);
-    setProductsLoading(true);
+
+    // INSTANT LOAD: if we've already visited this store before, show the
+    // cached version immediately (no spinner) while we quietly refresh in
+    // the background. This is what makes "already scanned" stores open
+    // instantly instead of waiting on the network every time.
+    const cleanSidForCache = sid.replace(/^SF-/i, '').trim();
+    const cachedMatch = allStores.find((s: any) =>
+      s.id === sid ||
+      s.store_id === sid ||
+      s.access_code === sid ||
+      s.store_id === cleanSidForCache ||
+      s.access_code === cleanSidForCache ||
+      (s.qr_code && typeof s.qr_code === 'string' && s.qr_code.includes(sid))
+    );
+    const hasInstantData = !!cachedMatch;
+    if (cachedMatch) {
+      setStore(cachedMatch);
+      setLoading(false); // don't block the UI — page renders immediately
+      const cachedProducts = localStorage.getItem('storeflow_cached_products_' + cachedMatch.id);
+      if (cachedProducts) {
+        try { setProducts(JSON.parse(cachedProducts)); } catch {}
+      }
+    } else {
+      setLoading(true);
+    }
+    setProductsLoading(!hasInstantData);
     setErrorText(null);
     try {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sid);
@@ -785,6 +889,7 @@ function App() {
         console.log(`[StoreFlow QR] Final products loaded successfully. Count: ${prods.length}`);
         setProducts(prods);
         localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));
+        localStorage.setItem('storeflow_cached_products_' + resolvedStoreUuid, JSON.stringify(prods));
 
         // Dynamically compute categories list
         let cats = ['All'];
@@ -858,7 +963,7 @@ function App() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('*, order_items(*)')
         .eq('customer_phone', lookupPhone)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -1562,6 +1667,11 @@ function App() {
 
         setOrderId(orderUuid);
 
+        // Offer real-time order status alerts right when they'd matter most
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          Notification.requestPermission().catch(() => {});
+        }
+
         // Step 3: Create Notification
         const notificationPayload = {
           store_id: store?.id || '',
@@ -2206,8 +2316,8 @@ function App() {
         {/* Center the store branding */}
         <div className="relative bg-white rounded-t-[28px] -mt-8 pt-20 pb-4 px-4 md:px-6 text-center flex flex-col items-center max-w-lg md:max-w-2xl mx-auto">
           <div className="absolute -top-16 w-32 h-32 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden flex items-center justify-center shrink-0 animate-fade-in">
-            {store?.logo && store.logo !== 'classic' ? (
-              <img src={store.logo} className="w-full h-full object-cover" alt="" />
+            {isLogoImageUrl(store?.logo) ? (
+              <img src={store!.logo} className="w-full h-full object-cover" alt="" />
             ) : (
               <div className="w-full h-full bg-[#1A1C1E] flex flex-col items-center justify-center text-white">
                 <span className="material-symbols-outlined text-[#FFD23F] text-3xl font-bold">shopping_cart</span>
@@ -3165,7 +3275,7 @@ function App() {
                       className="p-4 bg-white border border-gray-100 hover:border-gray-200 rounded-[24px] flex gap-4 cursor-pointer active-scale transition-all shadow-sm"
                     >
                       <div className="w-16 h-16 bg-[#F8F9FA] border border-gray-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
-                        {s.logo ? (
+                        {isLogoImageUrl(s.logo) ? (
                           <img className="w-full h-full object-cover" src={s.logo} alt="" />
                         ) : (
                           <span className="text-3xl">🏪</span>
@@ -3175,8 +3285,8 @@ function App() {
                         <h4 className="font-extrabold text-base text-[#1A1C1E] truncate">{s.business_name}</h4>
                         <p className="text-xs text-gray-400 mt-0.5 truncate font-semibold">{s.address || 'Partner Store'}</p>
                         <div className="flex items-center gap-2 mt-2">
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
-                            {s.status === 'active' ? 'Open' : 'Closed'}
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${computeStoreOpen(s) ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+                            {computeStoreOpen(s) ? 'Open' : 'Closed'}
                           </span>
                           <span className="text-[10px] font-semibold text-gray-400">• Scanned store</span>
                         </div>
@@ -3288,7 +3398,7 @@ function App() {
                       className="p-4 bg-white border border-gray-100 hover:border-gray-200 rounded-[24px] flex gap-4 cursor-pointer active-scale transition-all shadow-sm"
                     >
                       <div className="w-16 h-16 bg-[#F8F9FA] border border-gray-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
-                        {s.logo ? (
+                        {isLogoImageUrl(s.logo) ? (
                           <img className="w-full h-full object-cover" src={s.logo} alt="" />
                         ) : (
                           <span className="text-3xl">🏪</span>
@@ -3301,8 +3411,8 @@ function App() {
                           <p className="text-xs text-gray-400 truncate font-semibold">{s.address || 'Partner Store'}</p>
                         </div>
                         <div className="flex items-center gap-2 mt-2">
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
-                            {s.status === 'active' ? 'Open' : 'Closed'}
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${computeStoreOpen(s) ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+                            {computeStoreOpen(s) ? 'Open' : 'Closed'}
                           </span>
                           <span className="text-[10px] font-semibold text-gray-400">• Tap to browse</span>
                         </div>
@@ -3499,7 +3609,8 @@ function App() {
                       {filteredProducts.map(p => {
                         const qtyInCart = getQty(p.id);
                         const isOutOfStock = p.quantity <= 0;
-                        const isLimited = p.quantity > 0 && p.quantity <= 5;
+                        const showLimitedStock = store?.data?.marketplaceSettings?.showLimitedStock === true;
+                        const isLimited = showLimitedStock && p.quantity > 0 && p.quantity <= 5;
                         const isNew = p.status === 'new' || (p.cost_price === 0 && p.selling_price > 0);
                         const isPopular = p.status === 'popular';
                         const isFavorited = favorites.includes(p.id);
@@ -4989,7 +5100,7 @@ function App() {
                       className="flex items-center gap-3 bg-[#F8F9FA] rounded-2xl px-4 py-3 border border-gray-100 cursor-pointer hover:border-gray-200 transition"
                     >
                       <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 overflow-hidden flex items-center justify-center shrink-0">
-                        {s.logo ? <img src={s.logo} className="w-full h-full object-cover" alt="" /> : <span className="text-lg">🏪</span>}
+                        {isLogoImageUrl(s.logo) ? <img src={s.logo} className="w-full h-full object-cover" alt="" /> : <span className="text-lg">🏪</span>}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-black text-[#1A1C1E] truncate">{s.business_name}</p>
@@ -5109,9 +5220,12 @@ function App() {
             <span className="material-symbols-outlined text-xl">grid_view</span>
             <span className={`text-[10px] mt-1 ${screen === 'explore' ? 'font-bold' : 'font-semibold'}`}>Explore</span>
           </button>
-          <button onClick={() => { setScreen('history'); loadOrdersHistory(); }} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'history' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
+          <button onClick={() => { setScreen('history'); loadOrdersHistory(); }} className={`flex flex-col items-center justify-center cursor-pointer relative ${screen === 'history' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
             <span className="material-symbols-outlined text-xl">receipt_long</span>
             <span className={`text-[10px] mt-1 ${screen === 'history' ? 'font-bold' : 'font-semibold'}`}>Orders</span>
+            {activeOrdersCount > 0 && (
+              <span className="absolute -top-1 -right-2 bg-[#1A1C1E] text-[#FFD23F] text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black shadow-sm">{activeOrdersCount}</span>
+            )}
           </button>
           <button onClick={() => setIsCartOpen(true)} className="flex flex-col items-center justify-center text-gray-400 font-semibold hover:text-[#1A1C1E] relative cursor-pointer">
             <span className="material-symbols-outlined text-xl text-gray-400">shopping_cart</span>
