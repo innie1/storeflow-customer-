@@ -440,36 +440,16 @@ function App() {
   const [deliveryLandmark, setDeliveryLandmark] = useState(() => localStorage.getItem('storeflow_saved_checkout_landmark') || '');
   const [specialInstructions, setSpecialInstructions] = useState(() => localStorage.getItem('storeflow_saved_checkout_notes') || '');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'opay'>(() => (localStorage.getItem('storeflow_pref_payment_method') as any) || 'cash');
-  const [orderId, setOrderId] = useState<string | null>(() => localStorage.getItem('storeflow_tracking_order_id'));
-  const [orderNumber, setOrderNumber] = useState(() => localStorage.getItem('storeflow_tracking_order_number') || '');
-  const [orderStatus, setOrderStatus] = useState(() => localStorage.getItem('storeflow_tracking_order_status') || 'Pending');
-
-  useEffect(() => {
-    if (orderId) {
-      localStorage.setItem('storeflow_tracking_order_id', orderId);
-    } else {
-      localStorage.removeItem('storeflow_tracking_order_id');
-    }
-  }, [orderId]);
-
-  useEffect(() => {
-    if (orderNumber) {
-      localStorage.setItem('storeflow_tracking_order_number', orderNumber);
-    } else {
-      localStorage.removeItem('storeflow_tracking_order_number');
-    }
-  }, [orderNumber]);
-
-  useEffect(() => {
-    if (orderStatus) {
-      localStorage.setItem('storeflow_tracking_order_status', orderStatus);
-    } else {
-      localStorage.removeItem('storeflow_tracking_order_status');
-    }
-  }, [orderStatus]);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [orderStatus, setOrderStatus] = useState('Pending');
   const [orderCopied, setOrderCopied] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
+  const [orderStatusHistory, setOrderStatusHistory] = useState<{ status: string; at: string }[]>([]);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [scannedStoresVersion, setScannedStoresVersion] = useState(0);
+  const [pendingCrossStoreAdd, setPendingCrossStoreAdd] = useState<{ product: Product; qty: number } | null>(null);
   const [ordersHistory, setOrdersHistory] = useState<Order[]>([]);
 
   const [rejectionReason, setRejectionReason] = useState('');
@@ -756,6 +736,32 @@ function App() {
     return [...active, ...finished];
   }, [ordersHistory]);
 
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const searchFilteredOrdersHistory = useMemo(() => {
+    const q = historySearchQuery.trim().toLowerCase();
+    if (!q) return sortedOrdersHistory;
+    return sortedOrdersHistory.filter((o: any) => {
+      const cardStore = allStores.find((s: any) => s.id === o.store_id);
+      let itemNames = '';
+      let noteStoreName = '';
+      if (o.notes) {
+        try {
+          const parsed = JSON.parse(o.notes);
+          itemNames = (parsed.items_summary || []).map((it: any) => it.name).join(' ');
+          noteStoreName = parsed.store_name || '';
+        } catch { /* ignore */ }
+      }
+      if (itemNames === '' && o.order_items) {
+        itemNames = o.order_items.map((oi: any) => oi.product?.name || '').join(' ');
+      }
+      const dateStr = new Date(o.created_at).toLocaleDateString();
+      const haystack = [
+        cardStore?.business_name, noteStoreName, o.order_number, itemNames, dateStr, o.status
+      ].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [sortedOrdersHistory, historySearchQuery, allStores]);
+
   const syncItsMeProfileWithCloud = async (user: any) => {
     if (!user) return;
     try {
@@ -928,6 +934,12 @@ function App() {
             scanned.push(storeData.id);
             localStorage.setItem('storeflow_scanned_stores', JSON.stringify(scanned));
           }
+          // Track last-visit time per store so stores untouched for 3+ months
+          // can be automatically tidied out of "My Stores" — only from this
+          // customer's own device list, never touching the real store record.
+          const visitMeta = JSON.parse(localStorage.getItem('storeflow_scanned_stores_meta') || '{}');
+          visitMeta[storeData.id] = new Date().toISOString();
+          localStorage.setItem('storeflow_scanned_stores_meta', JSON.stringify(visitMeta));
         } catch (e) {
           console.error('[StoreFlow QR] Error saving scanned store history:', e);
         }
@@ -1083,12 +1095,13 @@ function App() {
 
     supabase
       .from('orders')
-      .select('status')
+      .select('status, status_history')
       .eq('id', orderId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (!error && data?.status) {
           setOrderStatus(data.status);
+          setOrderStatusHistory(data.status_history || []);
         }
       });
   }, [orderId, screen]);
@@ -1102,6 +1115,7 @@ function App() {
         event: 'UPDATE', filter: `id=eq.${orderId}`, schema: 'public', table: 'orders'
       }, (payload: any) => {
         if (payload.new?.status) setOrderStatus(payload.new.status);
+        if (payload.new?.status_history) setOrderStatusHistory(payload.new.status_history);
       })
       .subscribe();
 
@@ -1721,6 +1735,42 @@ function App() {
     });
   };
 
+  // Smart add-to-cart used by "Recommended For You" (and anywhere adding a
+  // product that might not belong to the store currently loaded in `store`
+  // state). Previously addToCart had no cross-store guard at all — nothing
+  // stopped items from two different stores silently mixing in one cart,
+  // even though checkout only ever submits under a single store_id. This
+  // also implements the spec: single store → add immediately; multiple
+  // stores with a genuine conflict → ask.
+  const handleSmartAddToCart = (product: Product, qty = 1) => {
+    const productStore = allStores.find((s: any) => s.id === product.store_id);
+    const cartStoreId = cart[0]?.product.store_id;
+
+    if (!cartStoreId || cartStoreId === product.store_id) {
+      // No conflict — cart is empty, or already the same store.
+      if (productStore && store?.id !== productStore.id) setStore(productStore);
+      addToCart(product, qty);
+      if (scannedStores.length > 1) {
+        localStorage.setItem('storeflow_last_selected_store', product.store_id);
+      }
+      return;
+    }
+
+    // Genuine conflict: cart has items from a different store already.
+    setPendingCrossStoreAdd({ product, qty });
+  };
+
+  const confirmCrossStoreAdd = () => {
+    if (!pendingCrossStoreAdd) return;
+    const { product, qty } = pendingCrossStoreAdd;
+    const productStore = allStores.find((s: any) => s.id === product.store_id);
+    setCart([]);
+    if (productStore) setStore(productStore);
+    addToCart(product, qty);
+    localStorage.setItem('storeflow_last_selected_store', product.store_id);
+    setPendingCrossStoreAdd(null);
+  };
+
   const getQty = (productId: string) => cart.find(i => i.product.id === productId)?.quantity ?? 0;
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + getPrice(i.product) * i.quantity, 0), [cart, getPrice]);
@@ -1777,7 +1827,18 @@ function App() {
       address: finalDeliveryType === 'delivery' ? finalDeliveryAddress : '',
       payment_method: finalPaymentMethod,
       instructions: finalSpecialInstructions,
-      pricing_mode: priceMode
+      pricing_mode: priceMode,
+      // Previously omitted entirely — order history always fell back to
+      // generic "Product" / "StoreFlow Partner" placeholder text because
+      // there was nothing real to read. Embedding this at order time also
+      // means order history still shows correct item names even if a
+      // product is later renamed or deleted from the store's catalog.
+      store_name: store?.business_name || store?.storeName || 'Partner Store',
+      items_summary: cart.map(item => ({
+        name: item.product.name,
+        quantity: item.quantity,
+        price: getPrice(item.product)
+      }))
     });
 
     const orderPayload = {
@@ -2051,7 +2112,6 @@ function App() {
 
       setOrderStatus('Cancelled');
       loadOrdersHistory();
-      alert('Order cancelled successfully.');
     } catch (e: any) {
       alert('Failed to cancel order: ' + e.message);
     } finally {
@@ -2488,7 +2548,7 @@ function App() {
               <button 
                 onClick={toggleStoreFavorite}
                 className={`w-11 h-11 flex items-center justify-center rounded-full bg-white text-[#1A1C1E] active-scale transition-all cursor-pointer shadow-md ${
-                  isStoreFavorited ? 'text-[#FFD23F]' : 'hover:text-[#FFD23F]'
+                  isStoreFavorited ? 'text-rose-500' : 'hover:text-rose-500'
                 }`}
               >
                 <span className={`material-symbols-outlined text-lg ${isStoreFavorited ? 'font-variation-fill' : ''}`} style={isStoreFavorited ? { fontVariationSettings: "'FILL' 1" } : undefined}>
@@ -2517,7 +2577,7 @@ function App() {
         </div>
 
         {/* Center the store branding */}
-        <div className="relative bg-white rounded-t-[32px] -mt-10 pt-20 pb-4 px-4 md:px-6 text-center flex flex-col items-center max-w-lg md:max-w-2xl mx-auto">
+        <div className="relative bg-white rounded-t-[28px] -mt-8 pt-20 pb-4 px-4 md:px-6 text-center flex flex-col items-center max-w-lg md:max-w-2xl mx-auto">
           <div className="absolute -top-16 w-32 h-32 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden flex items-center justify-center shrink-0 animate-fade-in">
             {isLogoImageUrl(store?.logo) ? (
               <img src={store!.logo} className="w-full h-full object-cover" alt="" />
@@ -3059,11 +3119,42 @@ function App() {
 
   const scannedStoreIds = useMemo<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem('storeflow_scanned_stores') || '[]');
+      const ids: string[] = JSON.parse(localStorage.getItem('storeflow_scanned_stores') || '[]');
+      const visitMeta: Record<string, string> = JSON.parse(localStorage.getItem('storeflow_scanned_stores_meta') || '{}');
+      const threeMonthsAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+
+      // Auto-cleanup: drop stores this customer hasn't opened in 3+ months.
+      // This only ever touches this device's own local list — the store
+      // itself is untouched in the database, and no other customer is
+      // affected. Stores with no recorded visit time (legacy entries from
+      // before this feature existed) are kept rather than assumed stale.
+      const kept = ids.filter(id => {
+        const lastVisit = visitMeta[id];
+        if (!lastVisit) return true;
+        return new Date(lastVisit).getTime() >= threeMonthsAgo;
+      });
+      if (kept.length !== ids.length) {
+        localStorage.setItem('storeflow_scanned_stores', JSON.stringify(kept));
+      }
+      return kept;
     } catch {
       return [];
     }
-  }, [allStores]); // re-derive when allStores loads
+  }, [allStores, scannedStoresVersion]); // re-derive when allStores loads or a store is manually removed
+
+  const removeScannedStore = (storeId: string) => {
+    try {
+      const ids: string[] = JSON.parse(localStorage.getItem('storeflow_scanned_stores') || '[]');
+      localStorage.setItem('storeflow_scanned_stores', JSON.stringify(ids.filter(id => id !== storeId)));
+      const visitMeta: Record<string, string> = JSON.parse(localStorage.getItem('storeflow_scanned_stores_meta') || '{}');
+      delete visitMeta[storeId];
+      localStorage.setItem('storeflow_scanned_stores_meta', JSON.stringify(visitMeta));
+      localStorage.removeItem('storeflow_fav_store_' + storeId);
+      setScannedStoresVersion(v => v + 1);
+    } catch (e) {
+      console.error('Failed to remove store:', e);
+    }
+  };
 
   const scannedStores = useMemo(() => {
     return allStores.filter(s => scannedStoreIds.includes(s.id));
@@ -3483,8 +3574,20 @@ function App() {
                         loadStoreDetails(s.id);
                         navigateToScreen('store');
                       }}
-                      className="p-4 bg-white border border-gray-100 hover:border-gray-200 rounded-[24px] flex gap-4 cursor-pointer active-scale transition-all shadow-sm"
+                      className="relative p-4 bg-white border border-gray-100 hover:border-gray-200 rounded-[24px] flex gap-4 cursor-pointer active-scale transition-all shadow-sm"
                     >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Remove ${s.business_name} from Your Stores? You can always re-scan it later.`)) {
+                            removeScannedStore(s.id);
+                          }
+                        }}
+                        className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-gray-50 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center transition cursor-pointer z-10"
+                        title="Remove from Your Stores"
+                      >
+                        <span className="material-symbols-outlined text-sm">close</span>
+                      </button>
                       <div className="w-16 h-16 bg-[#F8F9FA] border border-gray-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
                         {isLogoImageUrl(s.logo) ? (
                           <img className="w-full h-full object-cover" src={s.logo} alt="" />
@@ -3492,7 +3595,7 @@ function App() {
                           <span className="text-3xl">🏪</span>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0 text-left">
+                      <div className="flex-1 min-w-0 text-left pr-4">
                         <h4 className="font-extrabold text-base text-[#1A1C1E] truncate">{s.business_name}</h4>
                         <p className="text-xs text-gray-400 mt-0.5 truncate font-semibold">{s.address || 'Partner Store'}</p>
                         <div className="flex items-center gap-2 mt-2">
@@ -3521,7 +3624,7 @@ function App() {
                       setSelectedProduct(p);
                       navigateToScreen('store');
                     }}
-                    className="bg-white border border-gray-100 rounded-[24px] p-3 cursor-pointer hover:border-gray-200 transition-all flex flex-col justify-between active-scale shadow-sm"
+                    className="relative bg-white border border-gray-100 rounded-[24px] p-3 cursor-pointer hover:border-gray-200 transition-all flex flex-col justify-between active-scale shadow-sm"
                   >
                     <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-xl mb-3 overflow-hidden flex items-center justify-center">
                       {p.image ? (
@@ -3532,7 +3635,16 @@ function App() {
                     </div>
                     <div className="space-y-1 text-left">
                       <p className="font-bold text-xs text-[#1A1C1E] truncate">{p.name}</p>
-                      <p className="font-black text-sm text-[#1A1C1E]">₦{getPrice(p).toLocaleString()}</p>
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="font-black text-sm text-[#1A1C1E]">₦{getPrice(p).toLocaleString()}</p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleSmartAddToCart(p, 1); }}
+                          className="w-7 h-7 rounded-full bg-[#1A1C1E] text-[#FFD23F] flex items-center justify-center shrink-0 active:scale-90 transition cursor-pointer"
+                          title="Add to cart"
+                        >
+                          <span className="material-symbols-outlined text-sm font-bold">add</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -3748,8 +3860,8 @@ function App() {
                           onClick={() => setSelectedCategory(cat)}
                           className={`px-4 py-2 rounded-full font-bold text-xs shrink-0 transition-all cursor-pointer shadow-sm ${
                             selectedCategory === cat
-                              ? 'bg-[#1A1C1E] text-[#FFD23F] font-black'
-                              : 'bg-white border border-gray-100 text-gray-600 hover:bg-gray-50'
+                              ? 'bg-[#1A1C1E] text-white font-extrabold'
+                              : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
                           }`}
                         >
                           {cat}
@@ -4095,6 +4207,72 @@ function App() {
               </div>
             )}
 
+            {/* Live Order Timeline */}
+            {!orderSubmitting && orderStatusHistory.length > 0 && (
+              <div className="bg-white rounded-[24px] p-5 shadow-sm border border-gray-100">
+                <h4 className="font-black text-xs uppercase tracking-wider text-gray-400 mb-4">Order Timeline</h4>
+                {(() => {
+                  const TIMELINE_STAGES = ['Pending', 'Accepted', 'Preparing', 'Ready', 'Completed'];
+                  const historyByStatus = new Map(orderStatusHistory.map(h => [h.status, h.at]));
+                  const isTerminalNegative = orderStatus === 'Rejected' || orderStatus === 'Cancelled';
+                  const currentStageIdx = TIMELINE_STAGES.indexOf(orderStatus);
+                  return (
+                    <div className="space-y-0">
+                      {TIMELINE_STAGES.map((stage, i) => {
+                        const reachedAt = historyByStatus.get(stage);
+                        const isReached = !!reachedAt || (!isTerminalNegative && currentStageIdx >= 0 && i <= currentStageIdx);
+                        const isCurrent = stage === orderStatus;
+                        const isLast = i === TIMELINE_STAGES.length - 1;
+                        const stageLabel: Record<string, string> = {
+                          Pending: 'Order Placed', Accepted: 'Store Received Order', Preparing: 'Preparing',
+                          Ready: 'Ready', Completed: 'Completed'
+                        };
+                        return (
+                          <div key={stage} className="flex gap-3">
+                            <div className="flex flex-col items-center">
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                                isReached ? 'bg-[#1A1C1E] text-[#FFD23F]' : 'bg-gray-100 text-gray-300'
+                              }`}>
+                                <span className="material-symbols-outlined text-xs font-bold">
+                                  {isReached ? 'check' : 'circle'}
+                                </span>
+                              </div>
+                              {!isLast && <div className={`w-0.5 flex-1 min-h-[24px] ${isReached && i < currentStageIdx ? 'bg-[#1A1C1E]' : 'bg-gray-100'}`} />}
+                            </div>
+                            <div className="pb-6 -mt-0.5">
+                              <p className={`text-xs font-bold ${isReached ? 'text-[#1A1C1E]' : 'text-gray-300'}`}>
+                                {stageLabel[stage]}{isCurrent && !isTerminalNegative ? ' (current)' : ''}
+                              </p>
+                              {reachedAt && (
+                                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
+                                  {new Date(reachedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {isTerminalNegative && (
+                        <div className="flex gap-3">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-rose-500 text-white">
+                            <span className="material-symbols-outlined text-xs font-bold">close</span>
+                          </div>
+                          <div className="-mt-0.5">
+                            <p className="text-xs font-bold text-rose-600">{orderStatus}</p>
+                            {historyByStatus.get(orderStatus) && (
+                              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
+                                {new Date(historyByStatus.get(orderStatus)!).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Rejection Notice Banner */}
             {orderStatus === 'Rejected' && (
               <div className="bg-rose-50 border border-rose-150 text-rose-800 p-4 rounded-[20px] text-xs space-y-1.5 shadow-sm">
@@ -4140,6 +4318,47 @@ function App() {
                   >
                     {loading ? 'Approving...' : 'Approve Proposal'}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* General Cancel Order — customer can cancel any time before preparation starts */}
+            {(orderStatus === 'Pending' || orderStatus === 'Accepted') && !orderSubmitting && (
+              <button
+                onClick={() => setShowCancelConfirm(true)}
+                className="w-full py-3 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 font-extrabold rounded-2xl transition cursor-pointer text-center uppercase tracking-wider text-xs shadow-sm flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-sm">cancel</span>
+                Cancel This Order
+              </button>
+            )}
+
+            {/* Cancel confirmation dialog */}
+            {showCancelConfirm && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowCancelConfirm(false)}>
+                <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+                  <div className="text-center space-y-1.5">
+                    <span className="material-symbols-outlined text-3xl text-rose-500">warning</span>
+                    <h3 className="font-black text-base text-[#1A1C1E]">Cancel this order?</h3>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      This can't be undone. The store will be notified immediately.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowCancelConfirm(false)}
+                      className="flex-1 py-3 bg-gray-100 text-[#1A1C1E] font-bold rounded-xl text-xs uppercase tracking-wider cursor-pointer"
+                    >
+                      Keep Order
+                    </button>
+                    <button
+                      onClick={() => { setShowCancelConfirm(false); handleCancelOrder(); }}
+                      disabled={loading}
+                      className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider cursor-pointer disabled:opacity-60"
+                    >
+                      {loading ? 'Cancelling...' : 'Yes, Cancel'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -4437,6 +4656,23 @@ function App() {
           </header>
 
           <main className="mt-6 px-4 max-w-md mx-auto space-y-4 text-left">
+            {ordersHistory.length > 0 && (
+              <div className="relative w-full h-11 bg-white rounded-xl flex items-center px-4 border border-gray-200 shadow-sm">
+                <span className="material-symbols-outlined text-gray-400 text-sm mr-2.5">search</span>
+                <input
+                  type="text"
+                  placeholder="Search by store, item, order ID, or date..."
+                  value={historySearchQuery}
+                  onChange={e => setHistorySearchQuery(e.target.value)}
+                  className="bg-transparent border-none text-xs focus:ring-0 focus:outline-none w-full text-[#1A1C1E] placeholder:text-gray-400"
+                />
+                {historySearchQuery && (
+                  <button onClick={() => setHistorySearchQuery('')} className="text-gray-400 cursor-pointer">
+                    <span className="material-symbols-outlined text-base">close</span>
+                  </button>
+                )}
+              </div>
+            )}
             {ordersHistory.length === 0 ? (
               <div className="text-center py-16 text-gray-400 flex flex-col items-center justify-center gap-3">
                 <span className="material-symbols-outlined text-5xl text-gray-300">receipt_long</span>
@@ -4445,11 +4681,19 @@ function App() {
                   When you place an order, it will appear here instantly with live tracking updates.
                 </p>
               </div>
+            ) : searchFilteredOrdersHistory.length === 0 ? (
+              <div className="text-center py-16 text-gray-400 flex flex-col items-center justify-center gap-3">
+                <span className="material-symbols-outlined text-5xl text-gray-300">search_off</span>
+                <p className="text-sm font-black uppercase tracking-wider text-[#1A1C1E]">No matching orders</p>
+                <p className="text-xs text-gray-500 font-medium max-w-xs leading-relaxed">
+                  Try a different search term, or clear the search to see all your orders.
+                </p>
+              </div>
             ) : (
-              sortedOrdersHistory.map((o: any, idx: number) => {
+              searchFilteredOrdersHistory.map((o: any, idx: number) => {
                 // Section divider right where active orders end and finished ones begin
                 const isFirstFinished = ACTIVE_STATUSES.includes(o.status) === false &&
-                  idx > 0 && ACTIVE_STATUSES.includes(sortedOrdersHistory[idx - 1]?.status);
+                  idx > 0 && ACTIVE_STATUSES.includes(searchFilteredOrdersHistory[idx - 1]?.status);
                 let itemsSummary: any[] = [];
                 let paymentMethodText = 'Cash';
                 let storeNameText = 'Partner Store';
@@ -4477,6 +4721,7 @@ function App() {
                 const totalQty = itemsSummary.reduce((sum: number, item: any) => sum + Number(item.quantity || 1), 0);
 
                 const cardStore = allStores.find((s: any) => s.id === o.store_id);
+                storeNameText = cardStore?.business_name || storeNameText;
 
                 return (
                   <div key={o.id} className="space-y-4">
@@ -5404,6 +5649,40 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* ─── Cross-Store Cart Conflict Bottom Sheet ─── */}
+      {pendingCrossStoreAdd && (() => {
+        const currentCartStore = allStores.find((s: any) => s.id === cart[0]?.product.store_id);
+        const newProductStore = allStores.find((s: any) => s.id === pendingCrossStoreAdd.product.store_id);
+        return (
+          <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setPendingCrossStoreAdd(null)}>
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="text-center space-y-1.5">
+                <span className="material-symbols-outlined text-3xl text-amber-500">storefront</span>
+                <h3 className="font-black text-base text-[#1A1C1E]">Switch stores?</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Your cart has items from <span className="font-bold text-[#1A1C1E]">{currentCartStore?.business_name || 'another store'}</span>.
+                  Adding this item from <span className="font-bold text-[#1A1C1E]">{newProductStore?.business_name || 'this store'}</span> will start a new cart — your current items will be cleared.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPendingCrossStoreAdd(null)}
+                  className="flex-1 py-3 bg-gray-100 text-[#1A1C1E] font-bold rounded-xl text-xs uppercase tracking-wider cursor-pointer"
+                >
+                  Keep Current Cart
+                </button>
+                <button
+                  onClick={confirmCrossStoreAdd}
+                  className="flex-1 py-3 bg-[#1A1C1E] hover:bg-black text-[#FFD23F] font-bold rounded-xl text-xs uppercase tracking-wider cursor-pointer"
+                >
+                  Switch & Add
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ─── It'sMe Post-Order Update Prompt ─── */}
       {showItsMeUpdatePrompt && pendingItsMeUpdate && (
