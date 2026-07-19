@@ -1692,29 +1692,64 @@ function App() {
 
   // ─── Place Order / Checkout Sync ───────────────────────────────────────────
 
-  const submitOrder = async () => {
-    if (!customerName || !customerPhone) {
+  const submitOrder = async (overrides?: {
+    customerName?: string; customerPhone?: string; deliveryType?: 'pickup' | 'delivery';
+    deliveryAddress?: string; deliveryLandmark?: string; paymentMethod?: 'cash' | 'transfer' | 'opay';
+    specialInstructions?: string;
+  }) => {
+    // Using local "final" values instead of reading straight from state means
+    // callers (like "Same as Before") can pass overrides and submit
+    // immediately, without waiting on a React re-render to commit first —
+    // reading state directly here would silently submit stale/empty values
+    // in that one-tap scenario since state updates don't apply synchronously.
+    const finalCustomerName = overrides?.customerName ?? customerName;
+    const finalCustomerPhone = overrides?.customerPhone ?? customerPhone;
+    const finalDeliveryType = overrides?.deliveryType ?? deliveryType;
+    const finalDeliveryAddress = overrides?.deliveryAddress ?? deliveryAddress;
+    const finalDeliveryLandmark = overrides?.deliveryLandmark ?? deliveryLandmark;
+    const finalPaymentMethod = overrides?.paymentMethod ?? paymentMethod;
+    const finalSpecialInstructions = overrides?.specialInstructions ?? specialInstructions;
+    const finalDeliveryFee = (finalDeliveryType === 'pickup' || subtotal === 0) ? 0 : subtotal >= 5000 ? 0 : 500;
+    const finalTotal = subtotal + finalDeliveryFee;
+
+    if (!finalCustomerName || !finalCustomerPhone) {
       alert('Please enter your details first.');
       return;
+    }
+    if (cart.length === 0) {
+      alert('Your cart is empty.');
+      return;
+    }
+
+    // Reflect the final values in visible state too, so if the customer
+    // navigates back to checkout afterward, the form matches what was sent.
+    if (overrides) {
+      setCustomerName(finalCustomerName);
+      setCustomerPhone(finalCustomerPhone);
+      setDeliveryType(finalDeliveryType);
+      if (finalDeliveryAddress) setDeliveryAddress(finalDeliveryAddress);
+      if (finalDeliveryLandmark) setDeliveryLandmark(finalDeliveryLandmark);
+      setPaymentMethod(finalPaymentMethod);
+      if (finalSpecialInstructions) setSpecialInstructions(finalSpecialInstructions);
     }
 
     const genOrderNo = `SF-${Math.floor(100000 + Math.random() * 900000)}`;
     const notes = JSON.stringify({
-      delivery_type: deliveryType,
-      address: deliveryType === 'delivery' ? deliveryAddress : '',
-      payment_method: paymentMethod,
-      instructions: specialInstructions,
+      delivery_type: finalDeliveryType,
+      address: finalDeliveryType === 'delivery' ? finalDeliveryAddress : '',
+      payment_method: finalPaymentMethod,
+      instructions: finalSpecialInstructions,
       pricing_mode: priceMode
     });
 
     const orderPayload = {
       store_id: store?.id || '',
-      customer_name: customerName,
-      customer_phone: customerPhone,
+      customer_name: finalCustomerName,
+      customer_phone: finalCustomerPhone,
       order_number: genOrderNo,
       status: 'Pending',
       subtotal,
-      total,
+      total: finalTotal,
       notes
     };
     const itemsPayload = cart.map(item => ({
@@ -1741,23 +1776,23 @@ function App() {
     navigateToScreen('tracking');
 
     // Save checkout preferences immediately too — no reason to wait on the network for this
-    localStorage.setItem('storeflow_saved_checkout_name', customerName);
-    localStorage.setItem('storeflow_saved_checkout_phone', customerPhone);
-    if (deliveryAddress) localStorage.setItem('storeflow_pref_address', deliveryAddress);
-    if (deliveryLandmark) localStorage.setItem('storeflow_saved_checkout_landmark', deliveryLandmark);
-    if (specialInstructions) localStorage.setItem('storeflow_saved_checkout_notes', specialInstructions);
-    localStorage.setItem('storeflow_pref_payment_method', paymentMethod);
-    localStorage.setItem('storeflow_pref_delivery_type', deliveryType);
+    localStorage.setItem('storeflow_saved_checkout_name', finalCustomerName);
+    localStorage.setItem('storeflow_saved_checkout_phone', finalCustomerPhone);
+    if (finalDeliveryAddress) localStorage.setItem('storeflow_pref_address', finalDeliveryAddress);
+    if (finalDeliveryLandmark) localStorage.setItem('storeflow_saved_checkout_landmark', finalDeliveryLandmark);
+    if (finalSpecialInstructions) localStorage.setItem('storeflow_saved_checkout_notes', finalSpecialInstructions);
+    localStorage.setItem('storeflow_pref_payment_method', finalPaymentMethod);
+    localStorage.setItem('storeflow_pref_delivery_type', finalDeliveryType);
 
     const current = loadItsMeProfile();
     const changes: Partial<ItsMe> = {};
-    if (customerName && customerName !== current.displayName) changes.displayName = customerName;
-    if (customerPhone && customerPhone !== current.phone) changes.phone = customerPhone;
+    if (finalCustomerName && finalCustomerName !== current.displayName) changes.displayName = finalCustomerName;
+    if (finalCustomerPhone && finalCustomerPhone !== current.phone) changes.phone = finalCustomerPhone;
     if (customerEmail && customerEmail !== current.email) changes.email = customerEmail;
-    if (deliveryAddress && !current.addresses.includes(deliveryAddress)) changes.addresses = [...current.addresses, deliveryAddress];
-    if (deliveryLandmark && !current.landmarks.includes(deliveryLandmark)) changes.landmarks = [...current.landmarks, deliveryLandmark];
-    if (specialInstructions && specialInstructions !== current.deliveryInstructions) changes.deliveryInstructions = specialInstructions;
-    if (paymentMethod !== current.preferredPayment) changes.preferredPayment = paymentMethod;
+    if (finalDeliveryAddress && !current.addresses.includes(finalDeliveryAddress)) changes.addresses = [...current.addresses, finalDeliveryAddress];
+    if (finalDeliveryLandmark && !current.landmarks.includes(finalDeliveryLandmark)) changes.landmarks = [...current.landmarks, finalDeliveryLandmark];
+    if (finalSpecialInstructions && finalSpecialInstructions !== current.deliveryInstructions) changes.deliveryInstructions = finalSpecialInstructions;
+    if (finalPaymentMethod !== current.preferredPayment) changes.preferredPayment = finalPaymentMethod;
     if (Object.keys(changes).length > 0) {
       setPendingItsMeUpdate(changes);
       setTimeout(() => setShowItsMeUpdatePrompt(true), 800);
@@ -1785,7 +1820,7 @@ function App() {
       supabase.from('notifications').insert({
         store_id: store?.id || '',
         title: 'New Order',
-        message: `${customerName} placed Order #${genOrderNo} containing ${totalItemsCount} items.`,
+        message: `${finalCustomerName} placed Order #${genOrderNo} containing ${totalItemsCount} items.`,
         type: 'new_order',
         is_read: false
       }).then(({ error }) => {
@@ -1854,6 +1889,37 @@ function App() {
     if (p.landmarks.length > 0) setDeliveryLandmark(p.landmarks[0]);
     if (p.deliveryInstructions) setSpecialInstructions(p.deliveryInstructions);
     if (p.preferredPayment) setPaymentMethod(p.preferredPayment as any);
+  };
+
+  // "Same as Before" — reuses exactly what was used on the last order placed
+  // on this device (address, phone, payment method, instructions, pickup/
+  // delivery choice) and submits immediately in one tap, unlike "Fill with
+  // It'sMe" which only prefills the form for the customer to review first.
+  const hasSameAsBeforeData = () => !!localStorage.getItem('storeflow_saved_checkout_phone');
+
+  const applySameAsBeforeAndSubmit = () => {
+    const savedName = localStorage.getItem('storeflow_saved_checkout_name') || '';
+    const savedPhone = localStorage.getItem('storeflow_saved_checkout_phone') || '';
+    const savedAddress = localStorage.getItem('storeflow_pref_address') || '';
+    const savedLandmark = localStorage.getItem('storeflow_saved_checkout_landmark') || '';
+    const savedNotes = localStorage.getItem('storeflow_saved_checkout_notes') || '';
+    const savedPaymentMethod = (localStorage.getItem('storeflow_pref_payment_method') as 'cash' | 'transfer' | 'opay' | null) || 'cash';
+    const savedDeliveryType = (localStorage.getItem('storeflow_pref_delivery_type') as 'pickup' | 'delivery' | null) || 'pickup';
+
+    if (!savedPhone) {
+      alert("We don't have a previous order to reuse yet — please fill in your details this time.");
+      return;
+    }
+
+    submitOrder({
+      customerName: savedName,
+      customerPhone: savedPhone,
+      deliveryType: savedDeliveryType,
+      deliveryAddress: savedAddress,
+      deliveryLandmark: savedLandmark,
+      paymentMethod: savedPaymentMethod,
+      specialInstructions: savedNotes,
+    });
   };
 
   const updateItsMeProfileAndSync = async (newProfile: ItsMe) => {
@@ -4662,17 +4728,30 @@ function App() {
                   </div>
                 </div>
 
-                {/* ─── It'sMe Prefill Button ─── */}
-                <button
-                  onClick={applyItsMeToCheckout}
-                  className="w-full py-3.5 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-transform cursor-pointer border border-[#FFD23F]/20 hover:border-[#FFD23F]/40"
-                >
-                  <span className="text-base">✨</span>
-                  <span className="text-sm">Fill with It'sMe</span>
-                  {itsMeProfile.displayName && (
-                    <span className="text-[10px] font-semibold text-[#FFD23F]/60">— {itsMeProfile.displayName}</span>
+                {/* ─── It'sMe Prefill Button + Same as Before ─── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    onClick={applyItsMeToCheckout}
+                    className="w-full py-3.5 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-transform cursor-pointer border border-[#FFD23F]/20 hover:border-[#FFD23F]/40"
+                  >
+                    <span className="text-base">✨</span>
+                    <span className="text-sm">Fill with It'sMe</span>
+                    {itsMeProfile.displayName && (
+                      <span className="text-[10px] font-semibold text-[#FFD23F]/60 hidden sm:inline">— {itsMeProfile.displayName}</span>
+                    )}
+                  </button>
+                  {hasSameAsBeforeData() && (
+                    <button
+                      onClick={applySameAsBeforeAndSubmit}
+                      disabled={orderSubmitting}
+                      className="w-full py-3.5 bg-white text-[#1A1C1E] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-transform cursor-pointer border-2 border-[#1A1C1E] disabled:opacity-60"
+                      title="Reuses your last order's address, phone, and payment method, and places the order immediately"
+                    >
+                      <span className="text-base">⚡</span>
+                      <span className="text-sm">Same as Before</span>
+                    </button>
                   )}
-                </button>
+                </div>
                 <div className="space-y-2 text-left">
                   <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Order Option</label>
                   <div className="grid grid-cols-2 gap-2 bg-gray-50 rounded-full p-1 border border-gray-100">
@@ -4847,7 +4926,7 @@ function App() {
                 </div>
 
                 <button
-                  onClick={submitOrder}
+                  onClick={() => submitOrder()}
                   className="w-full bg-[#1A1C1E] hover:bg-black text-[#FFD23F] py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md active:scale-98 transition-all cursor-pointer"
                 >
                   Place Order (₦{total.toLocaleString()})
