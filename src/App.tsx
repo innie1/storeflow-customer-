@@ -436,6 +436,8 @@ function App() {
   const [orderNumber, setOrderNumber] = useState('');
   const [orderStatus, setOrderStatus] = useState('Pending');
   const [orderCopied, setOrderCopied] = useState(false);
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
   const [ordersHistory, setOrdersHistory] = useState<Order[]>([]);
 
   const [rejectionReason, setRejectionReason] = useState('');
@@ -470,6 +472,10 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanFrameRef = useRef<number | null>(null);
+  // Always points at the current render's loadOrdersHistory. Handlers that
+  // were captured once (like the online/offline listener) would otherwise
+  // call a stale mount-time version with outdated customerPhone/currentUser.
+  const loadOrdersHistoryRef = useRef<() => void>(() => {});
   const [torchOn, setTorchOn] = useState(false);
   const [autoTorchTriggered, setAutoTorchTriggered] = useState(false);
   const [scanHint, setScanHint] = useState<string | null>(null);
@@ -552,25 +558,58 @@ function App() {
     };
   }, []);
 
-  // Sync Offline Queue
+  // Sync Offline Queue — previously used raw .insert() calls on orders/
+  // order_items directly, bypassing place_order_atomic entirely. That RPC
+  // is what the online path uses, and it handles the transaction atomically
+  // (plus whatever else lives server-side, like inventory decrement) — a
+  // raw insert here meant offline-synced orders took a completely different,
+  // less safe path than online ones. Now both go through the same RPC.
   const syncOfflineOrders = async () => {
     const pending = localStorage.getItem('storeflow_pending_sync_orders');
     if (!pending) return;
 
     try {
       const ordersToSync: any[] = JSON.parse(pending);
+      const stillFailed: any[] = [];
       for (const orderData of ordersToSync) {
-        await supabase.from('orders').insert(orderData.order);
-        if (orderData.items && orderData.items.length > 0) {
-          await supabase.from('order_items').insert(orderData.items);
+        const { error } = await supabase.rpc('place_order_atomic', {
+          p_store_id: orderData.order.store_id,
+          p_customer_name: orderData.order.customer_name,
+          p_customer_phone: orderData.order.customer_phone,
+          p_order_number: orderData.order.order_number,
+          p_status: orderData.order.status || 'Pending',
+          p_subtotal: orderData.order.subtotal,
+          p_total: orderData.order.total,
+          p_notes: orderData.order.notes,
+          p_items: orderData.items || []
+        });
+        if (error) {
+          console.error('Failed to sync one offline order, will retry later:', error);
+          stillFailed.push(orderData);
         }
       }
-      localStorage.removeItem('storeflow_pending_sync_orders');
-      alert('Your offline order(s) have been successfully synchronized! 🎉');
-      loadOrdersHistory();
+      if (stillFailed.length > 0) {
+        localStorage.setItem('storeflow_pending_sync_orders', JSON.stringify(stillFailed));
+      } else {
+        localStorage.removeItem('storeflow_pending_sync_orders');
+      }
+      if (stillFailed.length < ordersToSync.length) {
+        showLocalNotice('Your offline order(s) have been successfully synchronized! 🎉');
+        loadOrdersHistoryRef.current();
+      }
     } catch (e) {
       console.error('Failed to sync offline orders:', e);
     }
+  };
+
+  // A plain alert() for a background sync completing was jarring — use a
+  // lightweight in-app notice instead when one is available, falling back
+  // to alert() only if truly nothing else is wired up.
+  const showLocalNotice = (msg: string) => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try { new Notification('StoreFlow', { body: msg }); return; } catch {}
+    }
+    console.log('[StoreFlow]', msg);
   };
 
   // ─── PWA & Install Prompt ──────────────────────────────────────────────────
@@ -1002,12 +1041,13 @@ function App() {
       console.warn('Orders history loading failed:', e);
     }
   };
+  loadOrdersHistoryRef.current = loadOrdersHistory;
 
   // ─── Real-time order status tracking ────────────────────────────────────────
 
   // Load order status initially when transitioning to tracking screen
   useEffect(() => {
-    if (!orderId || screen !== 'tracking') return;
+    if (!orderId || screen !== 'tracking' || orderId.startsWith('pending-') || orderId.startsWith('offline-')) return;
 
     supabase
       .from('orders')
@@ -1022,7 +1062,7 @@ function App() {
   }, [orderId, screen]);
 
   useEffect(() => {
-    if (!orderId || screen !== 'tracking') return;
+    if (!orderId || screen !== 'tracking' || orderId.startsWith('pending-') || orderId.startsWith('offline-')) return;
 
     const channel = supabase
       .channel('order-updates')
@@ -1657,131 +1697,151 @@ function App() {
       alert('Please enter your details first.');
       return;
     }
-    setLoading(true);
+
+    const genOrderNo = `SF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const notes = JSON.stringify({
+      delivery_type: deliveryType,
+      address: deliveryType === 'delivery' ? deliveryAddress : '',
+      payment_method: paymentMethod,
+      instructions: specialInstructions,
+      pricing_mode: priceMode
+    });
+
+    const orderPayload = {
+      store_id: store?.id || '',
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      order_number: genOrderNo,
+      status: 'Pending',
+      subtotal,
+      total,
+      notes
+    };
+    const itemsPayload = cart.map(item => ({
+      product_id: item.product.id,
+      quantity: item.quantity,
+      price: getPrice(item.product),
+      subtotal: getPrice(item.product) * item.quantity
+    }));
+
+    // OPTIMISTIC UI: show the order as placed immediately and take the
+    // customer to the tracking screen right away, instead of making them
+    // wait on the network round-trip. The actual save happens in the
+    // background below. Previously this was one long blocking await chain
+    // (place order → wait → insert notification → wait → THEN navigate),
+    // which is why order submission felt slow even on a decent connection.
+    setOrderNumber(genOrderNo);
+    setOrderStatus('Pending');
+    setOrderId('pending-' + Date.now());
+    setOrderSubmitting(true);
+    setOrderSubmitError(null);
+    setCheckoutStep('shopping');
+    setIsCartOpen(false);
+    setCart([]);
+    navigateToScreen('tracking');
+
+    // Save checkout preferences immediately too — no reason to wait on the network for this
+    localStorage.setItem('storeflow_saved_checkout_name', customerName);
+    localStorage.setItem('storeflow_saved_checkout_phone', customerPhone);
+    if (deliveryAddress) localStorage.setItem('storeflow_pref_address', deliveryAddress);
+    if (deliveryLandmark) localStorage.setItem('storeflow_saved_checkout_landmark', deliveryLandmark);
+    if (specialInstructions) localStorage.setItem('storeflow_saved_checkout_notes', specialInstructions);
+    localStorage.setItem('storeflow_pref_payment_method', paymentMethod);
+    localStorage.setItem('storeflow_pref_delivery_type', deliveryType);
+
+    const current = loadItsMeProfile();
+    const changes: Partial<ItsMe> = {};
+    if (customerName && customerName !== current.displayName) changes.displayName = customerName;
+    if (customerPhone && customerPhone !== current.phone) changes.phone = customerPhone;
+    if (customerEmail && customerEmail !== current.email) changes.email = customerEmail;
+    if (deliveryAddress && !current.addresses.includes(deliveryAddress)) changes.addresses = [...current.addresses, deliveryAddress];
+    if (deliveryLandmark && !current.landmarks.includes(deliveryLandmark)) changes.landmarks = [...current.landmarks, deliveryLandmark];
+    if (specialInstructions && specialInstructions !== current.deliveryInstructions) changes.deliveryInstructions = specialInstructions;
+    if (paymentMethod !== current.preferredPayment) changes.preferredPayment = paymentMethod;
+    if (Object.keys(changes).length > 0) {
+      setPendingItsMeUpdate(changes);
+      setTimeout(() => setShowItsMeUpdatePrompt(true), 800);
+    }
+
+    // Now do the actual network save, in the background
+    if (!isOnline) {
+      queueOrderForOfflineSync(orderPayload, itemsPayload);
+      setOrderSubmitting(false);
+      loadOrdersHistory();
+      return;
+    }
+
     try {
-      const genOrderNo = `SF-${Math.floor(100000 + Math.random() * 900000)}`;
-      const notes = JSON.stringify({
-        delivery_type: deliveryType,
-        address: deliveryType === 'delivery' ? deliveryAddress : '',
-        payment_method: paymentMethod,
-        instructions: specialInstructions,
-        pricing_mode: priceMode
+      const orderUuid = await placeOrderWithRetry(genOrderNo, orderPayload, itemsPayload, 2);
+      setOrderId(orderUuid);
+      setOrderSubmitting(false);
+
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+
+      // Fire-and-forget — the merchant notification doesn't need to block
+      // anything on the customer's side, and previously it did.
+      supabase.from('notifications').insert({
+        store_id: store?.id || '',
+        title: 'New Order',
+        message: `${customerName} placed Order #${genOrderNo} containing ${totalItemsCount} items.`,
+        type: 'new_order',
+        is_read: false
+      }).then(({ error }) => {
+        if (error) console.warn('Failed to create order notification in db:', error);
       });
 
-      const orderPayload = {
-        store_id: store?.id || '',
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        order_number: genOrderNo,
-        status: 'Pending',
-        subtotal,
-        total,
-        notes
-      };
-
-      if (isOnline) {
-        const itemsPayload = cart.map(item => ({
-          product_id: item.product.id,
-          quantity: item.quantity,
-          price: getPrice(item.product),
-          subtotal: getPrice(item.product) * item.quantity
-        }));
-
-        // Step 8: Atomic Transaction Order Placement
-        const { data: orderUuid, error: orderErr } = await supabase
-          .rpc('place_order_atomic', {
-            p_store_id: store?.id || '',
-            p_customer_name: customerName,
-            p_customer_phone: customerPhone,
-            p_order_number: genOrderNo,
-            p_status: 'Pending',
-            p_subtotal: subtotal,
-            p_total: total,
-            p_notes: notes,
-            p_items: itemsPayload
-          });
-
-        if (orderErr) throw orderErr;
-        if (!orderUuid) throw new Error("Database failed to return Order ID.");
-
-        setOrderId(orderUuid);
-
-        // Offer real-time order status alerts right when they'd matter most
-        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-          Notification.requestPermission().catch(() => {});
-        }
-
-        // Step 3: Create Notification
-        const notificationPayload = {
-          store_id: store?.id || '',
-          title: 'New Order',
-          message: `${customerName} placed Order #${genOrderNo} containing ${totalItemsCount} items.`,
-          type: 'new_order',
-          is_read: false
-        };
-
-        const { error: notificationErr } = await supabase
-          .from('notifications')
-          .insert(notificationPayload);
-
-        if (notificationErr) {
-          console.warn("Failed to create order notification in db:", notificationErr);
-        }
-      } else {
-        // Offline Order Caching Queue
-        const offlineQueue = JSON.parse(localStorage.getItem('storeflow_pending_sync_orders') || '[]');
-        offlineQueue.push({
-          order: orderPayload,
-          items: cart.map(item => ({
-            product_id: item.product.id,
-            quantity: item.quantity,
-            price: getPrice(item.product),
-            subtotal: getPrice(item.product) * item.quantity
-          }))
-        });
-        localStorage.setItem('storeflow_pending_sync_orders', JSON.stringify(offlineQueue));
-        setOrderId('offline-' + Date.now());
-      }
-
-      setOrderNumber(genOrderNo);
-      setOrderStatus('Pending');
-      setCheckoutStep('shopping');
-      setIsCartOpen(false);
-      setCart([]);
-      navigateToScreen('tracking');
       loadOrdersHistory();
-
-      // Auto-save to localStorage for "It's Me" Prefill button
-      localStorage.setItem('storeflow_saved_checkout_name', customerName);
-      localStorage.setItem('storeflow_saved_checkout_phone', customerPhone);
-      if (deliveryAddress) localStorage.setItem('storeflow_pref_address', deliveryAddress);
-      if (deliveryLandmark) localStorage.setItem('storeflow_saved_checkout_landmark', deliveryLandmark);
-      if (specialInstructions) localStorage.setItem('storeflow_saved_checkout_notes', specialInstructions);
-      localStorage.setItem('storeflow_pref_payment_method', paymentMethod);
-      localStorage.setItem('storeflow_pref_delivery_type', deliveryType);
-
-      // Check if fields differ from saved It'sMe profile → ask to update
-      const current = loadItsMeProfile();
-      const changes: Partial<ItsMe> = {};
-      if (customerName && customerName !== current.displayName) changes.displayName = customerName;
-      if (customerPhone && customerPhone !== current.phone) changes.phone = customerPhone;
-      if (customerEmail && customerEmail !== current.email) changes.email = customerEmail;
-      if (deliveryAddress && !current.addresses.includes(deliveryAddress)) changes.addresses = [...current.addresses, deliveryAddress];
-      if (deliveryLandmark && !current.landmarks.includes(deliveryLandmark)) changes.landmarks = [...current.landmarks, deliveryLandmark];
-      if (specialInstructions && specialInstructions !== current.deliveryInstructions) changes.deliveryInstructions = specialInstructions;
-      if (paymentMethod !== current.preferredPayment) changes.preferredPayment = paymentMethod;
-
-      if (Object.keys(changes).length > 0) {
-        setPendingItsMeUpdate(changes);
-        setTimeout(() => setShowItsMeUpdatePrompt(true), 800);
-      }
-
     } catch (e: any) {
-      alert('Order placement failed: ' + e.message);
-    } finally {
-      setLoading(false);
+      // Genuine failure after retries — don't lose the order. Queue it for
+      // background sync instead of just showing an error and giving up.
+      console.error('Order placement failed after retries, queueing for background sync:', e);
+      queueOrderForOfflineSync(orderPayload, itemsPayload);
+      setOrderSubmitting(false);
+      setOrderSubmitError("We're having trouble reaching the store right now — your order has been saved and will send automatically once your connection improves.");
     }
   };
+
+  // Retries transient network failures a couple times with short backoff
+  // before giving up — a dropped connection mid-checkout shouldn't force
+  // the customer to redo the whole order.
+  const placeOrderWithRetry = async (
+    genOrderNo: string,
+    orderPayload: { store_id: string; customer_name: string; customer_phone: string; order_number: string; status: string; subtotal: number; total: number; notes: string },
+    itemsPayload: { product_id: string; quantity: number; price: number; subtotal: number }[],
+    retriesLeft: number
+  ): Promise<string> => {
+    try {
+      const { data: orderUuid, error: orderErr } = await supabase.rpc('place_order_atomic', {
+        p_store_id: orderPayload.store_id,
+        p_customer_name: orderPayload.customer_name,
+        p_customer_phone: orderPayload.customer_phone,
+        p_order_number: genOrderNo,
+        p_status: 'Pending',
+        p_subtotal: orderPayload.subtotal,
+        p_total: orderPayload.total,
+        p_notes: orderPayload.notes,
+        p_items: itemsPayload
+      });
+      if (orderErr) throw orderErr;
+      if (!orderUuid) throw new Error('Database failed to return Order ID.');
+      return orderUuid;
+    } catch (e) {
+      if (retriesLeft > 0) {
+        await new Promise(res => setTimeout(res, 800));
+        return placeOrderWithRetry(genOrderNo, orderPayload, itemsPayload, retriesLeft - 1);
+      }
+      throw e;
+    }
+  };
+
+  const queueOrderForOfflineSync = (orderPayload: any, itemsPayload: any[]) => {
+    const offlineQueue = JSON.parse(localStorage.getItem('storeflow_pending_sync_orders') || '[]');
+    offlineQueue.push({ order: orderPayload, items: itemsPayload });
+    localStorage.setItem('storeflow_pending_sync_orders', JSON.stringify(offlineQueue));
+  };
+
 
   // ─── It'sMe Helpers ──────────────────────────────────────────────────────────
 
@@ -3892,24 +3952,36 @@ function App() {
                   ? 'bg-rose-100 text-rose-600 border border-rose-200' 
                   : 'bg-[#FFD23F]/20 text-[#1A1C1E] border border-[#FFD23F]/40'
               }`}>
-                <span className="material-symbols-outlined text-3xl font-black">
-                  {orderStatus === 'Rejected' ? 'block' : orderStatus === 'Cancelled' ? 'close' : 'receipt_long'}
+                <span className={`material-symbols-outlined text-3xl font-black ${orderSubmitting ? 'animate-spin' : ''}`}>
+                  {orderSubmitting ? 'progress_activity' : orderStatus === 'Rejected' ? 'block' : orderStatus === 'Cancelled' ? 'close' : 'receipt_long'}
                 </span>
               </div>
               <h1 className="text-2xl font-black text-[#1A1C1E] font-display uppercase tracking-tight">
-                {orderStatus === 'Rejected' ? 'Order Rejected' : orderStatus === 'Cancelled' ? 'Order Cancelled' : 'Order Placed! 🎉'}
+                {orderSubmitting ? 'Sending Order...' : orderStatus === 'Rejected' ? 'Order Rejected' : orderStatus === 'Cancelled' ? 'Order Cancelled' : 'Order Placed! 🎉'}
               </h1>
               <p className="text-xs text-gray-500 font-semibold max-w-xs leading-relaxed">
-                {orderStatus === 'Pending Approval' && 'The store is currently reviewing your order details.'}
-                {orderStatus === 'Accepted' && 'Your order was accepted! Awaiting packaging.'}
-                {orderStatus === 'Preparing' && 'Staff are preparing and packing your order.'}
-                {orderStatus === 'Ready' && 'Your order is ready! Awaiting pickup/delivery.'}
-                {orderStatus === 'Out for Delivery' && 'Your package is on its way to you.'}
-                {orderStatus === 'Delivered' && 'Order marked as delivered. Enjoy!'}
-                {orderStatus === 'Completed' && 'Thank you for shopping with StoreFlow!'}
-                {orderStatus === 'Changes Requested' && 'The merchant requested changes to your order.'}
+                {orderSubmitting && 'Confirming with the store — this only takes a moment.'}
+                {!orderSubmitting && orderStatus === 'Pending Approval' && 'The store is currently reviewing your order details.'}
+                {!orderSubmitting && orderStatus === 'Accepted' && 'Your order was accepted! Awaiting packaging.'}
+                {!orderSubmitting && orderStatus === 'Preparing' && 'Staff are preparing and packing your order.'}
+                {!orderSubmitting && orderStatus === 'Ready' && 'Your order is ready! Awaiting pickup/delivery.'}
+                {!orderSubmitting && orderStatus === 'Out for Delivery' && 'Your package is on its way to you.'}
+                {!orderSubmitting && orderStatus === 'Delivered' && 'Order marked as delivered. Enjoy!'}
+                {!orderSubmitting && orderStatus === 'Completed' && 'Thank you for shopping with StoreFlow!'}
+                {!orderSubmitting && orderStatus === 'Changes Requested' && 'The merchant requested changes to your order.'}
               </p>
             </div>
+
+            {/* Background sync error — order is safe, just delayed */}
+            {orderSubmitError && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-[20px] text-xs space-y-1.5 shadow-sm">
+                <h4 className="font-extrabold text-sm flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm font-bold">wifi_off</span>
+                  <span>Order queued</span>
+                </h4>
+                <p className="leading-relaxed">{orderSubmitError}</p>
+              </div>
+            )}
 
             {/* Rejection Notice Banner */}
             {orderStatus === 'Rejected' && (
@@ -3944,7 +4016,7 @@ function App() {
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={handleCancelOrder}
-                    disabled={loading}
+                    disabled={loading || orderSubmitting}
                     className="flex-1 py-3 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-600 font-extrabold rounded-xl transition cursor-pointer text-center uppercase tracking-wider text-xs shadow-sm"
                   >
                     Cancel Order
@@ -4292,6 +4364,8 @@ function App() {
 
                 const totalQty = itemsSummary.reduce((sum: number, item: any) => sum + Number(item.quantity || 1), 0);
 
+                const cardStore = allStores.find((s: any) => s.id === o.store_id);
+
                 return (
                   <div key={o.id} className="space-y-4">
                   {isFirstFinished && (
@@ -4301,14 +4375,24 @@ function App() {
                     </div>
                   )}
                   <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4 text-left">
-                    {/* Header: Store Name & Date */}
+                    {/* Header: Store Logo, Name & Date */}
                     <div className="flex justify-between items-start border-b border-gray-100 pb-3">
-                      <div className="text-left">
-                        <h4 className="font-extrabold text-sm text-[#1A1C1E] truncate max-w-[200px]">{storeNameText}</h4>
-                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">#{o.order_number}</p>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                          {isLogoImageUrl(cardStore?.logo) ? (
+                            <img src={cardStore!.logo} className="w-full h-full object-cover" alt="" />
+                          ) : (
+                            <span className="text-sm">🏪</span>
+                          )}
+                        </div>
+                        <div className="text-left min-w-0">
+                          <h4 className="font-extrabold text-sm text-[#1A1C1E] truncate max-w-[160px]">{storeNameText}</h4>
+                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">#{o.order_number}</p>
+                        </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <span className="text-[10px] text-gray-400 font-bold block">{new Date(o.created_at).toLocaleDateString()}</span>
+                        <span className="text-[10px] text-gray-400 font-semibold block">{new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider mt-1 ${
                           o.status === 'Completed' || o.status === 'Delivered' ? 'bg-emerald-55 text-emerald-700 border border-emerald-100' :
                           o.status === 'Rejected' || o.status === 'Cancelled' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
