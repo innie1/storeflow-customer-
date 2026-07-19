@@ -184,14 +184,30 @@ function App() {
     }
   }, [store?.id]);
 
-  useEffect(() => {
-    const rootScreens = ['home', 'explore', 'onboarding', 'login', 'location'];
-    if (rootScreens.includes(screen)) {
-      if (window.location.pathname !== '/') {
-        window.history.pushState(null, '', '/');
-      }
+  // Proper SPA navigation history: every screen change gets its own browser
+  // history entry with distinguishing state. Previously, screen changes
+  // (Home → Explore → Cart → History, etc.) never touched browser history
+  // at all — only entering a store did. That meant a swipe-back gesture had
+  // no in-app history to return to, so the browser fell through to
+  // reloading/exiting instead of going back one screen, which is exactly
+  // the "swipe back reloads the page" bug. This also replaces a previous
+  // effect that pushed '/' for every "root" screen with no state attached —
+  // that collapsed Home/Explore/Onboarding/Login/Location onto the exact
+  // same history entry, making them indistinguishable to the back button.
+  const SCREEN_PATHS: Record<string, string> = {
+    home: '/', explore: '/explore', history: '/orders', profile: '/profile',
+    tracking: '/tracking', login: '/login', location: '/location', onboarding: '/onboarding',
+  };
+  const navigateToScreen = useCallback((newScreen: typeof screen, opts?: { replace?: boolean }) => {
+    setScreen(newScreen);
+    const path = SCREEN_PATHS[newScreen] ?? window.location.pathname;
+    const state = { screen: newScreen };
+    if (opts?.replace) {
+      window.history.replaceState(state, '', path);
+    } else if (window.history.state?.screen !== newScreen) {
+      window.history.pushState(state, '', path);
     }
-  }, [screen]);
+  }, []);
 
   const toggleStoreFavorite = () => {
     if (!store?.id) return;
@@ -658,6 +674,17 @@ function App() {
     [ordersHistory]
   );
 
+  // Active orders first (Pending/Accepted/Preparing/Ready), finished orders
+  // (Completed/Cancelled/Rejected) pushed below — so an order from last week
+  // that's already done doesn't bury today's order that's still in progress.
+  // Each group keeps its own most-recent-first order from the query.
+  const ACTIVE_STATUSES = ['Pending', 'Accepted', 'Preparing', 'Ready'];
+  const sortedOrdersHistory = useMemo(() => {
+    const active = ordersHistory.filter((o: any) => ACTIVE_STATUSES.includes(o.status));
+    const finished = ordersHistory.filter((o: any) => !ACTIVE_STATUSES.includes(o.status));
+    return [...active, ...finished];
+  }, [ordersHistory]);
+
   const syncItsMeProfileWithCloud = async (user: any) => {
     if (!user) return;
     try {
@@ -899,7 +926,7 @@ function App() {
         localStorage.setItem('storeflow_cached_categories', JSON.stringify(cats));
       } else {
         console.warn(`[StoreFlow QR] Store ID: "${sid}" not found in database.`);
-        setScreen('store_not_found');
+        navigateToScreen('store_not_found');
 
         // 7. If no row is returned, print exactly why (wrong column, RLS, missing row, or filter mismatch)
         console.log(`[StoreFlow QR] Diagnostics - Why was no row returned?`);
@@ -948,7 +975,7 @@ function App() {
         setProducts([]);
         setLoading(false);
       } else {
-        setScreen('store_not_found');
+        navigateToScreen('store_not_found');
       }
     } finally {
       setLoading(false);
@@ -1066,7 +1093,17 @@ function App() {
   // ─── URL Routing / Deep Links ──────────────────────────────────────────────
 
   useEffect(() => {
-    const handleRouting = () => {
+    const handleRouting = (event?: PopStateEvent) => {
+      // If this history entry carries screen state (pushed by navigateToScreen),
+      // restore it instantly — no network call, no reload. This is what makes
+      // swipe-back feel instant instead of reloading the page.
+      const stateScreen = event?.state?.screen;
+      if (stateScreen) {
+        setScreen(stateScreen);
+        return;
+      }
+      // Otherwise this is a genuine store deep link (e.g. QR scan URL, or a
+      // history entry from before this fix shipped) — resolve it the normal way.
       const { storeId: sid, productId: pid } = parseRoute();
       if (sid) {
         setStoreId(sid);
@@ -1075,6 +1112,8 @@ function App() {
         if (pid) {
           setDeepLinkedProductId(pid);
         }
+      } else {
+        setScreen('home');
       }
     };
     window.addEventListener('popstate', handleRouting);
@@ -1200,7 +1239,7 @@ function App() {
           if (storeData) {
             setStoreId(storeData.id);
             await loadStoreDetails(storeData.id);
-            setScreen('store');
+            navigateToScreen('store');
             if (parsedProductId) {
               const { data: prodData } = await supabase
                 .from('products')
@@ -1236,7 +1275,7 @@ function App() {
             setStore(storeObj);
             setStoreId(storeObj.id);
             await loadStoreDetails(storeObj.id);
-            setScreen('store');
+            navigateToScreen('store');
             setSelectedProduct(prodDb);
             return;
           }
@@ -1498,7 +1537,7 @@ function App() {
           setProfileName(data.user.user_metadata?.full_name || '');
           setProfileEmail(data.user.email || '');
           setCustomerName(data.user.user_metadata?.full_name || '');
-          setScreen('home');
+          navigateToScreen('home');
           syncItsMeProfileWithCloud(data.user);
         }
       }
@@ -1531,7 +1570,7 @@ function App() {
           setCurrentUser(data.user);
           setProfilePhone(data.user.phone || '');
           setCustomerPhone(data.user.phone || '');
-          setScreen('home');
+          navigateToScreen('home');
           syncItsMeProfileWithCloud(data.user);
         }
       }
@@ -1545,7 +1584,7 @@ function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
-    setScreen('home');
+    navigateToScreen('home');
   };
 
   // ─── Location & Address Selector ───────────────────────────────────────────
@@ -1553,7 +1592,7 @@ function App() {
   const selectAddressAndSave = (addr: string) => {
     setSelectedAddress(addr);
     localStorage.setItem('storeflow_address', addr);
-    setScreen('home');
+    navigateToScreen('home');
   };
 
   const addNewAddress = () => {
@@ -1709,7 +1748,7 @@ function App() {
       setCheckoutStep('shopping');
       setIsCartOpen(false);
       setCart([]);
-      setScreen('tracking');
+      navigateToScreen('tracking');
       loadOrdersHistory();
 
       // Auto-save to localStorage for "It's Me" Prefill button
@@ -1951,7 +1990,7 @@ function App() {
       if (newCart.length > 0) {
         setCart(newCart);
         setIsCartOpen(true);
-        setScreen('store');
+        navigateToScreen('store');
       } else {
         alert('Could not find the products from this order in the store catalog.');
       }
@@ -2276,7 +2315,7 @@ function App() {
           <div className="absolute inset-0 bg-gradient-to-b from-[#1A1C1E]/60 via-transparent to-[#1A1C1E] pointer-events-none" />
           <header className="flex justify-between items-center w-full px-4 h-16 absolute top-0 left-0 z-20">
             <button 
-              onClick={() => setScreen('home')} 
+              onClick={() => navigateToScreen('home')} 
               className="w-11 h-11 flex items-center justify-center rounded-full bg-[#1A1C1E]/60 backdrop-blur-md border border-white/10 text-white active-scale transition-transform cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -2884,7 +2923,7 @@ function App() {
       {screen === 'onboarding' && (
         <div className="bg-[#F8F9FA] min-h-screen text-[#1A1C1E] flex flex-col justify-between p-6 max-w-md mx-auto">
           <div className="flex justify-end pt-4">
-            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); setScreen('home'); }} className="text-sm font-bold text-gray-400 hover:text-black cursor-pointer">Skip</button>
+            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); navigateToScreen('home'); }} className="text-sm font-bold text-gray-400 hover:text-black cursor-pointer">Skip</button>
           </div>
           <main className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
             <div className="space-y-2">
@@ -2903,10 +2942,10 @@ function App() {
             </div>
           </main>
           <footer className="space-y-4 pb-8">
-            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); setScreen('login'); }} className="w-full h-14 bg-[#1A1C1E] text-white font-bold rounded-xl active-scale cursor-pointer hover:bg-black transition-colors shadow-sm">
+            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); navigateToScreen('login'); }} className="w-full h-14 bg-[#1A1C1E] text-white font-bold rounded-xl active-scale cursor-pointer hover:bg-black transition-colors shadow-sm">
               Get Started
             </button>
-            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); setScreen('home'); }} className="w-full h-14 bg-white border border-gray-200 text-[#1A1C1E] font-bold rounded-xl active-scale cursor-pointer hover:bg-gray-50 transition-colors shadow-sm">
+            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); navigateToScreen('home'); }} className="w-full h-14 bg-white border border-gray-200 text-[#1A1C1E] font-bold rounded-xl active-scale cursor-pointer hover:bg-gray-50 transition-colors shadow-sm">
               Explore as Guest
             </button>
           </footer>
@@ -2917,7 +2956,7 @@ function App() {
       {screen === 'login' && (
         <div className="bg-[#F8F9FA] min-h-screen text-[#1A1C1E] p-6 flex flex-col justify-between max-w-md mx-auto relative z-10">
           <header className="h-14 flex items-center">
-            <button onClick={() => setScreen('home')} className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center cursor-pointer active-scale text-[#1A1C1E] shadow-sm">
+            <button onClick={() => navigateToScreen('home')} className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center cursor-pointer active-scale text-[#1A1C1E] shadow-sm">
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
           </header>
@@ -3029,7 +3068,7 @@ function App() {
       {screen === 'location' && (
         <div className="flex-1 p-6 flex flex-col justify-between">
           <header className="flex items-center gap-3 mb-6">
-            <button onClick={() => setScreen('home')} className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center cursor-pointer active-scale text-[#1A1C1E] shadow-sm">
+            <button onClick={() => navigateToScreen('home')} className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center cursor-pointer active-scale text-[#1A1C1E] shadow-sm">
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
             <h1 className="text-base font-black text-[#1A1C1E] tracking-tight">Delivery Address</h1>
@@ -3147,10 +3186,10 @@ function App() {
         <div className="bg-[#F8F9FA] min-h-screen text-[#1A1C1E] pb-24">
           <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md h-16 flex justify-between items-center border-b border-gray-100 px-4 md:px-gutter text-[#1A1C1E]">
             <div className="flex items-center gap-3">
-              <button onClick={() => setScreen('profile')} className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors rounded-full cursor-pointer text-[#1A1C1E]">
+              <button onClick={() => navigateToScreen('profile')} className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors rounded-full cursor-pointer text-[#1A1C1E]">
                 <span className="material-symbols-outlined text-xl">menu</span>
               </button>
-              <div onClick={() => setScreen('location')} className="flex flex-col cursor-pointer hover:opacity-85 select-none">
+              <div onClick={() => navigateToScreen('location')} className="flex flex-col cursor-pointer hover:opacity-85 select-none">
                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Deliver to</span>
                 <div className="flex items-center gap-1">
                   <span className="text-xs font-black text-[#1A1C1E]">{selectedAddress}</span>
@@ -3270,7 +3309,7 @@ function App() {
                       onClick={() => {
                         setStoreId(s.id);
                         loadStoreDetails(s.id);
-                        setScreen('store');
+                        navigateToScreen('store');
                       }}
                       className="p-4 bg-white border border-gray-100 hover:border-gray-200 rounded-[24px] flex gap-4 cursor-pointer active-scale transition-all shadow-sm"
                     >
@@ -3308,7 +3347,7 @@ function App() {
                       setStoreId(p.store_id);
                       loadStoreDetails(p.store_id);
                       setSelectedProduct(p);
-                      setScreen('store');
+                      navigateToScreen('store');
                     }}
                     className="bg-white border border-gray-100 rounded-[24px] p-3 cursor-pointer hover:border-gray-200 transition-all flex flex-col justify-between active-scale shadow-sm"
                   >
@@ -3393,7 +3432,7 @@ function App() {
                       onClick={() => {
                         setStoreId(s.id);
                         loadStoreDetails(s.id);
-                        setScreen('store');
+                        navigateToScreen('store');
                       }}
                       className="p-4 bg-white border border-gray-100 hover:border-gray-200 rounded-[24px] flex gap-4 cursor-pointer active-scale transition-all shadow-sm"
                     >
@@ -3835,7 +3874,7 @@ function App() {
           <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 px-4 text-[#1A1C1E]">
             <button 
               onClick={() => {
-                setScreen('store');
+                navigateToScreen('store');
               }} 
               className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] active:scale-95 transition cursor-pointer"
             >
@@ -3991,7 +4030,7 @@ function App() {
             <div className="space-y-3 pt-2">
               <button
                 onClick={() => {
-                  setScreen('store');
+                  navigateToScreen('store');
                 }}
                 className="w-full py-4 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl flex items-center justify-center gap-2 active:scale-98 transition shadow-lg text-sm uppercase tracking-wider cursor-pointer hover:bg-black"
               >
@@ -4001,7 +4040,7 @@ function App() {
 
               <button
                 onClick={() => {
-                  setScreen('history');
+                  navigateToScreen('history');
                   loadOrdersHistory();
                 }}
                 className="w-full py-4 bg-white border border-gray-100 text-[#1A1C1E] font-extrabold rounded-2xl flex items-center justify-between px-5 hover:bg-gray-50 cursor-pointer shadow-sm"
@@ -4037,7 +4076,7 @@ function App() {
           {/* Header */}
           <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 px-4 text-[#1A1C1E]">
             <button 
-              onClick={() => setScreen('home')} 
+              onClick={() => navigateToScreen('home')} 
               className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] active:scale-95 transition cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -4158,7 +4197,7 @@ function App() {
 
               {/* Saved list options */}
               <button 
-                onClick={() => { setScreen('history'); loadOrdersHistory(); }} 
+                onClick={() => { navigateToScreen('history'); loadOrdersHistory(); }} 
                 className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-left font-extrabold text-xs uppercase tracking-wider flex items-center justify-between cursor-pointer hover:bg-gray-50 active:scale-98 transition text-[#1A1C1E] shadow-sm"
               >
                 <span className="flex items-center gap-2">
@@ -4190,7 +4229,7 @@ function App() {
                 Log Out Account
               </button>
             ) : (
-              <button onClick={() => setScreen('login')} className="w-full h-14 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl active-scale transition cursor-pointer uppercase tracking-wider text-xs hover:bg-black">
+              <button onClick={() => navigateToScreen('login')} className="w-full h-14 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl active-scale transition cursor-pointer uppercase tracking-wider text-xs hover:bg-black">
                 Sign In / Register
               </button>
             )}
@@ -4204,7 +4243,7 @@ function App() {
           {/* Header */}
           <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 px-4 text-[#1A1C1E]">
             <button 
-              onClick={() => setScreen('home')} 
+              onClick={() => navigateToScreen('home')} 
               className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] active:scale-95 transition cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -4223,7 +4262,10 @@ function App() {
                 </p>
               </div>
             ) : (
-              ordersHistory.map((o: any) => {
+              sortedOrdersHistory.map((o: any, idx: number) => {
+                // Section divider right where active orders end and finished ones begin
+                const isFirstFinished = ACTIVE_STATUSES.includes(o.status) === false &&
+                  idx > 0 && ACTIVE_STATUSES.includes(sortedOrdersHistory[idx - 1]?.status);
                 let itemsSummary: any[] = [];
                 let paymentMethodText = 'Cash';
                 let storeNameText = 'Partner Store';
@@ -4251,7 +4293,14 @@ function App() {
                 const totalQty = itemsSummary.reduce((sum: number, item: any) => sum + Number(item.quantity || 1), 0);
 
                 return (
-                  <div key={o.id} className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                  <div key={o.id} className="space-y-4">
+                  {isFirstFinished && (
+                    <div className="flex items-center gap-3 pt-2 pb-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Order History</span>
+                      <div className="flex-1 h-px bg-gray-200" />
+                    </div>
+                  )}
+                  <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4 text-left">
                     {/* Header: Store Name & Date */}
                     <div className="flex justify-between items-start border-b border-gray-100 pb-3">
                       <div className="text-left">
@@ -4308,7 +4357,7 @@ function App() {
                           setOrderId(o.id);
                           setOrderNumber(o.order_number);
                           setOrderStatus(o.status);
-                          setScreen('tracking');
+                          navigateToScreen('tracking');
                         }}
                         className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-[#1A1C1E] rounded-xl text-center cursor-pointer uppercase tracking-wider transition shadow-sm"
                       >
@@ -4321,6 +4370,7 @@ function App() {
                         Reorder Items
                       </button>
                     </div>
+                  </div>
                   </div>
                 );
               })
@@ -4343,7 +4393,7 @@ function App() {
             </div>
             <div className="pt-2">
               <button
-                onClick={() => setScreen('home')}
+                onClick={() => navigateToScreen('home')}
                 className="w-full h-14 bg-primary text-on-primary font-bold rounded-full shadow-lg active:scale-98 hover:bg-primary/95 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-lg">home</span>
@@ -4768,7 +4818,7 @@ function App() {
                     if (firstStore) {
                       setStoreId(firstStore.id);
                       loadStoreDetails(firstStore.id);
-                      setScreen('store');
+                      navigateToScreen('store');
                       setShowQuickOrder(false);
                     }
                   }}
@@ -5067,7 +5117,7 @@ function App() {
               <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Recent Orders</h3>
-                  <button onClick={() => { setShowItsMeScreen(false); setScreen('history'); loadOrdersHistory(); }} className="text-[10px] font-black text-[#1A1C1E] cursor-pointer hover:text-gray-500">
+                  <button onClick={() => { setShowItsMeScreen(false); navigateToScreen('history'); loadOrdersHistory(); }} className="text-[10px] font-black text-[#1A1C1E] cursor-pointer hover:text-gray-500">
                     View all →
                   </button>
                 </div>
@@ -5096,7 +5146,7 @@ function App() {
                   {favStores.map(s => (
                     <div
                       key={s.id}
-                      onClick={() => { setShowItsMeScreen(false); setStoreId(s.id); loadStoreDetails(s.id); setScreen('store'); }}
+                      onClick={() => { setShowItsMeScreen(false); setStoreId(s.id); loadStoreDetails(s.id); navigateToScreen('store'); }}
                       className="flex items-center gap-3 bg-[#F8F9FA] rounded-2xl px-4 py-3 border border-gray-100 cursor-pointer hover:border-gray-200 transition"
                     >
                       <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 overflow-hidden flex items-center justify-center shrink-0">
@@ -5212,15 +5262,15 @@ function App() {
       {/* ─── Global Bottom Navigation ─── */}
       {['home', 'explore', 'store', 'tracking', 'profile', 'history'].includes(screen) && !isCartOpen && (
         <nav className="fixed bottom-0 left-0 right-0 w-full max-w-screen-xl mx-auto z-40 flex justify-around items-center px-4 py-3 bg-white shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] rounded-t-2xl border-t border-gray-100 text-[#1A1C1E]">
-          <button onClick={() => setScreen('home')} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'home' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
+          <button onClick={() => navigateToScreen('home')} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'home' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
             <span className="material-symbols-outlined text-xl">home</span>
             <span className={`text-[10px] mt-1 ${screen === 'home' ? 'font-bold' : 'font-semibold'}`}>Home</span>
           </button>
-          <button onClick={() => { setSearchQuery(''); setScreen('explore'); }} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'explore' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
+          <button onClick={() => { setSearchQuery(''); navigateToScreen('explore'); }} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'explore' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
             <span className="material-symbols-outlined text-xl">grid_view</span>
             <span className={`text-[10px] mt-1 ${screen === 'explore' ? 'font-bold' : 'font-semibold'}`}>Explore</span>
           </button>
-          <button onClick={() => { setScreen('history'); loadOrdersHistory(); }} className={`flex flex-col items-center justify-center cursor-pointer relative ${screen === 'history' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
+          <button onClick={() => { navigateToScreen('history'); loadOrdersHistory(); }} className={`flex flex-col items-center justify-center cursor-pointer relative ${screen === 'history' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
             <span className="material-symbols-outlined text-xl">receipt_long</span>
             <span className={`text-[10px] mt-1 ${screen === 'history' ? 'font-bold' : 'font-semibold'}`}>Orders</span>
             {activeOrdersCount > 0 && (
