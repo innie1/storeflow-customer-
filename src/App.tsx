@@ -128,26 +128,37 @@ function isLogoImageUrl(logo?: string | null): boolean {
 }
 
 function computeStoreOpen(s: any): boolean {
-  if (!s) return false;
-  if (s.subscription_status === 'inactive' || s.subscription_status === 'cancelled') return false;
-  const ms = s?.data?.marketplaceSettings;
-  if (!ms) return true; // merchant never configured hours — default to open
-  if (ms.storeOpen === false || ms.temporaryClosure === true || ms.temporarilyHidden === true) return false;
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  if (Array.isArray(ms.businessDays) && !ms.businessDays.includes(dayOfWeek)) return false;
-  if (ms.openingTime && ms.closingTime) {
+  // NOTE: the stores table has no "status" column — it's "subscription_status".
+  // Using store?.status here always evaluated to undefined, which made every
+  // store appear closed regardless of merchant settings.
+  if (s?.subscription_status === 'inactive' || s?.subscription_status === 'cancelled') return false;
+  
+  if (s?.data?.marketplaceSettings) {
+    const ms = s.data.marketplaceSettings;
+    if (!ms.enabled) return false;
+    if (!ms.openingTime || !ms.closingTime) return true;
+    const now = new Date();
     const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
     if (timeStr < ms.openingTime || timeStr > ms.closingTime) return false;
   }
   return true;
 }
 
+const SCREEN_PATHS: Record<string, string> = {
+  home: '/', explore: '/explore', history: '/orders', profile: '/profile',
+  tracking: '/tracking', login: '/login', location: '/location', onboarding: '/onboarding',
+};
+
 function App() {
   // Navigation & State Management
   const [screen, setScreen] = useState<'splash' | 'onboarding' | 'login' | 'location' | 'home' | 'explore' | 'store' | 'tracking' | 'profile' | 'history' | 'store_not_found'>(() => {
     const { storeId } = parseRoute();
     if (storeId) return 'store';
+
+    const path = window.location.pathname;
+    const pathToScreen = Object.entries(SCREEN_PATHS).find(([_, p]) => p === path)?.[0];
+    if (pathToScreen) return pathToScreen as any;
+
     const onboarded = localStorage.getItem('storeflow_onboarded') === 'true';
     if (onboarded) return 'home';
     return 'onboarding';
@@ -194,10 +205,6 @@ function App() {
   // effect that pushed '/' for every "root" screen with no state attached —
   // that collapsed Home/Explore/Onboarding/Login/Location onto the exact
   // same history entry, making them indistinguishable to the back button.
-  const SCREEN_PATHS: Record<string, string> = {
-    home: '/', explore: '/explore', history: '/orders', profile: '/profile',
-    tracking: '/tracking', login: '/login', location: '/location', onboarding: '/onboarding',
-  };
   const navigateToScreen = useCallback((newScreen: typeof screen, opts?: { replace?: boolean }) => {
     setScreen(newScreen);
     const path = SCREEN_PATHS[newScreen] ?? window.location.pathname;
@@ -432,9 +439,33 @@ function App() {
   const [deliveryLandmark, setDeliveryLandmark] = useState(() => localStorage.getItem('storeflow_saved_checkout_landmark') || '');
   const [specialInstructions, setSpecialInstructions] = useState(() => localStorage.getItem('storeflow_saved_checkout_notes') || '');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'opay'>(() => (localStorage.getItem('storeflow_pref_payment_method') as any) || 'cash');
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [orderNumber, setOrderNumber] = useState('');
-  const [orderStatus, setOrderStatus] = useState('Pending');
+  const [orderId, setOrderId] = useState<string | null>(() => localStorage.getItem('storeflow_tracking_order_id'));
+  const [orderNumber, setOrderNumber] = useState(() => localStorage.getItem('storeflow_tracking_order_number') || '');
+  const [orderStatus, setOrderStatus] = useState(() => localStorage.getItem('storeflow_tracking_order_status') || 'Pending');
+
+  useEffect(() => {
+    if (orderId) {
+      localStorage.setItem('storeflow_tracking_order_id', orderId);
+    } else {
+      localStorage.removeItem('storeflow_tracking_order_id');
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    if (orderNumber) {
+      localStorage.setItem('storeflow_tracking_order_number', orderNumber);
+    } else {
+      localStorage.removeItem('storeflow_tracking_order_number');
+    }
+  }, [orderNumber]);
+
+  useEffect(() => {
+    if (orderStatus) {
+      localStorage.setItem('storeflow_tracking_order_status', orderStatus);
+    } else {
+      localStorage.removeItem('storeflow_tracking_order_status');
+    }
+  }, [orderStatus]);
   const [orderCopied, setOrderCopied] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
@@ -1191,7 +1222,13 @@ function App() {
           setDeepLinkedProductId(pid);
         }
       } else {
-        setScreen('home');
+        const path = window.location.pathname;
+        const pathToScreen = Object.entries(SCREEN_PATHS).find(([_, p]) => p === path)?.[0];
+        if (pathToScreen) {
+          setScreen(pathToScreen as any);
+        } else {
+          setScreen('home');
+        }
       }
     };
     window.addEventListener('popstate', handleRouting);
