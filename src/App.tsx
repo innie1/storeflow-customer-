@@ -62,15 +62,6 @@ interface Order {
   order_items?: OrderItem[];
 }
 
-const STATUS_ORDER = ['Pending', 'Accepted', 'Preparing', 'Ready', 'Completed'];
-const isStatusAtLeast = (current: string, target: string) => {
-  const curIdx = STATUS_ORDER.indexOf(current);
-  const tgtIdx = STATUS_ORDER.indexOf(target);
-  const normCur = curIdx === -1 ? (current === 'Pending Approval' ? 0 : -1) : curIdx;
-  const normTgt = tgtIdx === -1 ? (target === 'Pending Approval' ? 0 : -1) : tgtIdx;
-  return normCur >= normTgt;
-};
-
 // ─── It'sMe Identity ─────────────────────────────────────────────────────────
 
 interface ItsMe {
@@ -4448,38 +4439,6 @@ function App() {
                 <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">credit_card</span>
                 <span className="font-black text-[11px] mt-1 capitalize truncate">{paymentMethod}</span>
                 <span className="text-[9px] text-gray-400 font-bold">Payment</span>
-              </div>
-            </div>
-
-            {/* Timeline Steps Tracker */}
-            <div className="bg-white border border-gray-100 rounded-[24px] p-5 shadow-sm space-y-6">
-              <h3 className="font-black text-sm uppercase tracking-wider text-[#1A1C1E] border-b border-gray-100 pb-2.5">Live Timeline</h3>
-              
-              <div className="relative border-l border-gray-200 ml-3.5 pl-6 space-y-6">
-                {[
-                  { key: 'Pending Approval', label: 'Order Sent & Awaiting Approval', desc: 'The merchant is verifying item stocks and pricing.' },
-                  { key: 'Preparing', label: 'Order Accepted & Packing', desc: 'Staff are packaging your items at the store counter.' },
-                  { key: 'Ready', label: deliveryType === 'delivery' ? 'Out for Delivery' : 'Ready at Counter', desc: deliveryType === 'delivery' ? 'Delivery dispatch agent is carrying your order.' : 'Visit the counter to pick up your package.' },
-                  { key: 'Completed', label: 'Completed', desc: 'Thank you for shopping with StoreFlow!' },
-                ].map((step) => {
-                  const completed = isStatusAtLeast(orderStatus, step.key);
-                  const active = orderStatus === step.key;
-                  return (
-                    <div key={step.key} className="relative">
-                      <div className={`absolute -left-[30px] top-0.5 w-4 h-4 rounded-full border-2 transition-all duration-300 ${
-                        active 
-                          ? 'bg-[#FFD23F] border-[#1A1C1E] scale-110 shadow-lg' 
-                          : completed 
-                            ? 'bg-[#1A1C1E] border-[#1A1C1E]' 
-                            : 'bg-white border-gray-200'
-                      }`} />
-                      <div className="space-y-1">
-                        <div className={`text-xs font-black ${active ? 'text-[#FFD23F]' : completed ? 'text-[#1A1C1E]' : 'text-gray-400'}`}>{step.label}</div>
-                        <div className="text-[10px] text-gray-400 leading-relaxed font-semibold">{step.desc}</div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
 
