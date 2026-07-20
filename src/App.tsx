@@ -143,21 +143,11 @@ function computeStoreOpen(s: any): boolean {
   return true;
 }
 
-const SCREEN_PATHS: Record<string, string> = {
-  home: '/', explore: '/explore', history: '/orders', profile: '/profile',
-  tracking: '/tracking', login: '/login', location: '/location', onboarding: '/onboarding',
-};
-
 function App() {
   // Navigation & State Management
   const [screen, setScreen] = useState<'splash' | 'onboarding' | 'login' | 'location' | 'home' | 'explore' | 'store' | 'tracking' | 'profile' | 'history' | 'store_not_found'>(() => {
     const { storeId } = parseRoute();
     if (storeId) return 'store';
-
-    const path = window.location.pathname;
-    const pathToScreen = Object.entries(SCREEN_PATHS).find(([_, p]) => p === path)?.[0];
-    if (pathToScreen) return pathToScreen as any;
-
     const onboarded = localStorage.getItem('storeflow_onboarded') === 'true';
     if (onboarded) return 'home';
     return 'onboarding';
@@ -187,7 +177,6 @@ function App() {
   const [userRating, setUserRating] = useState<number | null>(null);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [isStoreFavorited, setIsStoreFavorited] = useState(false);
-  const [showStoreInfoDetails, setShowStoreInfoDetails] = useState(false);
   
   useEffect(() => {
     if (store?.id) {
@@ -205,7 +194,10 @@ function App() {
   // effect that pushed '/' for every "root" screen with no state attached —
   // that collapsed Home/Explore/Onboarding/Login/Location onto the exact
   // same history entry, making them indistinguishable to the back button.
-
+  const SCREEN_PATHS: Record<string, string> = {
+    home: '/', explore: '/explore', history: '/orders', profile: '/profile',
+    tracking: '/tracking', login: '/login', location: '/location', onboarding: '/onboarding',
+  };
   const navigateToScreen = useCallback((newScreen: typeof screen, opts?: { replace?: boolean }) => {
     setScreen(newScreen);
     const path = SCREEN_PATHS[newScreen] ?? window.location.pathname;
@@ -1199,13 +1191,7 @@ function App() {
           setDeepLinkedProductId(pid);
         }
       } else {
-        const path = window.location.pathname;
-        const pathToScreen = Object.entries(SCREEN_PATHS).find(([_, p]) => p === path)?.[0];
-        if (pathToScreen) {
-          setScreen(pathToScreen as any);
-        } else {
-          setScreen('home');
-        }
+        setScreen('home');
       }
     };
     window.addEventListener('popstate', handleRouting);
@@ -2540,15 +2526,15 @@ function App() {
           <header className="flex justify-between items-center w-full px-4 h-16 absolute top-0 left-0 z-20">
             <button 
               onClick={() => navigateToScreen('home')} 
-              className="w-11 h-11 flex items-center justify-center rounded-full bg-white text-[#1A1C1E] active-scale transition-transform cursor-pointer shadow-md"
+              className="w-11 h-11 flex items-center justify-center rounded-full bg-[#1A1C1E]/60 backdrop-blur-md border border-white/10 text-white active-scale transition-transform cursor-pointer"
             >
-              <span className="material-symbols-outlined text-lg font-bold">arrow_back</span>
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
             <div className="flex items-center gap-2">
               <button 
                 onClick={toggleStoreFavorite}
-                className={`w-11 h-11 flex items-center justify-center rounded-full bg-white text-[#1A1C1E] active-scale transition-all cursor-pointer shadow-md ${
-                  isStoreFavorited ? 'text-rose-500' : 'hover:text-rose-500'
+                className={`w-11 h-11 flex items-center justify-center rounded-full bg-[#1A1C1E]/60 backdrop-blur-md border border-white/10 text-white active-scale transition-all cursor-pointer ${
+                  isStoreFavorited ? 'text-[#FFD23F]' : 'hover:text-[#FFD23F]'
                 }`}
               >
                 <span className={`material-symbols-outlined text-lg ${isStoreFavorited ? 'font-variation-fill' : ''}`} style={isStoreFavorited ? { fontVariationSettings: "'FILL' 1" } : undefined}>
@@ -2568,9 +2554,9 @@ function App() {
                     alert('Link copied to clipboard!');
                   }
                 }}
-                className="w-11 h-11 flex items-center justify-center rounded-full bg-white text-[#1A1C1E] active-scale transition-transform cursor-pointer shadow-md"
+                className="w-11 h-11 flex items-center justify-center rounded-full bg-[#1A1C1E]/60 backdrop-blur-md border border-white/10 text-white active-scale transition-transform cursor-pointer"
               >
-                <span className="material-symbols-outlined text-lg font-bold">share</span>
+                <span className="material-symbols-outlined text-lg">share</span>
               </button>
             </div>
           </header>
@@ -2603,10 +2589,31 @@ function App() {
               className="flex items-center justify-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
               title={rating ? "View Reviews" : "Rate this store"}
             >
-              <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#FFF6E9] text-[#FF8A00] text-xs font-bold transition-all shadow-sm border border-[#FFD23F]/10">
-                <span className="material-symbols-outlined text-[#FF8A00] text-sm font-variation-fill" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                <span>{rating ? `${rating.toFixed(1)} (${reviewsCount} reviews)` : 'Rate this store'}</span>
-              </div>
+              {rating ? (
+                <>
+                  <div className="flex items-center gap-0.5 text-[#FFD23F]">
+                    {Array.from({ length: 5 }).map((_, s) => {
+                      const fill = rating >= s + 1 ? 1 : rating >= s + 0.5 ? 0.5 : 0;
+                      return (
+                        <span 
+                          key={s} 
+                          className={`material-symbols-outlined text-base font-bold ${fill === 1 ? 'font-variation-fill' : ''}`}
+                          style={fill === 1 ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                        >
+                          {fill === 0.5 ? 'star_half' : 'star'}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <span className="text-xs font-black text-[#1A1C1E]">{rating.toFixed(1)}</span>
+                  <span className="text-xs text-gray-400 font-bold">({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</span>
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20 text-xs font-black hover:bg-amber-500/25 transition-all">
+                  <span className="material-symbols-outlined text-xs font-variation-fill" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                  <span>Rate this store</span>
+                </div>
+              )}
             </div>
 
             <p className="text-sm text-gray-500 font-medium max-w-sm mx-auto leading-relaxed pt-1">
@@ -2639,210 +2646,181 @@ function App() {
     const hasWebsite = !!website;
     const hasHours = !!(openingTime && closingTime);
     const hasDelivery = !!(deliveryTime || deliveryFee !== undefined);
+    const hasMinOrder = minimumOrder !== undefined;
+    const hasStoreType = !!storeType;
+    const hasProducts = numProducts > 0;
     const hasDistance = !!distance;
 
     return (
       <div className="bg-white rounded-[24px] p-5 border border-gray-100 shadow-sm text-left space-y-5 animate-fade-in">
-        {/* 2x2 Grid of Main Stats to make the page short & premium, matching the screenshot */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* Card 1: Delivery Time */}
-          <div className="bg-[#F8F9FA] border border-gray-100/50 rounded-[20px] p-4 flex items-center gap-3 shadow-sm text-left">
-            <div className="w-10 h-10 rounded-full bg-[#EAFBF3] text-[#0A9E58] flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-lg">local_shipping</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Delivery Time</p>
-              <p className="text-xs font-black text-[#1A1C1E] mt-0.5 truncate">{deliveryTime}</p>
-            </div>
-          </div>
+        <h3 className="font-extrabold text-sm uppercase tracking-wider text-gray-400">Store Information</h3>
 
-          {/* Card 2: Minimum Order */}
-          <div className="bg-[#F8F9FA] border border-gray-100/50 rounded-[20px] p-4 flex items-center gap-3 shadow-sm text-left">
-            <div className="w-10 h-10 rounded-full bg-[#EAFBF3] text-[#0A9E58] flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-lg">payments</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Minimum Order</p>
-              <p className="text-xs font-black text-[#1A1C1E] mt-0.5 truncate">
-                {minimumOrder === 0 ? 'No Minimum' : `₦${minimumOrder.toLocaleString()}`}
-              </p>
-            </div>
-          </div>
-
-          {/* Card 3: Store Type */}
-          <div className="bg-[#F8F9FA] border border-gray-100/50 rounded-[20px] p-4 flex items-center gap-3 shadow-sm text-left">
-            <div className="w-10 h-10 rounded-full bg-[#EAFBF3] text-[#0A9E58] flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-lg">storefront</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Store Type</p>
-              <p className="text-xs font-black text-[#1A1C1E] mt-0.5 truncate capitalize">{storeType}</p>
-            </div>
-          </div>
-
-          {/* Card 4: Products */}
-          <div className="bg-[#F8F9FA] border border-gray-100/50 rounded-[20px] p-4 flex items-center gap-3 shadow-sm text-left">
-            <div className="w-10 h-10 rounded-full bg-[#EAFBF3] text-[#0A9E58] flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-lg">inventory_2</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Products</p>
-              <p className="text-xs font-black text-[#1A1C1E] mt-0.5 truncate">
-                {numProducts} {numProducts === 1 ? 'product' : 'products'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Collapsible Accordion containing contact/hours/social details so the layout stays compact */}
-        <div className="pt-2 border-t border-gray-50 flex flex-col items-center">
-          <button 
-            onClick={() => setShowStoreInfoDetails(!showStoreInfoDetails)}
-            className="flex items-center gap-1 text-[10px] font-extrabold text-gray-400 hover:text-gray-600 transition-colors uppercase tracking-wider cursor-pointer"
-          >
-            <span>{showStoreInfoDetails ? 'Hide Contact & Hours' : 'Show Contact & Hours'}</span>
-            <span className="material-symbols-outlined text-sm leading-none">
-              {showStoreInfoDetails ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
-            </span>
-          </button>
-
-          {showStoreInfoDetails && (
-            <div className="w-full mt-4 space-y-4 text-xs animate-fade-in">
-              {hasAddress && (
-                <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-                  <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">location_on</span>
-                  <div className="min-w-0">
-                    <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Full Address</p>
-                    <p className="mt-0.5 leading-relaxed font-semibold text-gray-800 break-words">{address}</p>
-                  </div>
-                </div>
-              )}
-
-              {hasPhone && (
-                <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-                  <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">call</span>
-                  <div>
-                    <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Phone Number</p>
-                    <p className="mt-0.5 font-semibold text-gray-800">{phone}</p>
-                  </div>
-                </div>
-              )}
-
-              {hasEmail && (
-                <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-                  <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">mail</span>
-                  <div>
-                    <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Email Address</p>
-                    <p className="mt-0.5 font-semibold text-gray-800 break-all">{email}</p>
-                  </div>
-                </div>
-              )}
-
-              {hasWebsite && (
-                <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-                  <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">language</span>
-                  <div className="min-w-0">
-                    <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Website</p>
-                    <a 
-                      href={website.startsWith('http') ? website : 'https://' + website}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-0.5 font-semibold text-[#1A1C1E] hover:underline cursor-pointer block truncate"
-                    >
-                      {website}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {hasHours && (
-                <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-                  <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">schedule</span>
-                  <div>
-                    <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Opening Hours</p>
-                    <p className="mt-0.5 font-semibold text-[#1A1C1E]">
-                      {openingTime} – {closingTime}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {hasDelivery && (
-                <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-                  <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">local_shipping</span>
-                  <div>
-                    <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Delivery Details</p>
-                    <p className="mt-0.5 font-semibold text-gray-800">
-                      Time: {deliveryTime} | Fee: {deliveryFee === 0 ? 'Free' : '₦' + deliveryFee.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {hasDistance && (
-                <div className="flex gap-3 items-start py-0.5">
-                  <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">near_me</span>
-                  <div>
-                    <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Distance</p>
-                    <p className="mt-0.5 font-semibold text-gray-800">{distance} away from your location</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Quick Action Buttons */}
-              <div className="grid grid-cols-4 gap-2 text-[10px] font-bold text-center pt-2">
-                {hasPhone && (
-                  <a 
-                    href={'tel:' + phone}
-                    className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
-                  >
-                    <span className="material-symbols-outlined text-lg text-[#FFD23F] font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>call</span>
-                    <span>Call</span>
-                  </a>
-                )}
-                {hasPhone && (
-                  <a 
-                    href={'https://wa.me/' + phone.replace(/\D/g, '')}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
-                  >
-                    <span className="material-symbols-outlined text-lg text-emerald-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-                    <span>WhatsApp</span>
-                  </a>
-                )}
-                {hasAddress && (
-                  <a 
-                    href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
-                  >
-                    <span className="material-symbols-outlined text-lg text-sky-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>directions</span>
-                    <span>Directions</span>
-                  </a>
-                )}
-                <button 
-                  onClick={() => {
-                    if (navigator.share) {
-                      navigator.share({
-                        title: store?.business_name || 'StoreFlow Store',
-                        text: 'Shop online at ' + (store?.business_name || 'StoreFlow') + '!',
-                        url: window.location.href
-                      }).catch(() => {});
-                    } else {
-                      navigator.clipboard.writeText(window.location.href);
-                      alert('Link copied to clipboard!');
-                    }
-                  }}
-                  className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
-                >
-                  <span className="material-symbols-outlined text-lg text-amber-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>share</span>
-                  <span>Share Store</span>
-                </button>
+        <div className="space-y-4 text-xs">
+          {hasAddress && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">location_on</span>
+              <div className="min-w-0">
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Full Address</p>
+                <p className="mt-0.5 leading-relaxed font-semibold text-gray-800 break-words">{address}</p>
               </div>
             </div>
           )}
+
+          {hasPhone && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">call</span>
+              <div>
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Phone Number</p>
+                <p className="mt-0.5 font-semibold text-gray-800">{phone}</p>
+              </div>
+            </div>
+          )}
+
+          {hasEmail && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">mail</span>
+              <div>
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Email Address</p>
+                <p className="mt-0.5 font-semibold text-gray-800 break-all">{email}</p>
+              </div>
+            </div>
+          )}
+
+          {hasWebsite && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">language</span>
+              <div className="min-w-0">
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Website</p>
+                <a 
+                  href={website.startsWith('http') ? website : 'https://' + website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-0.5 font-semibold text-[#1A1C1E] hover:underline cursor-pointer block truncate"
+                >
+                  {website}
+                </a>
+              </div>
+            </div>
+          )}
+
+          {hasHours && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">schedule</span>
+              <div>
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Opening Hours</p>
+                <p className="mt-0.5 font-semibold text-[#1A1C1E]">
+                  {openingTime} – {closingTime}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {hasDelivery && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">local_shipping</span>
+              <div>
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Delivery Details</p>
+                <p className="mt-0.5 font-semibold text-gray-800">
+                  Time: {deliveryTime} | Fee: {deliveryFee === 0 ? 'Free' : '₦' + deliveryFee.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {hasMinOrder && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">payments</span>
+              <div>
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Minimum Order</p>
+                <p className="mt-0.5 font-semibold text-gray-800">
+                  {minimumOrder === 0 ? 'No Minimum' : '₦' + minimumOrder.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {hasStoreType && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">storefront</span>
+              <div>
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Store Type</p>
+                <p className="mt-0.5 font-semibold text-gray-800 capitalize">{storeType}</p>
+              </div>
+            </div>
+          )}
+
+          {hasProducts && (
+            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">inventory_2</span>
+              <div>
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Catalog Size</p>
+                <p className="mt-0.5 font-semibold text-gray-800">{numProducts} products listed</p>
+              </div>
+            </div>
+          )}
+
+          {hasDistance && (
+            <div className="flex gap-3 items-start py-0.5">
+              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">near_me</span>
+              <div>
+                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Distance</p>
+                <p className="mt-0.5 font-semibold text-gray-800">{distance} away from your location</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Quick Action Buttons */}
+        <div className="grid grid-cols-4 gap-2 text-[10px] font-bold text-center pt-2">
+          {hasPhone && (
+            <a 
+              href={'tel:' + phone}
+              className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
+            >
+              <span className="material-symbols-outlined text-lg text-[#FFD23F] font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>call</span>
+              <span>Call</span>
+            </a>
+          )}
+          {hasPhone && (
+            <a 
+              href={'https://wa.me/' + phone.replace(/\D/g, '')}
+              target="_blank"
+              rel="noreferrer"
+              className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
+            >
+              <span className="material-symbols-outlined text-lg text-emerald-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+              <span>WhatsApp</span>
+            </a>
+          )}
+          {hasAddress && (
+            <a 
+              href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address)}
+              target="_blank"
+              rel="noreferrer"
+              className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
+            >
+              <span className="material-symbols-outlined text-lg text-sky-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>directions</span>
+              <span>Directions</span>
+            </a>
+          )}
+          <button 
+            onClick={() => {
+              if (navigator.share) {
+                navigator.share({
+                  title: store?.business_name || 'StoreFlow Store',
+                  text: 'Shop online at ' + (store?.business_name || 'StoreFlow') + '!',
+                  url: window.location.href
+                }).catch(() => {});
+              } else {
+                navigator.clipboard.writeText(window.location.href);
+                alert('Link copied to clipboard!');
+              }
+            }}
+            className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
+          >
+            <span className="material-symbols-outlined text-lg text-amber-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>share</span>
+            <span>Share Store</span>
+          </button>
         </div>
       </div>
     );
@@ -2851,16 +2829,16 @@ function App() {
   const renderStoreStatus = () => {
     const status = storeStatusText; // 'Open' | 'Closed' | 'Closing Soon'
     const colorClass = status === 'Open' 
-      ? 'bg-[#EAFBF3] text-[#0A9E58] border-[#C5F3DB]' 
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
       : status === 'Closing Soon' 
-        ? 'bg-[#FFF9E6] text-[#D97706] border-[#FEF3C7]' 
-        : 'bg-[#FDF2F2] text-[#DE350B] border-[#FBD5D5]';
+        ? 'bg-amber-50 text-amber-800 border-amber-100' 
+        : 'bg-rose-50 text-rose-700 border-rose-100';
 
     const dotColor = status === 'Open' 
-      ? 'bg-[#0A9E58]' 
+      ? 'bg-emerald-500' 
       : status === 'Closing Soon' 
-        ? 'bg-[#D97706]' 
-        : 'bg-[#DE350B]';
+        ? 'bg-amber-500' 
+        : 'bg-rose-500';
 
     return (
       <div className="space-y-3">
@@ -2868,9 +2846,9 @@ function App() {
         <div className={`border px-4 py-2.5 rounded-[20px] flex items-center justify-between shadow-sm text-xs font-bold ${colorClass}`}>
           <div className="flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${dotColor} animate-pulse`} />
-            <span className="uppercase tracking-wider font-black text-[10px]">{status === 'Closed' ? 'Closed' : status === 'Closing Soon' ? 'Closing Soon' : 'Open'}</span>
+            <span className="uppercase tracking-wider font-extrabold text-[10px]">{status === 'Closed' ? 'Closed' : status === 'Closing Soon' ? 'Closing Soon' : 'Open'}</span>
           </div>
-          <span className="text-[10px] opacity-90 font-bold">
+          <span className="text-[10px] text-gray-500 font-semibold">
             {status === 'Closed' ? 'Accepting orders when open' : status === 'Closing Soon' ? 'Closing shortly' : 'Accepting orders now'}
           </span>
         </div>
@@ -3860,8 +3838,8 @@ function App() {
                           onClick={() => setSelectedCategory(cat)}
                           className={`px-4 py-2 rounded-full font-bold text-xs shrink-0 transition-all cursor-pointer shadow-sm ${
                             selectedCategory === cat
-                              ? 'bg-[#1A1C1E] text-white font-extrabold'
-                              : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
+                              ? 'bg-[#1A1C1E] text-[#FFD23F] font-black'
+                              : 'bg-white border border-gray-100 text-gray-600 hover:bg-gray-50'
                           }`}
                         >
                           {cat}
@@ -3947,48 +3925,48 @@ function App() {
                           <div
                             key={p.id}
                             onClick={() => setSelectedProduct(p)}
-                            className="bg-white border border-gray-100 rounded-[24px] p-4 flex flex-col justify-between shadow-sm relative group cursor-pointer hover:border-gray-200 transition-colors text-left"
+                            className="bg-white border border-gray-100 rounded-[24px] p-[18px] flex flex-col justify-between shadow-sm relative group cursor-pointer hover:border-gray-200 transition-colors text-left"
                           >
                             <div className="relative">
-                              <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-2xl mb-3 overflow-hidden flex items-center justify-center shrink-0">
-                                {/* Badges Container */}
-                                <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 pointer-events-none">
-                                  {isOutOfStock ? (
-                                    <span className="bg-rose-500 text-white font-extrabold text-[8px] px-1.5 py-0.5 rounded-[4px] uppercase tracking-wider shadow-sm">Sold Out</span>
-                                  ) : isLimited ? (
-                                    <span className="bg-amber-500 text-white font-extrabold text-[8px] px-1.5 py-0.5 rounded-[4px] uppercase tracking-wider shadow-sm">Limited</span>
-                                  ) : (
-                                    <span className="bg-[#0A9E58] text-white font-extrabold text-[8px] px-1.5 py-0.5 rounded-[4px] uppercase tracking-wider shadow-sm">Available</span>
-                                  )}
+                              {/* Badges Container */}
+                              <div className="absolute top-1 left-1 z-10 flex flex-col gap-1 pointer-events-none">
+                                {isOutOfStock ? (
+                                  <span className="bg-rose-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Sold Out</span>
+                                ) : isLimited ? (
+                                  <span className="bg-amber-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Limited</span>
+                                ) : (
+                                  <span className="bg-emerald-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Available</span>
+                                )}
 
-                                  {isNew && !isOutOfStock && (
-                                    <span className="bg-[#FFD23F] text-slate-950 font-extrabold text-[8px] px-1.5 py-0.5 rounded-[4px] uppercase tracking-wider shadow-sm">New</span>
-                                  )}
+                                {isNew && !isOutOfStock && (
+                                  <span className="bg-[#FFD23F] text-slate-950 font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">New</span>
+                                )}
 
-                                  {isPopular && !isOutOfStock && (
-                                    <span className="bg-indigo-500 text-white font-extrabold text-[8px] px-1.5 py-0.5 rounded-[4px] uppercase tracking-wider shadow-sm">Popular</span>
-                                  )}
+                                {isPopular && !isOutOfStock && (
+                                  <span className="bg-indigo-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Popular</span>
+                                )}
 
-                                  {hasDiscount && !isOutOfStock && (
-                                    <span className="bg-rose-500 text-white font-extrabold text-[8px] px-1.5 py-0.5 rounded-[4px] uppercase tracking-wider shadow-sm">-{discountPct}%</span>
-                                  )}
-                                </div>
+                                {hasDiscount && !isOutOfStock && (
+                                  <span className="bg-rose-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">-{discountPct}%</span>
+                                )}
+                              </div>
 
-                                {/* Favorite heart icon */}
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleFavorite(p.id);
-                                  }}
-                                  className="absolute top-2 right-2 z-10 text-gray-400 hover:text-rose-500 active:scale-90 transition-transform cursor-pointer"
-                                >
-                                  <span className={`material-symbols-outlined text-lg ${isFavorited ? 'text-rose-500 font-variation-fill' : ''}`} style={isFavorited ? { fontVariationSettings: "'FILL' 1" } : undefined}>
-                                    favorite
-                                  </span>
-                                </button>
+                              {/* Favorite heart icon */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(p.id);
+                                }}
+                                className="absolute top-1 right-1 z-10 w-7 h-7 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm cursor-pointer text-gray-400 hover:text-rose-500 transition-transform"
+                              >
+                                <span className={`material-symbols-outlined text-base ${isFavorited ? 'text-rose-500 font-variation-fill' : ''}`} style={isFavorited ? { fontVariationSettings: "'FILL' 1" } : undefined}>
+                                  favorite
+                                </span>
+                              </button>
 
+                              <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-2xl mb-4 overflow-hidden flex items-center justify-center">
                                 {p.image ? (
-                                  <img src={p.image} className="w-full h-full object-contain p-2 animate-fade-in" alt="" />
+                                  <img src={p.image} className="w-full h-full object-contain p-2" alt="" />
                                 ) : (
                                   <span className="material-symbols-outlined text-gray-300 text-3xl">image</span>
                                 )}
@@ -4169,6 +4147,20 @@ function App() {
           </header>
 
           <main className="mt-6 px-4 max-w-md mx-auto space-y-6 text-left">
+            {/* Store identity chip */}
+            {store && (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                  {isLogoImageUrl(store.logo) ? (
+                    <img src={store.logo} className="w-full h-full object-cover" alt="" />
+                  ) : (
+                    <span className="text-[10px]">🏪</span>
+                  )}
+                </div>
+                <span className="text-xs font-bold text-gray-500">{store.business_name}</span>
+              </div>
+            )}
+
             {/* Status Header Hero */}
             <div className="text-center flex flex-col items-center gap-2.5 py-4">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-1 ${
@@ -4267,6 +4259,31 @@ function App() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  );
+                })()}
+
+                {/* Fulfillment duration summary — once accepted, shows how long it took */}
+                {(() => {
+                  const historyByStatus = new Map(orderStatusHistory.map(h => [h.status, h.at]));
+                  const acceptedAt = historyByStatus.get('Accepted');
+                  const completedAt = historyByStatus.get('Completed');
+                  if (!acceptedAt) return null;
+                  const durationMs = completedAt
+                    ? new Date(completedAt).getTime() - new Date(acceptedAt).getTime()
+                    : Date.now() - new Date(acceptedAt).getTime();
+                  const mins = Math.max(1, Math.round(durationMs / 60000));
+                  return (
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+                          {completedAt ? 'Fulfillment Time' : 'Time Since Accepted'}
+                        </p>
+                        <p className="text-sm font-black text-[#1A1C1E] mt-0.5">
+                          {mins < 60 ? `${mins} minute${mins === 1 ? '' : 's'}` : `${Math.floor(mins / 60)}h ${mins % 60}m`}
+                        </p>
+                      </div>
+                      <span className="material-symbols-outlined text-gray-300 text-xl">timer</span>
                     </div>
                   );
                 })()}
@@ -5660,6 +5677,25 @@ function App() {
               <div className="text-center space-y-1.5">
                 <span className="material-symbols-outlined text-3xl text-amber-500">storefront</span>
                 <h3 className="font-black text-base text-[#1A1C1E]">Switch stores?</h3>
+                <div className="flex items-center justify-center gap-3 py-2">
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
+                      {isLogoImageUrl(currentCartStore?.logo) ? (
+                        <img src={currentCartStore!.logo} className="w-full h-full object-cover" alt="" />
+                      ) : <span className="text-sm">🏪</span>}
+                    </div>
+                    <span className="text-[9px] font-bold text-gray-400 max-w-[70px] truncate">{currentCartStore?.business_name}</span>
+                  </div>
+                  <span className="material-symbols-outlined text-gray-300 text-lg">arrow_forward</span>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
+                      {isLogoImageUrl(newProductStore?.logo) ? (
+                        <img src={newProductStore!.logo} className="w-full h-full object-cover" alt="" />
+                      ) : <span className="text-sm">🏪</span>}
+                    </div>
+                    <span className="text-[9px] font-bold text-gray-400 max-w-[70px] truncate">{newProductStore?.business_name}</span>
+                  </div>
+                </div>
                 <p className="text-xs text-gray-500 leading-relaxed">
                   Your cart has items from <span className="font-bold text-[#1A1C1E]">{currentCartStore?.business_name || 'another store'}</span>.
                   Adding this item from <span className="font-bold text-[#1A1C1E]">{newProductStore?.business_name || 'this store'}</span> will start a new cart — your current items will be cleared.
