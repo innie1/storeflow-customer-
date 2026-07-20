@@ -196,6 +196,7 @@ function App() {
   // effect that pushed '/' for every "root" screen with no state attached —
   // that collapsed Home/Explore/Onboarding/Login/Location onto the exact
   // same history entry, making them indistinguishable to the back button.
+
   const navigateToScreen = useCallback((newScreen: typeof screen, opts?: { replace?: boolean }) => {
     setScreen(newScreen);
     const path = SCREEN_PATHS[newScreen] ?? window.location.pathname;
