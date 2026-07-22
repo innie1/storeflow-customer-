@@ -208,6 +208,21 @@ function App() {
     }
   }, []);
 
+  // For in-app "back" arrows: reuse the real browser history stack instead
+  // of pushing a new forward entry. Pushing a new entry (as the Tracking
+  // screen's back arrow used to, via navigateToScreen('store')) leaves the
+  // back-stack with an extra synthetic entry that doesn't match what the
+  // user just did, so a follow-up physical/gesture back-press can land
+  // somewhere unexpected. Falls back to navigateToScreen if there's
+  // nothing to go back to (e.g. this screen was opened as a direct link).
+  const goBack = useCallback((fallbackScreen: typeof screen) => {
+    if (window.history.state?.screen) {
+      window.history.back();
+    } else {
+      navigateToScreen(fallbackScreen);
+    }
+  }, [navigateToScreen]);
+
   const toggleStoreFavorite = () => {
     if (!store?.id) return;
     const next = !isStoreFavorited;
@@ -939,8 +954,9 @@ function App() {
         // Sync browser URL to represent the active store (so refreshes work)
         const storeSlug = storeData.store_id || storeData.access_code || storeData.id;
         const targetPath = `/s/${storeSlug}`;
-        if (window.location.pathname !== targetPath) {
-          window.history.pushState(null, '', targetPath);
+        const currentState = window.history.state;
+        if (window.location.pathname !== targetPath || currentState?.screen !== 'store') {
+          window.history.replaceState({ screen: 'store' }, '', targetPath);
         }
 
         try {
@@ -1088,7 +1104,7 @@ function App() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*, order_items(*, product:products(id, name))')
+        .select('*, order_items(*)')
         .eq('customer_phone', lookupPhone)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -4220,7 +4236,7 @@ function App() {
           <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 px-4 text-[#1A1C1E]">
             <button 
               onClick={() => {
-                navigateToScreen('store');
+                goBack('store');
               }} 
               className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] active:scale-95 transition cursor-pointer"
             >
