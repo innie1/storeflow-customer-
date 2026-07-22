@@ -2146,7 +2146,11 @@ function App() {
   const handleReorder = async (order: Order) => {
     try {
       setLoading(true);
-      
+
+      // Always resolve the ORIGINAL order's store, never whatever store the
+      // customer currently has open. This guarantees a reorder reconnects to
+      // the exact same store the order was placed with.
+      let targetStore = store;
       let targetProducts = products;
       if (store?.id !== order.store_id) {
         const { data: storeData, error: storeErr } = await supabase
@@ -2155,45 +2159,74 @@ function App() {
           .eq('id', order.store_id)
           .single();
         if (storeErr) throw storeErr;
-        
+
+        // Filter to active products only, matching the same rule used
+        // everywhere else products are loaded for browsing. Previously this
+        // fetch had no filter, so a reorder could silently add a
+        // discontinued/hidden product back to the cart.
         const { data: prodData, error: prodErr } = await supabase
           .from('products')
           .select('*')
-          .eq('store_id', order.store_id);
+          .eq('store_id', order.store_id)
+          .eq('status', 'active');
         if (prodErr) throw prodErr;
-        
+
+        targetStore = storeData;
+        targetProducts = prodData || [];
         setStore(storeData);
         setStoreId(order.store_id);
-        setProducts(prodData || []);
-        targetProducts = prodData || [];
+        setProducts(targetProducts);
+      } else {
+        targetProducts = products.filter(p => p.status === 'active');
       }
-      
-      let itemsSummary = [];
-      if (order.notes) {
+
+      // Don't let a customer reorder into a store that's since closed or
+      // had its subscription cancelled — computeStoreOpen() is the same
+      // check used to gate ordering everywhere else in the app.
+      if (!computeStoreOpen(targetStore)) {
+        alert('This store is currently unavailable, so we can\'t start a reorder from it right now.');
+        return;
+      }
+
+      // Match by product_id first (from order_items — exact and immune to
+      // a product later being renamed), falling back to matching by name
+      // from notes.items_summary only for older orders that predate
+      // order_items being reliably linked. Previously this matched by name
+      // ONLY, and the order_items fallback path referenced oi.product?.name
+      // even though the query that loads order history
+      // (.select('*, order_items(*)')) never joins the product row — so
+      // that fallback always produced the literal string "Product" and
+      // could never match anything.
+      const productById = new Map(targetProducts.map(p => [p.id, p]));
+      const productByName = new Map(targetProducts.map(p => [p.name.trim().toLowerCase(), p]));
+
+      const newCart: CartItem[] = [];
+      const unavailable: string[] = [];
+
+      if (order.order_items && order.order_items.length > 0) {
+        for (const oi of order.order_items) {
+          const match = productById.get(oi.product_id);
+          if (match && match.quantity > 0) {
+            newCart.push({ product: match, quantity: oi.quantity });
+          } else {
+            unavailable.push(match?.name || 'An item from this order');
+          }
+        }
+      } else if (order.notes) {
+        let itemsSummary: any[] = [];
         try {
           const parsed = JSON.parse(order.notes);
           itemsSummary = parsed.items_summary || [];
         } catch (e) {
-          // ignore
+          // ignore malformed notes
         }
-      }
-      
-      if (itemsSummary.length === 0 && order.order_items) {
-        itemsSummary = order.order_items.map((oi: any) => ({
-          name: oi.product?.name || 'Product',
-          quantity: oi.quantity,
-          price: oi.price
-        }));
-      }
-
-      const newCart: CartItem[] = [];
-      for (const item of itemsSummary) {
-        const match = targetProducts.find(p => p.name.toLowerCase() === item.name.toLowerCase());
-        if (match) {
-          newCart.push({
-            product: match,
-            quantity: item.quantity
-          });
+        for (const item of itemsSummary) {
+          const match = productByName.get(String(item.name || '').trim().toLowerCase());
+          if (match && match.quantity > 0) {
+            newCart.push({ product: match, quantity: item.quantity });
+          } else {
+            unavailable.push(item.name || 'An item from this order');
+          }
         }
       }
 
@@ -2201,8 +2234,11 @@ function App() {
         setCart(newCart);
         setIsCartOpen(true);
         navigateToScreen('store');
+        if (unavailable.length > 0) {
+          alert(`Added ${newCart.length} item(s) back to your cart from ${targetStore?.business_name || 'this store'}. These items are no longer available and were skipped: ${unavailable.join(', ')}.`);
+        }
       } else {
-        alert('Could not find the products from this order in the store catalog.');
+        alert('None of the items from this order are currently available in the store.');
       }
     } catch (e: any) {
       alert('Failed to reorder: ' + e.message);
