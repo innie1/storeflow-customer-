@@ -1088,7 +1088,7 @@ function App() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*, order_items(*)')
+        .select('*, order_items(*, product:products(id, name))')
         .eq('customer_phone', lookupPhone)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -1738,15 +1738,19 @@ function App() {
   // ─── Cart & Checkout Calculations ──────────────────────────────────────────
 
   const addToCart = (product: Product, qty = 1) => {
+    // Cap at available stock — previously the "+" button had no ceiling at
+    // all and let a customer add more units than the store actually has.
+    const stockCap = Math.max(0, product.quantity ?? Infinity);
     setCart(prev => {
       const idx = prev.findIndex(i => i.product.id === product.id);
       if (idx !== -1) {
         const next = [...prev];
-        const nq = next[idx].quantity + qty;
+        const nq = Math.min(next[idx].quantity + qty, stockCap);
         if (nq <= 0) next.splice(idx, 1); else next[idx].quantity = nq;
         return next;
       }
-      return qty > 0 ? [...prev, { product, quantity: qty }] : prev;
+      const initialQty = Math.min(qty, stockCap);
+      return initialQty > 0 ? [...prev, { product, quantity: initialQty }] : prev;
     });
   };
 
@@ -1986,9 +1990,24 @@ function App() {
   };
 
   const queueOrderForOfflineSync = (orderPayload: any, itemsPayload: any[]) => {
-    const offlineQueue = JSON.parse(localStorage.getItem('storeflow_pending_sync_orders') || '[]');
+    let offlineQueue: any[] = [];
+    try {
+      offlineQueue = JSON.parse(localStorage.getItem('storeflow_pending_sync_orders') || '[]');
+      if (!Array.isArray(offlineQueue)) offlineQueue = [];
+    } catch (e) {
+      // Corrupted queue data — start a fresh queue rather than throwing here
+      // and losing the order this function exists to protect.
+      console.error('Offline order queue was corrupted, resetting it:', e);
+      offlineQueue = [];
+    }
     offlineQueue.push({ order: orderPayload, items: itemsPayload });
-    localStorage.setItem('storeflow_pending_sync_orders', JSON.stringify(offlineQueue));
+    try {
+      localStorage.setItem('storeflow_pending_sync_orders', JSON.stringify(offlineQueue));
+    } catch (e) {
+      // e.g. storage quota exceeded / private browsing — can't persist the
+      // queue, but don't let that crash the checkout flow either.
+      console.error('Failed to save offline order queue:', e);
+    }
   };
 
 
