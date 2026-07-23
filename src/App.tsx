@@ -478,6 +478,9 @@ function App() {
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
   const [orderStatusHistory, setOrderStatusHistory] = useState<{ status: string; at: string }[]>([]);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelOrderError, setCancelOrderError] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState<string>('');
+  const CANCEL_REASONS = ['Ordered by mistake', 'Taking too long', 'Found it cheaper elsewhere', 'Changed my mind', 'Other'];
   const [scannedStoresVersion, setScannedStoresVersion] = useState(0);
   const [pendingCrossStoreAdd, setPendingCrossStoreAdd] = useState<{ product: Product; qty: number } | null>(null);
   const [ordersHistory, setOrdersHistory] = useState<Order[]>([]);
@@ -707,44 +710,28 @@ function App() {
   // Keep the customer's own order history fresh in the background so the
   // "Orders" nav badge and statuses (accepted/rejected/preparing) update on
   // their own, without the customer needing to open the Orders tab.
+  //
+  // Previously used a Supabase Realtime channel here. Guest customers have
+  // no Supabase Auth session (no login required to check out), so once the
+  // orders table's SELECT policy was locked down to store staff only (it
+  // was previously public — any order from any customer at any store was
+  // readable by anyone with just the app's public key), Realtime silently
+  // stopped delivering anything to guest customers — no error, it just
+  // never fires, since Realtime enforces the same RLS as normal reads.
+  // Polling does the real work now; status-change notifications (which
+  // used to fire off the Realtime UPDATE payload) are detected by diffing
+  // inside loadOrdersHistory instead.
   useEffect(() => {
     const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
     if (!lookupPhone) return;
 
     loadOrdersHistory();
 
-    const ordersChannel = supabase
-      .channel('customer-orders-updates-' + lookupPhone)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `customer_phone=eq.${lookupPhone}` }, (payload: any) => {
-        loadOrdersHistory();
-        // Notify the customer when their order's status actually changes
-        if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
-          const statusLabel: Record<string, string> = {
-            Accepted: 'was accepted! 🎉',
-            Preparing: 'is being prepared 👨‍🍳',
-            Ready: 'is ready for pickup/delivery 📦',
-            Completed: 'has been completed ✅',
-            Rejected: 'was declined by the store 😔',
-            Cancelled: 'was cancelled',
-          };
-          const label = statusLabel[payload.new?.status];
-          if (label) {
-            const orderNum = payload.new?.order_number || '';
-            const message = `Order ${orderNum ? '#' + orderNum : ''} ${label}`.trim();
-            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-              try { new Notification('StoreFlow', { body: message, icon: '/icons/icon-192.png' }); } catch {}
-            }
-          }
-        }
-      })
-      .subscribe();
-
     const pollId = setInterval(() => {
       if (navigator.onLine) loadOrdersHistory();
     }, 30000);
 
     return () => {
-      supabase.removeChannel(ordersChannel);
       clearInterval(pollId);
     };
   }, [currentUser?.phone, customerPhone]);
@@ -1102,58 +1089,86 @@ function App() {
     const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
     if (!lookupPhone) return;
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*, order_items(*)')
-        .eq('customer_phone', lookupPhone)
-        .order('created_at', { ascending: false });
+      // Guest customers have no Supabase Auth session, so they can't read
+      // the orders table directly under RLS anymore (it used to be fully
+      // public, which meant anyone could read every customer's orders
+      // platform-wide). This RPC verifies the phone number server-side and
+      // returns only that customer's own orders.
+      const { data, error } = await supabase.rpc('get_customer_orders', { p_customer_phone: lookupPhone });
       if (error) throw error;
-      if (data) {
-        setOrdersHistory(data);
-        localStorage.setItem('storeflow_cached_orders_history', JSON.stringify(data));
-      }
+      const next: any[] = data || [];
+
+      // Status-change notifications previously fired off a Realtime UPDATE
+      // payload. Polling has no payload to diff against, so compare the
+      // freshly-fetched list against what's currently in state instead.
+      setOrdersHistory(prev => {
+        const prevStatusById = new Map(prev.map((o: any) => [o.id, o.status]));
+        const statusLabel: Record<string, string> = {
+          Accepted: 'was accepted! 🎉',
+          Preparing: 'is being prepared 👨‍🍳',
+          Ready: 'is ready for pickup/delivery 📦',
+          Completed: 'has been completed ✅',
+          Rejected: 'was declined by the store 😔',
+          Cancelled: 'was cancelled',
+        };
+        for (const o of next) {
+          const prevStatus = prevStatusById.get(o.id);
+          if (prevStatus && prevStatus !== o.status) {
+            const label = statusLabel[o.status];
+            if (label) {
+              const orderNum = o.order_number || '';
+              const message = `Order ${orderNum ? '#' + orderNum : ''} ${label}`.trim();
+              if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                try { new Notification('StoreFlow', { body: message, icon: '/icons/icon-192.png' }); } catch {}
+              }
+            }
+          }
+        }
+        return next;
+      });
+      localStorage.setItem('storeflow_cached_orders_history', JSON.stringify(next));
     } catch (e) {
       console.warn('Orders history loading failed:', e);
     }
   };
   loadOrdersHistoryRef.current = loadOrdersHistory;
 
-  // ─── Real-time order status tracking ────────────────────────────────────────
-
-  // Load order status initially when transitioning to tracking screen
+  // ─── Order status tracking ──────────────────────────────────────────────
+  //
+  // Previously used a direct table read plus a Supabase Realtime
+  // subscription for instant push updates. Guest customers have no
+  // Supabase Auth session, so once the orders table's SELECT policy was
+  // locked down to store staff only (it used to be fully public — any
+  // order from any customer was readable by anyone with just the app's
+  // public key), both the direct read and the Realtime channel stopped
+  // working for guest customers — Realtime enforces the same RLS as a
+  // normal read, so it just silently never fires, no error. This RPC
+  // verifies the phone number server-side; polling trades instant push for
+  // an update landing within ~20s, which is the honest cost of no longer
+  // exposing every customer's order data to anyone with the public key.
   useEffect(() => {
     if (!orderId || screen !== 'tracking' || orderId.startsWith('pending-') || orderId.startsWith('offline-')) return;
+    const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
+    if (!lookupPhone) return;
 
-    supabase
-      .from('orders')
-      .select('status, status_history')
-      .eq('id', orderId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!error && data?.status) {
-          setOrderStatus(data.status);
-          setOrderStatusHistory(data.status_history || []);
-        }
-      });
-  }, [orderId, screen]);
-
-  useEffect(() => {
-    if (!orderId || screen !== 'tracking' || orderId.startsWith('pending-') || orderId.startsWith('offline-')) return;
-
-    const channel = supabase
-      .channel('order-updates')
-      .on('postgres_changes', {
-        event: 'UPDATE', filter: `id=eq.${orderId}`, schema: 'public', table: 'orders'
-      }, (payload: any) => {
-        if (payload.new?.status) setOrderStatus(payload.new.status);
-        if (payload.new?.status_history) setOrderStatusHistory(payload.new.status_history);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+    const fetchStatus = () => {
+      supabase
+        .rpc('get_customer_order_status', { p_order_id: orderId, p_customer_phone: lookupPhone })
+        .then(({ data, error }) => {
+          if (!error && data?.status) {
+            setOrderStatus(data.status);
+            setOrderStatusHistory(data.status_history || []);
+          }
+        });
     };
-  }, [orderId, screen]);
+
+    fetchStatus();
+    const pollId = setInterval(() => {
+      if (navigator.onLine) fetchStatus();
+    }, 20000);
+
+    return () => clearInterval(pollId);
+  }, [orderId, screen, currentUser?.phone, customerPhone]);
 
   // Real-time store updates tracking
   useEffect(() => {
@@ -2128,21 +2143,22 @@ function App() {
     });
   };
 
-  const handleCancelOrder = async () => {
+  const handleCancelOrder = async (reason?: string) => {
     if (!orderId) return;
+    setCancelOrderError(null);
 
     // Guard against optimistic/offline order IDs that don't exist as a real
     // row yet. Previously this wasn't checked, so cancelling right after
     // placing an order (before the background save finished) would silently
     // no-op against a nonexistent ID.
     if (orderId.startsWith('pending-') || orderId.startsWith('offline-')) {
-      alert("This order is still syncing — please wait a few seconds and try again.");
+      setCancelOrderError('This order is still syncing — please wait a few seconds and try again.');
       return;
     }
 
     const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
     if (!lookupPhone) {
-      alert('Unable to verify your order. Please try again.');
+      setCancelOrderError('Unable to verify your order. Please try again.');
       return;
     }
 
@@ -2157,15 +2173,19 @@ function App() {
       // while the order is still Pending/Accepted.
       const { data, error } = await supabase.rpc('customer_cancel_order', {
         p_order_id: orderId,
-        p_customer_phone: lookupPhone
+        p_customer_phone: lookupPhone,
+        p_reason: reason || null
       });
       if (error) throw error;
       if (!data?.success) throw new Error('Order could not be cancelled.');
 
       setOrderStatus('Cancelled');
+      setCancelReason('');
       loadOrdersHistory();
     } catch (e: any) {
-      alert('Failed to cancel order: ' + (e.message || 'Please try again.'));
+      // Inline banner instead of alert() — matches the style already used
+      // for orderSubmitError, instead of blocking the whole screen.
+      setCancelOrderError(e.message || 'Failed to cancel order. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -2173,37 +2193,29 @@ function App() {
 
   const handleApproveChanges = async () => {
     if (!orderId) return;
+    const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
+    if (!lookupPhone) {
+      alert('Unable to verify your order. Please try again.');
+      return;
+    }
     try {
       setLoading(true);
-      const { data, error: fetchErr } = await supabase
-        .from('orders')
-        .select('notes')
-        .eq('id', orderId)
-        .single();
-      if (fetchErr) throw fetchErr;
+      // Same class of bug as the original cancel-order issue: a guest
+      // customer has no Supabase Auth session, so a direct read/update on
+      // orders was silently blocked by RLS. Uses the same phone-verified
+      // RPC pattern as customer_cancel_order.
+      const { data, error } = await supabase.rpc('customer_approve_order_changes', {
+        p_order_id: orderId,
+        p_customer_phone: lookupPhone
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error('Proposal could not be approved.');
 
-      let parsedNotes: any = {};
-      if (data?.notes) {
-        try {
-          parsedNotes = JSON.parse(data.notes);
-        } catch {
-          parsedNotes = { instructions: data.notes };
-        }
-      }
-
-      parsedNotes.customer_approved_changes = true;
-
-      const { error: updateErr } = await supabase
-        .from('orders')
-        .update({ notes: JSON.stringify(parsedNotes), updated_at: new Date().toISOString() })
-        .eq('id', orderId);
-      if (updateErr) throw updateErr;
-
-      setChangeRequestMessage(parsedNotes.change_request_message || '');
+      setChangeRequestMessage(data.change_request_message || '');
       loadOrdersHistory();
       alert('Proposal approved! The merchant has been notified.');
     } catch (e: any) {
-      alert('Failed to approve proposal: ' + e.message);
+      alert('Failed to approve proposal: ' + (e.message || 'Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -4424,7 +4436,7 @@ function App() {
                 )}
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={handleCancelOrder}
+                    onClick={() => handleCancelOrder()}
                     disabled={loading || orderSubmitting}
                     className="flex-1 py-3 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-600 font-extrabold rounded-xl transition cursor-pointer text-center uppercase tracking-wider text-xs shadow-sm"
                   >
@@ -4441,10 +4453,26 @@ function App() {
               </div>
             )}
 
+            {/* Inline cancel error banner — replaces alert(), matches the
+                style already used for orderSubmitError above so a failed
+                cancel doesn't feel like a jarring browser popup. */}
+            {cancelOrderError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-[20px] text-xs space-y-1.5 shadow-sm flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-sm font-bold shrink-0 mt-0.5">error</span>
+                <div className="flex-1">
+                  <h4 className="font-extrabold text-sm">Couldn't cancel order</h4>
+                  <p className="leading-relaxed mt-0.5">{cancelOrderError}</p>
+                </div>
+                <button onClick={() => setCancelOrderError(null)} className="shrink-0 cursor-pointer text-rose-400 hover:text-rose-600">
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              </div>
+            )}
+
             {/* General Cancel Order — customer can cancel any time before preparation starts */}
             {(orderStatus === 'Pending' || orderStatus === 'Accepted') && !orderSubmitting && (
               <button
-                onClick={() => setShowCancelConfirm(true)}
+                onClick={() => { setCancelOrderError(null); setCancelReason(''); setShowCancelConfirm(true); }}
                 className="w-full py-3 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 font-extrabold rounded-2xl transition cursor-pointer text-center uppercase tracking-wider text-xs shadow-sm flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-sm">cancel</span>
@@ -4460,9 +4488,32 @@ function App() {
                     <span className="material-symbols-outlined text-3xl text-rose-500">warning</span>
                     <h3 className="font-black text-base text-[#1A1C1E]">Cancel this order?</h3>
                     <p className="text-xs text-gray-500 leading-relaxed">
-                      This can't be undone. The store will be notified immediately.
+                      This can't be undone. The store will be notified immediately and won't prepare this order.
+                      {paymentMethod !== 'cash' && ' If you already paid online, contact the store directly using the details on this order to arrange a refund.'}
                     </p>
                   </div>
+
+                  {/* Optional cancellation reason — helps merchants see patterns
+                      in why orders get cancelled, without blocking the flow
+                      if the customer just wants to cancel quickly. */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-0.5">Reason (optional)</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {CANCEL_REASONS.map(r => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setCancelReason(prev => prev === r ? '' : r)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-colors cursor-pointer ${
+                            cancelReason === r ? 'bg-[#1A1C1E] text-white border-[#1A1C1E]' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="flex gap-2">
                     <button
                       onClick={() => setShowCancelConfirm(false)}
@@ -4471,7 +4522,7 @@ function App() {
                       Keep Order
                     </button>
                     <button
-                      onClick={() => { setShowCancelConfirm(false); handleCancelOrder(); }}
+                      onClick={() => { setShowCancelConfirm(false); handleCancelOrder(cancelReason); }}
                       disabled={loading}
                       className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider cursor-pointer disabled:opacity-60"
                     >
