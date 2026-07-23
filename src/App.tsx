@@ -2130,40 +2130,42 @@ function App() {
 
   const handleCancelOrder = async () => {
     if (!orderId) return;
+
+    // Guard against optimistic/offline order IDs that don't exist as a real
+    // row yet. Previously this wasn't checked, so cancelling right after
+    // placing an order (before the background save finished) would silently
+    // no-op against a nonexistent ID.
+    if (orderId.startsWith('pending-') || orderId.startsWith('offline-')) {
+      alert("This order is still syncing — please wait a few seconds and try again.");
+      return;
+    }
+
+    const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
+    if (!lookupPhone) {
+      alert('Unable to verify your order. Please try again.');
+      return;
+    }
+
     try {
       setLoading(true);
-      const { data, error: fetchErr } = await supabase
-        .from('orders')
-        .select('notes')
-        .eq('id', orderId)
-        .single();
-      if (fetchErr) throw fetchErr;
-
-      let parsedNotes: any = {};
-      if (data?.notes) {
-        try {
-          parsedNotes = JSON.parse(data.notes);
-        } catch {
-          parsedNotes = { instructions: data.notes };
-        }
-      }
-
-      parsedNotes.customer_cancelled = true;
-
-      const { error: updateErr } = await supabase
-        .from('orders')
-        .update({
-          status: 'Cancelled',
-          notes: JSON.stringify(parsedNotes),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId);
-      if (updateErr) throw updateErr;
+      // Customers have no Supabase Auth session tied to store_members, so a
+      // direct .update() on orders is silently blocked by RLS (0 rows
+      // affected, no error) — the previous code here had no way to detect
+      // that and would show "Cancelled" even though nothing changed in the
+      // database. This RPC runs server-side with elevated privilege but
+      // only after verifying the caller's phone matches the order, and only
+      // while the order is still Pending/Accepted.
+      const { data, error } = await supabase.rpc('customer_cancel_order', {
+        p_order_id: orderId,
+        p_customer_phone: lookupPhone
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error('Order could not be cancelled.');
 
       setOrderStatus('Cancelled');
       loadOrdersHistory();
     } catch (e: any) {
-      alert('Failed to cancel order: ' + e.message);
+      alert('Failed to cancel order: ' + (e.message || 'Please try again.'));
     } finally {
       setLoading(false);
     }
