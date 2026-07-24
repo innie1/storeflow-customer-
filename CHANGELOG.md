@@ -36,3 +36,13 @@ All notable changes to the StoreFlow Customer app are logged here.
 
 - Home screen "Your Stores" empty state: removed the black "Scan a Store QR Code" button; the white QR icon tile above it is now the single tap target (bigger, 144x144px, `active-scale` press feedback), with a looping fill/gray animation on the icon so it reads as interactive without a second button underneath.
 - Scanner: the per-frame canvas used for pixel analysis and worker decode was full camera resolution (up to 1920x1080) on every tick. Capped it to 900px on the long edge — cuts per-frame CPU cost and the data sent to the scanner worker by roughly 3-4x, with no expected loss in decode reliability at typical scan distances. See coder message for further scan-pipeline observations not yet acted on.
+
+## [2026-07-24] v1.0.4 — Native alert() replaced on reorder + profile page cleanup — 🟠 High
+
+- ⚠️ Reconciliation note: this same set of changes was pushed once already (commit d894a06) but got silently reverted when a later push (1937a51, "v1.0.3") landed on top of it from a base that predated it. Re-applied here directly on top of current `main11` HEAD so nothing gets lost this time — please make sure any local/other branches pull this before pushing again.
+- Reorder flow: replaced 3 native browser `alert()` calls (the raw "storeflow-customer.vercel.app says" popup) with an in-app styled bottom sheet (`reorderNotice` state), consistent with the rest of the app's error/warning UI. Covers: store unavailable, some items skipped, nothing available, and reorder failure.
+- Found while there: 22 other native `alert()` calls remain elsewhere in the app (signup, OTP, geolocation, rating, link-copy, etc.) — same "says" popup issue, not touched in this pass since it wasn't the ask. Flagging for a future cleanup pass.
+- Profile Hub: It'sMe identity card shrunk from a large stats-card (p-5, 56px avatar, 3-stat row) to a single compact row (p-3.5, 40px avatar) — full detail is still one tap away on the It'sMe screen.
+- It'sMe full screen: hero card avatar/padding reduced to match (80px → 56px avatar).
+- Checkout: "Fill with It'sMe" / "Same as Before" buttons were stacking vertically on mobile (`grid-cols-1 sm:grid-cols-2`, and phones never hit the `sm:` breakpoint) — now always side by side, and both shrunk (py-3.5 → py-2.5, rounded-2xl → rounded-xl).
+- Dark mode toggle: replaced the sliding switch with a moon/sun icon button — tapping swaps the icon and the mode together.
