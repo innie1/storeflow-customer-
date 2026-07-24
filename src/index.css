@@ -213,6 +213,18 @@ body {
   animation: cart-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
+/* Home "Scan a Store QR Code" tile — the QR icon quietly fills solid
+   black then eases back to gray on a loop, signalling it's tappable
+   without needing a separate button underneath it. */
+@keyframes qrFillPulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+.qr-fill-pulse-fill {
+  animation: qrFillPulse 2.6s ease-in-out infinite;
+}
+
 /* ─── Global Dark Mode Overrides ─── */
 .dark {
   background-color: #121315 !important;

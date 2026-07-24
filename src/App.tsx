@@ -480,10 +480,6 @@ function App() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelOrderError, setCancelOrderError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('');
-  // In-app replacement for the native browser alert() previously used to
-  // report reorder outcomes — that showed the raw "storeflow-customer.vercel.app
-  // says" browser dialog instead of the app's own styled UI.
-  const [reorderNotice, setReorderNotice] = useState<{ tone: 'success' | 'warning' | 'error'; title: string; message: string } | null>(null);
   const CANCEL_REASONS = ['Ordered by mistake', 'Taking too long', 'Found it cheaper elsewhere', 'Changed my mind', 'Other'];
   const [scannedStoresVersion, setScannedStoresVersion] = useState(0);
   const [pendingCrossStoreAdd, setPendingCrossStoreAdd] = useState<{ product: Product; qty: number } | null>(null);
@@ -2274,7 +2270,7 @@ function App() {
       // had its subscription cancelled — computeStoreOpen() is the same
       // check used to gate ordering everywhere else in the app.
       if (!computeStoreOpen(targetStore)) {
-        setReorderNotice({ tone: 'warning', title: 'Store unavailable', message: "This store is currently unavailable, so we can't start a reorder from it right now." });
+        alert('This store is currently unavailable, so we can\'t start a reorder from it right now.');
         return;
       }
 
@@ -2325,17 +2321,13 @@ function App() {
         setIsCartOpen(true);
         navigateToScreen('store');
         if (unavailable.length > 0) {
-          setReorderNotice({
-            tone: 'warning',
-            title: 'Some items were skipped',
-            message: `Added ${newCart.length} item(s) back to your cart from ${targetStore?.business_name || 'this store'}. These items are no longer available: ${unavailable.join(', ')}.`,
-          });
+          alert(`Added ${newCart.length} item(s) back to your cart from ${targetStore?.business_name || 'this store'}. These items are no longer available and were skipped: ${unavailable.join(', ')}.`);
         }
       } else {
-        setReorderNotice({ tone: 'error', title: 'Nothing to reorder', message: 'None of the items from this order are currently available in the store.' });
+        alert('None of the items from this order are currently available in the store.');
       }
     } catch (e: any) {
-      setReorderNotice({ tone: 'error', title: 'Reorder failed', message: e.message || 'Something went wrong while reordering. Please try again.' });
+      alert('Failed to reorder: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -4675,28 +4667,49 @@ function App() {
               }}
               className="w-full text-left"
             >
-              <div className="relative overflow-hidden bg-[#1A1C1E] border border-white/10 rounded-2xl p-3.5 shadow-md group cursor-pointer">
+              <div className="relative overflow-hidden bg-[#1A1C1E] border border-white/10 rounded-3xl p-5 shadow-lg group cursor-pointer">
                 {/* Decorative glow */}
-                <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-[#FFD23F]/10 blur-2xl pointer-events-none" />
+                <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-[#FFD23F]/10 blur-2xl pointer-events-none" />
+                <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-[#FFD23F]/5 blur-xl pointer-events-none" />
 
-                <div className="relative z-10 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
                     {/* Avatar */}
-                    <div className="w-10 h-10 rounded-xl bg-[#FFD23F]/20 border border-[#FFD23F]/30 flex items-center justify-center shrink-0 text-sm font-black text-[#FFD23F]">
+                    <div className="w-14 h-14 rounded-2xl bg-[#FFD23F]/20 border border-[#FFD23F]/30 flex items-center justify-center shrink-0 text-xl font-black text-[#FFD23F]">
                       {itsMeProfile.displayName ? itsMeProfile.displayName.charAt(0).toUpperCase() : '✦'}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[#FFD23F] font-black text-sm tracking-tight">It'sMe</span>
-                        <span className="text-[8px] bg-[#FFD23F]/15 text-[#FFD23F] border border-[#FFD23F]/25 px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider shrink-0">Identity</span>
+                    <div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[#FFD23F] font-black text-base tracking-tight">It'sMe</span>
+                        <span className="text-[9px] bg-[#FFD23F]/15 text-[#FFD23F] border border-[#FFD23F]/25 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Identity</span>
                       </div>
-                      <p className="text-white/60 text-[11px] font-semibold truncate">
+                      <p className="text-white/80 text-xs font-semibold">
                         {itsMeProfile.displayName || 'Tap to set up your identity'}
+                      </p>
+                      <p className="text-white/40 text-[10px] font-mono mt-0.5">
+                        ···{itsMeProfile.customerId.slice(-8)}
                       </p>
                     </div>
                   </div>
-                  <span className="material-symbols-outlined text-white/30 group-hover:text-[#FFD23F]/60 transition-colors text-lg shrink-0">chevron_right</span>
+                  <span className="material-symbols-outlined text-white/30 group-hover:text-[#FFD23F]/60 transition-colors text-xl">chevron_right</span>
                 </div>
+
+                <div className="relative z-10 mt-4 pt-4 border-t border-white/10 grid grid-cols-3 gap-3">
+                  <div className="text-center">
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider font-bold">Phone</p>
+                    <p className="text-[11px] text-white/70 font-bold mt-0.5 truncate">{itsMeProfile.phone || '—'}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider font-bold">Addresses</p>
+                    <p className="text-[11px] text-white/70 font-bold mt-0.5">{itsMeProfile.addresses.length || '—'}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider font-bold">Payment</p>
+                    <p className="text-[11px] text-[#FFD23F] font-bold mt-0.5 capitalize">{itsMeProfile.preferredPayment || '—'}</p>
+                  </div>
+                </div>
+
+                <p className="relative z-10 text-center text-[10px] text-white/30 font-semibold mt-3">Your secure StoreFlow identity · Tap to open</p>
               </div>
             </button>
 
@@ -4715,8 +4728,8 @@ function App() {
               {/* Dark mode toggler */}
               <div className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">{darkMode ? 'dark_mode' : 'light_mode'}</span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{darkMode ? 'Dark Mode' : 'Light Mode'}</span>
+                  <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">dark_mode</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Dark Mode Accent</span>
                 </div>
                 <button
                   onClick={() => {
@@ -4724,11 +4737,11 @@ function App() {
                     setDarkMode(newVal);
                     localStorage.setItem('storeflow_dark_mode', String(newVal));
                   }}
-                  aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                  title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                  className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer active:scale-90 transition-all focus:outline-none"
+                  className={`w-12 h-6 rounded-full p-0.5 transition-colors duration-200 ease-out focus:outline-none cursor-pointer ${darkMode ? 'bg-[#FFD23F]' : 'bg-gray-200'}`}
                 >
-                  <span className="material-symbols-outlined text-lg text-[#1A1C1E]">{darkMode ? 'light_mode' : 'dark_mode'}</span>
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-out ${darkMode ? 'translate-x-6' : 'translate-x-0'}`}
+                  />
                 </button>
               </div>
 
@@ -5154,23 +5167,26 @@ function App() {
                 </div>
 
                 {/* ─── It'sMe Prefill Button + Same as Before ─── */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     onClick={applyItsMeToCheckout}
-                    className="w-full py-2.5 px-2 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] transition-transform cursor-pointer border border-[#FFD23F]/20 hover:border-[#FFD23F]/40"
+                    className="w-full py-3.5 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-transform cursor-pointer border border-[#FFD23F]/20 hover:border-[#FFD23F]/40"
                   >
-                    <span className="text-sm">✨</span>
-                    <span className="text-[11px] truncate">Fill with It'sMe</span>
+                    <span className="text-base">✨</span>
+                    <span className="text-sm">Fill with It'sMe</span>
+                    {itsMeProfile.displayName && (
+                      <span className="text-[10px] font-semibold text-[#FFD23F]/60 hidden sm:inline">— {itsMeProfile.displayName}</span>
+                    )}
                   </button>
                   {hasSameAsBeforeData() && (
                     <button
                       onClick={applySameAsBeforeAndSubmit}
                       disabled={orderSubmitting}
-                      className="w-full py-2.5 px-2 bg-white text-[#1A1C1E] font-black rounded-xl flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] transition-transform cursor-pointer border-2 border-[#1A1C1E] disabled:opacity-60"
+                      className="w-full py-3.5 bg-white text-[#1A1C1E] font-black rounded-2xl flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-transform cursor-pointer border-2 border-[#1A1C1E] disabled:opacity-60"
                       title="Reuses your last order's address, phone, and payment method, and places the order immediately"
                     >
-                      <span className="text-sm">⚡</span>
-                      <span className="text-[11px] truncate">Same as Before</span>
+                      <span className="text-base">⚡</span>
+                      <span className="text-sm">Same as Before</span>
                     </button>
                   )}
                 </div>
@@ -5461,20 +5477,20 @@ function App() {
           <div className="overflow-y-auto flex-1 px-4 py-5 space-y-5 pb-10">
 
             {/* Identity Hero Card */}
-            <div className="relative overflow-hidden bg-[#1A1C1E] rounded-2xl p-4 shadow-md">
-              <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-[#FFD23F]/10 blur-2xl pointer-events-none" />
-              <div className="relative z-10 flex flex-col items-center text-center gap-2">
+            <div className="relative overflow-hidden bg-[#1A1C1E] rounded-3xl p-6 shadow-lg">
+              <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-[#FFD23F]/10 blur-2xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col items-center text-center gap-3">
                 {/* Avatar with Photo Upload */}
-                <div className="relative group w-14 h-14">
+                <div className="relative group w-20 h-20">
                   {itsMeProfile.profilePhoto ? (
-                    <img src={itsMeProfile.profilePhoto} className="w-14 h-14 rounded-xl object-cover border border-[#FFD23F]/30" alt="" />
+                    <img src={itsMeProfile.profilePhoto} className="w-20 h-20 rounded-2xl object-cover border border-[#FFD23F]/30" alt="" />
                   ) : (
-                    <div className="w-14 h-14 rounded-xl bg-[#FFD23F]/20 border border-[#FFD23F]/30 flex items-center justify-center text-xl font-black text-[#FFD23F]">
+                    <div className="w-20 h-20 rounded-2xl bg-[#FFD23F]/20 border border-[#FFD23F]/30 flex items-center justify-center text-3xl font-black text-[#FFD23F]">
                       {itsMeProfile.displayName ? itsMeProfile.displayName.charAt(0).toUpperCase() : '✦'}
                     </div>
                   )}
-                  <label htmlFor="itsme-photo-upload-input" className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-xl cursor-pointer transition-opacity">
-                    <span className="material-symbols-outlined text-[#FFD23F] text-base font-bold">photo_camera</span>
+                  <label htmlFor="itsme-photo-upload-input" className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-2xl cursor-pointer transition-opacity">
+                    <span className="material-symbols-outlined text-[#FFD23F] text-xl font-bold">photo_camera</span>
                   </label>
                   <input
                     type="file"
@@ -5485,25 +5501,25 @@ function App() {
                   />
                 </div>
                 <div>
-                  <div className="flex items-center justify-center gap-1.5">
-                    <span className="text-white font-black text-sm">{itsMeProfile.displayName || 'Your Name'}</span>
-                    <span className="text-[8px] bg-[#FFD23F]/15 text-[#FFD23F] border border-[#FFD23F]/25 px-1.5 py-0.5 rounded-full font-black uppercase tracking-wider">It'sMe</span>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-white font-black text-lg">{itsMeProfile.displayName || 'Your Name'}</span>
+                    <span className="text-[9px] bg-[#FFD23F]/15 text-[#FFD23F] border border-[#FFD23F]/25 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">It'sMe</span>
                   </div>
-                  <p className="text-white/40 text-[9px] font-mono mt-0.5 select-all">{itsMeProfile.customerId}</p>
+                  <p className="text-white/40 text-[10px] font-mono mt-1 select-all">{itsMeProfile.customerId}</p>
                 </div>
                 {/* Quick stats row */}
-                <div className="w-full grid grid-cols-3 gap-2 mt-1 pt-3 border-t border-white/10">
+                <div className="w-full grid grid-cols-3 gap-2 mt-2 pt-4 border-t border-white/10">
                   <div className="text-center">
-                    <p className="text-[#FFD23F] font-black text-sm">{itsMeProfile.addresses.length}</p>
-                    <p className="text-white/40 text-[8px] font-bold uppercase tracking-wider mt-0.5">Addresses</p>
+                    <p className="text-[#FFD23F] font-black text-base">{itsMeProfile.addresses.length}</p>
+                    <p className="text-white/40 text-[9px] font-bold uppercase tracking-wider mt-0.5">Addresses</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[#FFD23F] font-black text-sm">{ordersHistory.length}</p>
-                    <p className="text-white/40 text-[8px] font-bold uppercase tracking-wider mt-0.5">Orders</p>
+                    <p className="text-[#FFD23F] font-black text-base">{ordersHistory.length}</p>
+                    <p className="text-white/40 text-[9px] font-bold uppercase tracking-wider mt-0.5">Orders</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[#FFD23F] font-black text-sm capitalize">{itsMeProfile.preferredPayment.slice(0,4)}</p>
-                    <p className="text-white/40 text-[8px] font-bold uppercase tracking-wider mt-0.5">Payment</p>
+                    <p className="text-[#FFD23F] font-black text-base capitalize">{itsMeProfile.preferredPayment.slice(0,4)}</p>
+                    <p className="text-white/40 text-[9px] font-bold uppercase tracking-wider mt-0.5">Payment</p>
                   </div>
                 </div>
               </div>
@@ -5834,34 +5850,7 @@ function App() {
         );
       })()}
 
-      {/* ─── Reorder Notice Bottom Sheet ─── */}
-      {/* Replaces the native browser alert() previously used here, which
-          rendered as a raw "storeflow-customer.vercel.app says" system
-          dialog instead of matching the app's own design. */}
-      {reorderNotice && (() => {
-        const toneStyles = {
-          success: { icon: 'check_circle', iconColor: 'text-emerald-500' },
-          warning: { icon: 'info', iconColor: 'text-amber-500' },
-          error: { icon: 'error', iconColor: 'text-red-500' },
-        }[reorderNotice.tone];
-        return (
-          <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setReorderNotice(null)}>
-            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-6 space-y-4 animate-slide-up" onClick={e => e.stopPropagation()}>
-              <div className="text-center space-y-1.5">
-                <span className={`material-symbols-outlined text-3xl ${toneStyles.iconColor}`}>{toneStyles.icon}</span>
-                <h3 className="font-black text-base text-[#1A1C1E]">{reorderNotice.title}</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">{reorderNotice.message}</p>
-              </div>
-              <button
-                onClick={() => setReorderNotice(null)}
-                className="w-full py-3 bg-[#1A1C1E] hover:bg-black text-[#FFD23F] font-bold rounded-xl text-xs uppercase tracking-wider cursor-pointer active:scale-[0.98] transition-transform"
-              >
-                Got It
-              </button>
-            </div>
-          </div>
-        );
-      })()}
+      {/* ─── It'sMe Post-Order Update Prompt ─── */}
       {showItsMeUpdatePrompt && pendingItsMeUpdate && (
         <div className="absolute inset-0 z-[300] flex items-end justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-t-3xl w-full p-6 space-y-4 animate-slide-up">
