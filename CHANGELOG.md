@@ -46,3 +46,8 @@ All notable changes to the StoreFlow Customer app are logged here.
 - It'sMe full screen: hero card avatar/padding reduced to match (80px → 56px avatar).
 - Checkout: "Fill with It'sMe" / "Same as Before" buttons were stacking vertically on mobile (`grid-cols-1 sm:grid-cols-2`, and phones never hit the `sm:` breakpoint) — now always side by side, and both shrunk (py-3.5 → py-2.5, rounded-2xl → rounded-xl).
 - Dark mode toggle: replaced the sliding switch with a moon/sun icon button — tapping swaps the icon and the mode together.
+
+## [2026-07-24] v1.0.5 — Dark mode divider lines fixed — 🟢 Low
+
+- Dark mode CSS overrides recolored `border-gray-100`/`border-gray-200` but missed `border-gray-50` (Tailwind's near-white gray) — so any divider using that class stayed bright white against dark cards. Visible as two stark white lines in the Store Info card (Delivery Details / Minimum Order rows), but affects 13 spots app-wide using the same class.
+- Fixed in `src/index.css` only — one rule, no component changes needed.

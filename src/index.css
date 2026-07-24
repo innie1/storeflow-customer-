@@ -273,9 +273,15 @@ body {
   color: #9ca3af !important;
 }
 
+.dark .border-gray-50,
 .dark .border-gray-100,
 .dark .border-gray-200,
 .dark .border-outline-variant\/10 {
+  border-color: #26282b !important;
+}
+
+.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
   border-color: #26282b !important;
 }
 
