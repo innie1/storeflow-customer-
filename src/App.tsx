@@ -140,6 +140,69 @@ const SCREEN_PATHS: Record<string, string> = {
   tracking: '/tracking', login: '/login', location: '/location', onboarding: '/onboarding',
 };
 
+// ─── Shared store-products resolver (JSONB catalog OR relational table) ──
+// Many merchant stores keep their entire catalog embedded in
+// stores.data.products as JSONB and have ZERO rows in the relational
+// products table (confirmed: e.g. store "Mee" — 115 products in JSONB,
+// 0 rows in `products`). Anything that needs a store's products — not
+// just the initial store-detail load — has to check both places the
+// same way, or it silently sees an empty catalog for JSONB-only stores.
+// This was previously duplicated inline in loadStoreDetails only;
+// handleReorder queried the relational table directly and got nothing
+// back for stores like this, so reorder always reported "none of the
+// items are available" even when they were in stock.
+async function resolveStoreProducts(storeData: any): Promise<any[]> {
+  const storeUuid = storeData.id;
+  let prods: any[] = [];
+
+  if (storeData.data && Array.isArray((storeData.data as any).products)) {
+    prods = (storeData.data as any).products.map((p: any) => {
+      const whPrice = p.sellingPrice ?? p.selling_price ?? 0;
+      const isCartonSingle = p.isCartonSingleEnabled === true;
+      const rtPrice = isCartonSingle ? (p.singleSellingPrice ?? (p.singlesPerCarton ? Math.round(whPrice / p.singlesPerCarton) : whPrice)) : whPrice;
+      return {
+        id: p.id || p.productId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+        store_id: storeUuid,
+        barcode: p.barcode || '',
+        name: p.name || p.productName || 'Product',
+        description: p.description || '',
+        selling_price: whPrice,
+        wholesale_price: whPrice,
+        retail_price: rtPrice,
+        quantity: p.quantity ?? 0,
+        category: p.category || 'General',
+        image: p.image || '',
+        status: p.discontinued ? 'inactive' : 'active'
+      };
+    }).filter((p: any) => p.status === 'active');
+  }
+
+  if (prods.length === 0) {
+    const { data: prodData, error: prodErr } = await supabase
+      .from('products')
+      .select('*')
+      .eq('store_id', storeUuid)
+      .eq('status', 'active');
+    if (prodErr) throw prodErr;
+    prods = (prodData || []).map((p: any) => ({
+      ...p,
+      wholesale_price: p.wholesale_price ?? p.selling_price ?? 0,
+      retail_price: p.retail_price ?? p.selling_price ?? 0
+    }));
+  }
+
+  return prods;
+}
+
+// Columns the customer app actually needs from `stores`. Deliberately
+// excludes owner_password and other merchant-only fields — `stores` has
+// a public SELECT policy (RLS is row-level, not column-level), so a
+// bare select('*') here sends the merchant's password to every client
+// that loads a store, and (via loadStoresData) that used to get written
+// straight into localStorage for every store, on every device. Column
+// list confirmed by checking what the app actually reads off `store`.
+const STORE_PUBLIC_COLUMNS = 'id, store_id, business_name, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';
+
 function App() {
   // Navigation & State Management
   const [screen, setScreen] = useState<'splash' | 'onboarding' | 'login' | 'location' | 'home' | 'explore' | 'store' | 'tracking' | 'profile' | 'history' | 'store_not_found'>(() => {
@@ -843,7 +906,7 @@ function App() {
 
   const loadStoresData = async () => {
     try {
-      const { data, error } = await supabase.from('stores').select('*');
+      const { data, error } = await supabase.from('stores').select(STORE_PUBLIC_COLUMNS);
       if (error) throw error;
       if (data) {
         setAllStores(data);
@@ -907,9 +970,9 @@ function App() {
 
       // 5. If the URL contains SF-TTEC9S (or starts with SF-), the query must search the stores.store_id column first
       if (cleanSid.toUpperCase().startsWith('SF-')) {
-        queryUsed = `supabase.from('stores').select('*').ilike('store_id', '${cleanSid}')`;
+        queryUsed = `supabase.from('stores').select(STORE_PUBLIC_COLUMNS).ilike('store_id', '${cleanSid}')`;
         console.log(`[StoreFlow QR] Prioritizing query on stores.store_id column first: ${queryUsed}`);
-        const res = await supabase.from('stores').select('*').ilike('store_id', cleanSid).maybeSingle();
+        const res = await supabase.from('stores').select(STORE_PUBLIC_COLUMNS).ilike('store_id', cleanSid).maybeSingle();
         storeData = res.data;
         storeErr = res.error;
       }
@@ -922,9 +985,9 @@ function App() {
         } else {
           orFilter = `store_id.ilike.${cleanSid},store_id.ilike.SF-${cleanSid},access_code.ilike.${cleanSid},qr_code.ilike.%/store/${cleanSid},qr_code.ilike.%/s/${cleanSid}`;
         }
-        queryUsed = `supabase.from('stores').select('*').or('${orFilter}')`;
+        queryUsed = `supabase.from('stores').select(STORE_PUBLIC_COLUMNS).or('${orFilter}')`;
         console.log(`[StoreFlow QR] Running fallback OR query: ${queryUsed}`);
-        const res = await supabase.from('stores').select('*').or(orFilter).maybeSingle();
+        const res = await supabase.from('stores').select(STORE_PUBLIC_COLUMNS).or(orFilter).maybeSingle();
         storeData = res.data;
         storeErr = res.error;
       }
@@ -971,53 +1034,7 @@ function App() {
         const resolvedStoreUuid = storeData.id;
         console.log(`[StoreFlow QR] Store data loaded:`, storeData);
 
-        // Extract products from storeData.data.products (JSONB) or query public.products table
-        let prods: any[] = [];
-        if (storeData.data && Array.isArray((storeData.data as any).products)) {
-          console.log(`[StoreFlow QR] Extracting products from store JSONB payload...`);
-          prods = (storeData.data as any).products.map((p: any) => {
-            const whPrice = p.sellingPrice ?? p.selling_price ?? 0;
-            const isCartonSingle = p.isCartonSingleEnabled === true;
-            const rtPrice = isCartonSingle ? (p.singleSellingPrice ?? (p.singlesPerCarton ? Math.round(whPrice / p.singlesPerCarton) : whPrice)) : whPrice;
-            return {
-              id: p.id || p.productId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-              store_id: resolvedStoreUuid,
-              barcode: p.barcode || '',
-              name: p.name || p.productName || 'Product',
-              description: p.description || '',
-              selling_price: whPrice,
-              wholesale_price: whPrice,
-              retail_price: rtPrice,
-              quantity: p.quantity ?? 0,
-              category: p.category || 'General',
-              image: p.image || '',
-              status: p.discontinued ? 'inactive' : 'active'
-            };
-          }).filter((p: any) => p.status === 'active');
-          console.log(`[StoreFlow QR] Extracted ${prods.length} products from JSONB.`);
-        }
-
-        // If no products found in JSONB, attempt query on products table
-        if (prods.length === 0) {
-          console.log(`[StoreFlow QR] Querying public.products table for store UUID: "${resolvedStoreUuid}"...`);
-          const { data: prodData, error: prodErr } = await supabase
-            .from('products')
-            .select('*')
-            .eq('store_id', resolvedStoreUuid)
-            .eq('status', 'active');
-
-          if (prodErr) {
-            console.error(`[StoreFlow QR] Error querying products for store UUID: "${resolvedStoreUuid}":`, prodErr);
-            throw prodErr;
-          }
-          prods = (prodData || []).map((p: any) => ({
-            ...p,
-            wholesale_price: p.wholesale_price ?? p.selling_price ?? 0,
-            retail_price: p.retail_price ?? p.selling_price ?? 0
-          }));
-          console.log(`[StoreFlow QR] Query response from products table:`, prods);
-        }
-
+        const prods = await resolveStoreProducts(storeData);
         console.log(`[StoreFlow QR] Final products loaded successfully. Count: ${prods.length}`);
         setProducts(prods);
         localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));
@@ -1039,7 +1056,7 @@ function App() {
           // A. Test connection & check if RLS or permissions blocked the request
           const { count, error: countErr } = await supabase
             .from('stores')
-            .select('*', { count: 'exact', head: true });
+            .select('id', { count: 'exact', head: true });
 
           if (countErr) {
             console.log(` - Reason: RLS (Row Level Security) or Database Permission error. Cannot count stores. Error detail:`, countErr);
@@ -2245,24 +2262,20 @@ function App() {
       if (store?.id !== order.store_id) {
         const { data: storeData, error: storeErr } = await supabase
           .from('stores')
-          .select('*')
+          .select(STORE_PUBLIC_COLUMNS)
           .eq('id', order.store_id)
           .single();
         if (storeErr) throw storeErr;
 
-        // Filter to active products only, matching the same rule used
-        // everywhere else products are loaded for browsing. Previously this
-        // fetch had no filter, so a reorder could silently add a
-        // discontinued/hidden product back to the cart.
-        const { data: prodData, error: prodErr } = await supabase
-          .from('products')
-          .select('*')
-          .eq('store_id', order.store_id)
-          .eq('status', 'active');
-        if (prodErr) throw prodErr;
+        // Use the same JSONB-or-relational resolver store loading uses.
+        // Querying the relational products table alone (as this used to)
+        // returns nothing for stores whose entire catalog lives in
+        // stores.data.products JSONB — which is why reorder was reporting
+        // "none of the items are available" even for in-stock items.
+        const resolvedProds = await resolveStoreProducts(storeData);
 
         targetStore = storeData;
-        targetProducts = prodData || [];
+        targetProducts = resolvedProds.filter((p: any) => p.status === 'active');
         setStore(storeData);
         setStoreId(order.store_id);
         setProducts(targetProducts);
