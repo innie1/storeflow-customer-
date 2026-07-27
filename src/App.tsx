@@ -170,6 +170,7 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
         wholesale_price: whPrice,
         retail_price: rtPrice,
         quantity: p.quantity ?? 0,
+        unit: p.unit || 'pcs',
         category: p.category || 'General',
         image: p.image || '',
         status: p.discontinued ? 'inactive' : 'active'
@@ -1811,6 +1812,23 @@ function App() {
       }
       const initialQty = Math.min(qty, stockCap);
       return initialQty > 0 ? [...prev, { product, quantity: initialQty }] : prev;
+    });
+  };
+
+  // For unit-priced items (kg, liter) the customer types the amount they
+  // want directly — e.g. "3.5" kg of gas — rather than tapping +1 repeatedly.
+  // This sets the cart line to that exact amount instead of adding a delta.
+  const setCartQuantity = (product: Product, qty: number) => {
+    const stockCap = Math.max(0, product.quantity ?? Infinity);
+    const clamped = Math.max(0, Math.min(qty, stockCap));
+    setCart(prev => {
+      const idx = prev.findIndex(i => i.product.id === product.id);
+      if (idx !== -1) {
+        const next = [...prev];
+        if (clamped <= 0) next.splice(idx, 1); else next[idx].quantity = clamped;
+        return next;
+      }
+      return clamped > 0 ? [...prev, { product, quantity: clamped }] : prev;
     });
   };
 
@@ -3938,7 +3956,11 @@ function App() {
                           type="text"
                           value={searchQuery}
                           onChange={e => setSearchQuery(e.target.value)}
-                          placeholder="Search products..."
+                          placeholder={
+                            store?.data?.storeType === 'laundry' ? 'Search laundry items...'
+                            : store?.data?.storeType === 'gas_filling' ? 'Search gas & fuel...'
+                            : 'Search products...'
+                          }
                           className="bg-transparent border-none text-sm focus:ring-0 focus:outline-none w-full text-[#1A1C1E] placeholder:text-gray-400"
                         />
                         {searchQuery && (
@@ -4124,7 +4146,10 @@ function App() {
 
                             <div className="mt-4 flex items-center justify-between">
                               <div className="flex flex-col">
-                                <span className="font-black text-sm text-[#1A1C1E]">₦{getPrice(p).toLocaleString()}</span>
+                                <span className="font-black text-sm text-[#1A1C1E]">
+                                  ₦{getPrice(p).toLocaleString()}
+                                  {p.unit && p.unit !== 'pcs' && <span className="text-[9px] font-semibold text-gray-400">/{p.unit}</span>}
+                                </span>
                                 {hasDiscount && (
                                   <span className="text-[10px] text-gray-400 line-through font-medium mt-0.5">₦{Math.round(originalPrice).toLocaleString()}</span>
                                 )}
@@ -5014,7 +5039,12 @@ function App() {
               <div>
                 <h2 className="text-xl font-extrabold text-on-background font-headline-lg">{selectedProduct.name}</h2>
                 <div className="flex justify-between items-center mt-2">
-                  <span className="text-xl font-extrabold text-primary">{store?.currency || '₦'}{getPrice(selectedProduct).toLocaleString()}</span>
+                  <span className="text-xl font-extrabold text-primary">
+                    {store?.currency || '₦'}{getPrice(selectedProduct).toLocaleString()}
+                    {selectedProduct.unit && selectedProduct.unit !== 'pcs' && (
+                      <span className="text-xs font-semibold text-secondary"> / {selectedProduct.unit}</span>
+                    )}
+                  </span>
                   <span className={`text-xs font-semibold ${selectedProduct.quantity > 0 ? 'text-primary' : 'text-error'}`}>
                     {selectedProduct.quantity > 0 ? 'Available' : 'Out of Stock'}
                   </span>
@@ -5032,16 +5062,30 @@ function App() {
               {getQty(selectedProduct.id) > 0 ? (
                 <>
                   <div className="flex justify-between items-center bg-surface-container-low rounded-2xl p-2 border border-outline-variant/10">
-                    <span className="text-xs font-bold text-secondary px-2">Quantity in Cart</span>
-                    <div className="flex items-center gap-4">
-                      <button onClick={() => addToCart(selectedProduct, -1)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer border border-gray-100">
-                        <span className="material-symbols-outlined text-lg">remove</span>
-                      </button>
-                      <span className="font-extrabold text-base text-on-surface">{getQty(selectedProduct.id)}</span>
-                      <button onClick={() => addToCart(selectedProduct, 1)} className="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
-                        <span className="material-symbols-outlined text-lg">add</span>
-                      </button>
-                    </div>
+                    <span className="text-xs font-bold text-secondary px-2">
+                      {selectedProduct.unit && selectedProduct.unit !== 'pcs' ? `Amount (${selectedProduct.unit})` : 'Quantity in Cart'}
+                    </span>
+                    {selectedProduct.unit && selectedProduct.unit !== 'pcs' ? (
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step={selectedProduct.unit === 'kg' || selectedProduct.unit === 'liter' ? 0.5 : 1}
+                        value={getQty(selectedProduct.id)}
+                        onChange={e => setCartQuantity(selectedProduct, Number(e.target.value) || 0)}
+                        className="w-20 text-right font-extrabold text-base text-on-surface bg-white rounded-lg px-2 py-1.5 border border-outline-variant/20"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-4">
+                        <button onClick={() => addToCart(selectedProduct, -1)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer border border-gray-100">
+                          <span className="material-symbols-outlined text-lg">remove</span>
+                        </button>
+                        <span className="font-extrabold text-base text-on-surface">{getQty(selectedProduct.id)}</span>
+                        <button onClick={() => addToCart(selectedProduct, 1)} className="w-10 h-10 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
+                          <span className="material-symbols-outlined text-lg">add</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => {
@@ -5102,17 +5146,31 @@ function App() {
                       </div>
                       <div className="flex-1 min-w-0 text-left">
                         <h4 className="font-bold text-sm text-[#1A1C1E] truncate">{item.product.name}</h4>
-                        <span className="text-xs text-gray-400 mt-0.5 block font-semibold">₦{getPrice(item.product)} each</span>
+                        <span className="text-xs text-gray-400 mt-0.5 block font-semibold">
+                          ₦{getPrice(item.product)} {item.product.unit && item.product.unit !== 'pcs' ? `/ ${item.product.unit}` : 'each'}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-3 bg-gray-50 rounded-full p-1 border border-gray-100 shrink-0">
-                        <button onClick={() => addToCart(item.product, -1)} className="w-8 h-8 bg-white text-[#1A1C1E] rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer border border-gray-100">
-                          <span className="material-symbols-outlined text-sm font-bold">remove</span>
-                        </button>
-                        <span className="font-black text-sm text-[#1A1C1E] w-4 text-center">{item.quantity}</span>
-                        <button onClick={() => addToCart(item.product, 1)} className="w-8 h-8 bg-[#1A1C1E] text-[#FFD23F] rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
-                          <span className="material-symbols-outlined text-sm font-black">add</span>
-                        </button>
-                      </div>
+                      {item.product.unit && item.product.unit !== 'pcs' ? (
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step={0.5}
+                          value={item.quantity}
+                          onChange={e => setCartQuantity(item.product, Number(e.target.value) || 0)}
+                          className="w-16 text-right font-black text-sm text-[#1A1C1E] bg-gray-50 rounded-lg px-2 py-1.5 border border-gray-200 shrink-0"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-3 bg-gray-50 rounded-full p-1 border border-gray-100 shrink-0">
+                          <button onClick={() => addToCart(item.product, -1)} className="w-8 h-8 bg-white text-[#1A1C1E] rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer border border-gray-100">
+                            <span className="material-symbols-outlined text-sm font-bold">remove</span>
+                          </button>
+                          <span className="font-black text-sm text-[#1A1C1E] w-4 text-center">{item.quantity}</span>
+                          <button onClick={() => addToCart(item.product, 1)} className="w-8 h-8 bg-[#1A1C1E] text-[#FFD23F] rounded-full flex items-center justify-center shadow-sm active:scale-90 transition-transform cursor-pointer">
+                            <span className="material-symbols-outlined text-sm font-black">add</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
