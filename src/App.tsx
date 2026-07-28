@@ -18,6 +18,8 @@ interface Product {
   retail_price?: number;
   quantity: number;
   unit?: string;
+  isService?: boolean;
+  turnaround?: string;
   image?: string;
   status?: string;
   category?: string;
@@ -171,6 +173,8 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
         retail_price: rtPrice,
         quantity: p.quantity ?? 0,
         unit: p.unit || 'pcs',
+        isService: p.isService || false,
+        turnaround: p.turnaround || '',
         category: p.category || 'General',
         image: p.image || '',
         status: p.discontinued ? 'inactive' : 'active'
@@ -4133,6 +4137,8 @@ function App() {
                               <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-2xl mb-4 overflow-hidden flex items-center justify-center">
                                 {p.image ? (
                                   <img src={p.image} className="w-full h-full object-contain p-2" alt="" />
+                                ) : p.isService ? (
+                                  <span className="material-symbols-outlined text-gray-300 text-3xl">dry_cleaning</span>
                                 ) : (
                                   <span className="material-symbols-outlined text-gray-300 text-3xl">image</span>
                                 )}
@@ -4140,7 +4146,13 @@ function App() {
 
                               <div className="space-y-0.5">
                                 <h4 className="font-extrabold text-xs text-[#1A1C1E] truncate">{p.name}</h4>
-                                <p className="text-[10px] text-gray-400 truncate">{p.unit || p.brand || p.category || 'Product'}</p>
+                                {p.isService && p.turnaround ? (
+                                  <p className="text-[10px] text-gray-400 truncate flex items-center gap-0.5">
+                                    <span className="material-symbols-outlined text-[11px]">schedule</span> {p.turnaround}
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-gray-400 truncate">{p.unit || p.brand || p.category || 'Product'}</p>
+                                )}
                               </div>
                             </div>
 
@@ -5032,12 +5044,19 @@ function App() {
               <div className="w-full h-56 bg-surface-container-low rounded-2xl flex items-center justify-center overflow-hidden">
                 {selectedProduct.image ? (
                   <img src={selectedProduct.image} className="w-full h-full object-contain p-4" alt="" />
+                ) : selectedProduct.isService ? (
+                  <span className="text-6xl">🧺</span>
                 ) : (
                   <span className="text-6xl">📦</span>
                 )}
               </div>
               <div>
                 <h2 className="text-xl font-extrabold text-on-background font-headline-lg">{selectedProduct.name}</h2>
+                {selectedProduct.isService && selectedProduct.turnaround && (
+                  <span className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-bold">
+                    <span className="material-symbols-outlined text-sm">schedule</span> {selectedProduct.turnaround}
+                  </span>
+                )}
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-xl font-extrabold text-primary">
                     {store?.currency || '₦'}{getPrice(selectedProduct).toLocaleString()}
