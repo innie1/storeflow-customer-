@@ -545,6 +545,7 @@ function App() {
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
   const [orderStatusHistory, setOrderStatusHistory] = useState<{ status: string; at: string }[]>([]);
+  const [processingStage, setProcessingStage] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelOrderError, setCancelOrderError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('');
@@ -1184,6 +1185,12 @@ function App() {
           if (!error && data?.status) {
             setOrderStatus(data.status);
             setOrderStatusHistory(data.status_history || []);
+            try {
+              const parsedNotes = data.notes ? JSON.parse(data.notes) : null;
+              setProcessingStage(parsedNotes?.processingStage || null);
+            } catch {
+              setProcessingStage(null);
+            }
           }
         });
     };
@@ -4419,6 +4426,11 @@ function App() {
                               {reachedAt && (
                                 <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
                                   {new Date(reachedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
+                              {stage === 'Preparing' && isCurrent && processingStage && (
+                                <p className="text-[11px] text-[#1A1C1E] font-bold mt-1 inline-flex items-center gap-1 bg-[#FFD23F]/20 px-2 py-0.5 rounded-full">
+                                  🧺 {processingStage}
                                 </p>
                               )}
                             </div>
