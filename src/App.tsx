@@ -508,6 +508,8 @@ function App() {
   const [checkoutStep, setCheckoutStep] = useState<'shopping' | 'checkout' | 'payment'>('shopping');
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('storeflow_saved_checkout_name') || '');
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('storeflow_saved_checkout_phone') || '');
+  const [loyaltyBalance, setLoyaltyBalance] = useState<{ enabled: boolean; points: number; redeemThreshold: number; redeemValueNaira: number } | null>(null);
+  const [redeemLoyalty, setRedeemLoyalty] = useState(false);
   const [deliveryType, setDeliveryType] = useState<'pickup' | 'delivery'>(() => (localStorage.getItem('storeflow_pref_delivery_type') as any) || 'pickup');
   const [deliveryAddress, setDeliveryAddress] = useState(() => localStorage.getItem('storeflow_pref_address') || '');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -1278,6 +1280,18 @@ function App() {
   };
 
 
+  // Loyalty balance — fetched whenever we know both the store and a phone number
+  useEffect(() => {
+    if (!store?.id || !customerPhone) { setLoyaltyBalance(null); return; }
+    const normalized = customerPhone.replace(/\D/g, '');
+    if (!normalized) return;
+    supabase
+      .rpc('get_customer_loyalty_balance', { p_store_id: store.id, p_customer_phone: normalized })
+      .then(({ data, error }) => {
+        if (!error && data) setLoyaltyBalance(data);
+      });
+  }, [store?.id, customerPhone]);
+
   // Real-time store updates tracking
   useEffect(() => {
     if (!store?.id) return;
@@ -1981,7 +1995,9 @@ function App() {
     const finalPaymentMethod = overrides?.paymentMethod ?? paymentMethod;
     const finalSpecialInstructions = overrides?.specialInstructions ?? specialInstructions;
     const finalDeliveryFee = (finalDeliveryType === 'pickup' || subtotal === 0) ? 0 : subtotal >= 5000 ? 0 : 500;
-    const finalTotal = subtotal + finalDeliveryFee;
+    const willRedeemLoyalty = redeemLoyalty && !!loyaltyBalance?.enabled && loyaltyBalance.points >= loyaltyBalance.redeemThreshold;
+    const loyaltyDiscount = willRedeemLoyalty ? loyaltyBalance!.redeemValueNaira : 0;
+    const finalTotal = Math.max(0, subtotal + finalDeliveryFee - loyaltyDiscount);
 
     if (!finalCustomerName || !finalCustomerPhone) {
       alert('Please enter your details first.');
@@ -2011,6 +2027,7 @@ function App() {
       payment_method: finalPaymentMethod,
       instructions: finalSpecialInstructions,
       pricing_mode: priceMode,
+      loyalty_discount: loyaltyDiscount || undefined,
       // Previously omitted entirely — order history always fell back to
       // generic "Product" / "StoreFlow Partner" placeholder text because
       // there was nothing real to read. Embedding this at order time also
@@ -2092,6 +2109,17 @@ function App() {
       const orderUuid = await placeOrderWithRetry(genOrderNo, orderPayload, itemsPayload, 2);
       setOrderId(orderUuid);
       setOrderSubmitting(false);
+
+      if (willRedeemLoyalty && store?.id) {
+        const normalized = finalCustomerPhone.replace(/\D/g, '');
+        supabase.rpc('redeem_customer_loyalty', { p_store_id: store.id, p_customer_phone: normalized, p_order_id: orderUuid })
+          .then(({ data }) => {
+            if (data?.success) {
+              setLoyaltyBalance(prev => prev ? { ...prev, points: data.remainingPoints } : prev);
+            }
+          });
+        setRedeemLoyalty(false);
+      }
 
       if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
         Notification.requestPermission().catch(() => {});
@@ -3069,6 +3097,20 @@ function App() {
             <span>Share Store</span>
           </button>
         </div>
+
+        {loyaltyBalance?.enabled && (
+          <div className="mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-amber-100/60 border border-amber-200 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide">Loyalty Points</p>
+              <p className="text-sm font-black text-[#1A1C1E] mt-0.5">🪙 {loyaltyBalance.points} points</p>
+            </div>
+            <p className="text-[11px] text-amber-700 font-bold text-right max-w-[110px]">
+              {loyaltyBalance.points >= loyaltyBalance.redeemThreshold
+                ? `Ready to redeem for ₦${loyaltyBalance.redeemValueNaira.toLocaleString()} off!`
+                : `${loyaltyBalance.redeemThreshold - loyaltyBalance.points} more for ₦${loyaltyBalance.redeemValueNaira.toLocaleString()} off`}
+            </p>
+          </div>
+        )}
 
         <button
           onClick={() => { setShowTrackLookup(true); setTrackLookupMode('phone'); setTrackLookupValue(''); setTrackLookupError(''); setTrackLookupResults([]); }}
@@ -5596,6 +5638,21 @@ function App() {
                   </div>
                 </div>
 
+                {loyaltyBalance?.enabled && loyaltyBalance.points >= loyaltyBalance.redeemThreshold && (
+                  <div
+                    onClick={() => setRedeemLoyalty(v => !v)}
+                    className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center justify-between transition-all ${redeemLoyalty ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'}`}
+                  >
+                    <div>
+                      <p className="text-xs font-black text-[#1A1C1E]">🪙 Redeem {loyaltyBalance.redeemThreshold} points</p>
+                      <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Get ₦{loyaltyBalance.redeemValueNaira.toLocaleString()} off this order</p>
+                    </div>
+                    <div className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${redeemLoyalty ? 'bg-amber-500' : 'bg-gray-200'}`}>
+                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${redeemLoyalty ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-3">
                   {paymentMethodsList.map(opt => (
                     <div
@@ -5616,7 +5673,9 @@ function App() {
                   onClick={() => submitOrder()}
                   className="w-full bg-[#1A1C1E] hover:bg-black text-[#FFD23F] py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md active:scale-98 transition-all cursor-pointer"
                 >
-                  Place Order (₦{total.toLocaleString()})
+                  {redeemLoyalty && loyaltyBalance?.enabled && loyaltyBalance.points >= loyaltyBalance.redeemThreshold
+                    ? `Place Order (₦${Math.max(0, total - loyaltyBalance.redeemValueNaira).toLocaleString()})`
+                    : `Place Order (₦${total.toLocaleString()})`}
                 </button>
               </div>
             )}
