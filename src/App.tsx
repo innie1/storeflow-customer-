@@ -518,6 +518,15 @@ function App() {
   const [orderNumber, setOrderNumber] = useState(() => localStorage.getItem('storeflow_tracking_order_number') || '');
   const [orderStatus, setOrderStatus] = useState(() => localStorage.getItem('storeflow_tracking_order_status') || 'Pending');
 
+  // Guest order lookup — for someone tracking an order with no local history
+  // on this device (fresh scan, borrowed phone, etc.)
+  const [showTrackLookup, setShowTrackLookup] = useState(false);
+  const [trackLookupMode, setTrackLookupMode] = useState<'phone' | 'code'>('phone');
+  const [trackLookupValue, setTrackLookupValue] = useState('');
+  const [trackLookupError, setTrackLookupError] = useState('');
+  const [trackLookupLoading, setTrackLookupLoading] = useState(false);
+  const [trackLookupResults, setTrackLookupResults] = useState<any[]>([]);
+
   useEffect(() => {
     if (orderId) {
       localStorage.setItem('storeflow_tracking_order_id', orderId);
@@ -1202,6 +1211,72 @@ function App() {
 
     return () => clearInterval(pollId);
   }, [orderId, screen, currentUser?.phone, customerPhone]);
+
+  // Guest order lookup — "Track an Order" with no local history required.
+  // Phone path reuses the existing get_customer_orders RPC (already
+  // SECURITY DEFINER, already scoped to the phone number) and just filters
+  // client-side to this store. Code path uses a new store-scoped RPC since
+  // order_number alone isn't guaranteed globally unique.
+  const openOrderFromLookup = (o: any) => {
+    setOrderId(o.id);
+    setOrderNumber(o.order_number || '');
+    setOrderStatus(o.status || 'Pending');
+    setOrderStatusHistory(o.status_history || []);
+    try {
+      const parsedNotes = o.notes ? JSON.parse(o.notes) : null;
+      setProcessingStage(parsedNotes?.processingStage || null);
+    } catch {
+      setProcessingStage(null);
+    }
+    if (o.customer_phone) setCustomerPhone(o.customer_phone);
+    localStorage.setItem('storeflow_tracking_order_id', o.id);
+    localStorage.setItem('storeflow_tracking_order_number', o.order_number || '');
+    localStorage.setItem('storeflow_tracking_order_status', o.status || 'Pending');
+    setShowTrackLookup(false);
+    setTrackLookupResults([]);
+    setTrackLookupValue('');
+    navigateToScreen('tracking');
+  };
+
+  const runTrackLookup = async () => {
+    const value = trackLookupValue.trim();
+    setTrackLookupError('');
+    if (!value) return;
+    if (!store?.id) {
+      setTrackLookupError("Couldn't identify this store — try rescanning the QR code.");
+      return;
+    }
+    setTrackLookupLoading(true);
+    try {
+      if (trackLookupMode === 'phone') {
+        const normalized = value.replace(/\D/g, '');
+        const { data, error } = await supabase.rpc('get_customer_orders', { p_customer_phone: normalized });
+        if (error) throw error;
+        const matches = (data || []).filter((o: any) => o.store_id === store.id);
+        if (matches.length === 0) {
+          setTrackLookupError("No orders found for that phone number at this store.");
+        } else if (matches.length === 1) {
+          openOrderFromLookup(matches[0]);
+        } else {
+          setTrackLookupResults(matches);
+        }
+      } else {
+        const code = value.toUpperCase();
+        const { data, error } = await supabase.rpc('get_order_by_number', { p_store_id: store.id, p_order_number: code });
+        if (error) throw error;
+        if (!data) {
+          setTrackLookupError("No order found with that code at this store.");
+        } else {
+          openOrderFromLookup(data);
+        }
+      }
+    } catch {
+      setTrackLookupError("Couldn't look that up right now — check your connection and try again.");
+    } finally {
+      setTrackLookupLoading(false);
+    }
+  };
+
 
   // Real-time store updates tracking
   useEffect(() => {
@@ -2994,6 +3069,14 @@ function App() {
             <span>Share Store</span>
           </button>
         </div>
+
+        <button
+          onClick={() => { setShowTrackLookup(true); setTrackLookupMode('phone'); setTrackLookupValue(''); setTrackLookupError(''); setTrackLookupResults([]); }}
+          className="w-full mt-3 py-3 rounded-2xl bg-[#1A1C1E] text-white font-black text-xs uppercase tracking-wide flex items-center justify-center gap-2 active-scale cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-base">receipt_long</span>
+          Track an Order
+        </button>
       </div>
     );
   };
@@ -4313,6 +4396,71 @@ function App() {
 
           {/* Ratings overlay popup */}
           {renderReviewsModal()}
+
+          {/* Track an Order — guest lookup, no local history needed */}
+          {showTrackLookup && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
+              <div className="w-full sm:max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-5 pb-8 sm:pb-5">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-base font-black text-[#1A1C1E]">Track an Order</h3>
+                  <button onClick={() => setShowTrackLookup(false)} className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100">
+                    <span className="material-symbols-outlined text-lg">close</span>
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mb-4">No account needed — just your phone number or order code.</p>
+
+                <div className="flex bg-gray-100 rounded-xl p-1 mb-3">
+                  <button
+                    onClick={() => { setTrackLookupMode('phone'); setTrackLookupError(''); setTrackLookupResults([]); }}
+                    className={`flex-1 py-2 rounded-lg text-xs font-black transition ${trackLookupMode === 'phone' ? 'bg-white shadow-sm text-[#1A1C1E]' : 'text-gray-400'}`}
+                  >
+                    Phone Number
+                  </button>
+                  <button
+                    onClick={() => { setTrackLookupMode('code'); setTrackLookupError(''); setTrackLookupResults([]); }}
+                    className={`flex-1 py-2 rounded-lg text-xs font-black transition ${trackLookupMode === 'code' ? 'bg-white shadow-sm text-[#1A1C1E]' : 'text-gray-400'}`}
+                  >
+                    Order Code
+                  </button>
+                </div>
+
+                <input
+                  value={trackLookupValue}
+                  onChange={e => setTrackLookupValue(trackLookupMode === 'phone' ? e.target.value.replace(/[^0-9+]/g, '') : e.target.value)}
+                  placeholder={trackLookupMode === 'phone' ? 'e.g. 08012345678' : 'e.g. SF-4821'}
+                  inputMode={trackLookupMode === 'phone' ? 'tel' : 'text'}
+                  autoFocus
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold placeholder:font-medium placeholder:text-gray-300 focus:outline-none focus:border-[#1A1C1E]"
+                />
+
+                {trackLookupError && <p className="text-xs text-red-500 font-semibold mt-2">{trackLookupError}</p>}
+
+                {trackLookupResults.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[11px] text-gray-500 font-bold">Multiple orders found — pick one:</p>
+                    {trackLookupResults.map((o: any) => (
+                      <button
+                        key={o.id}
+                        onClick={() => openOrderFromLookup(o)}
+                        className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50 text-left"
+                      >
+                        <span className="text-xs font-black text-[#1A1C1E]">#{o.order_number}</span>
+                        <span className="text-[11px] text-gray-400 font-bold">{o.status}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={runTrackLookup}
+                  disabled={!trackLookupValue.trim() || trackLookupLoading}
+                  className="w-full mt-4 py-3.5 rounded-xl bg-[#1A1C1E] text-white font-black text-xs uppercase tracking-wide disabled:opacity-40"
+                >
+                  {trackLookupLoading ? 'Looking up…' : 'Track Order'}
+                </button>
+              </div>
+            </div>
+          )}
 
         </div>
       )}
