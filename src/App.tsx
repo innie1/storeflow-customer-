@@ -4631,6 +4631,21 @@ function App() {
               </div>
             )}
 
+            {/* Message the store about this specific order — no need to search for a number */}
+            {store?.phone && (
+              <a
+                href={`https://wa.me/${store.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                  `Hi, I'm checking on my order${orderNumber ? ` #${orderNumber}` : ''} at ${store.business_name}. Current status: ${orderStatus}${processingStage ? ` (${processingStage})` : ''}. Could you give me an update?`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-[#25D366]/10 border border-[#25D366]/30 text-[#128C4A] font-black text-xs uppercase tracking-wide active-scale"
+              >
+                <span className="material-symbols-outlined text-base">chat</span>
+                Message {store.business_name} on WhatsApp
+              </a>
+            )}
+
             {/* Rejection Notice Banner */}
             {orderStatus === 'Rejected' && (
               <div className="bg-rose-50 border border-rose-150 text-rose-800 p-4 rounded-[20px] text-xs space-y-1.5 shadow-sm">
