@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import { parseRoute, parseQRCode } from './router';
-import { subscribeUserToPush } from './utils/pushNotifications';
+import { subscribeUserToPush, showSystemNotification } from './utils/pushNotifications';
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -736,9 +736,7 @@ function App() {
   // lightweight in-app notice instead when one is available, falling back
   // to alert() only if truly nothing else is wired up.
   const showLocalNotice = (msg: string) => {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      try { new Notification('StoreFlow', { body: msg }); return; } catch {}
-    }
+    showSystemNotification('StoreFlow', { body: msg });
     console.log('[StoreFlow]', msg);
   };
 
@@ -1157,9 +1155,11 @@ function App() {
             if (label) {
               const orderNum = o.order_number || '';
               const message = `Order ${orderNum ? '#' + orderNum : ''} ${label}`.trim();
-              if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                try { new Notification('StoreFlow', { body: message, icon: '/icons/icon-192.png' }); } catch {}
-              }
+              showSystemNotification('StoreFlow Order Update', {
+                body: message,
+                icon: '/logo.jpg',
+                tag: `order-${o.id}-${o.status}`,
+              });
             }
           }
         }

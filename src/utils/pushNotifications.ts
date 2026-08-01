@@ -106,3 +106,40 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
     return false;
   }
 }
+
+/**
+ * Display a background-safe system notification via Service Worker registration if available
+ * (This works when the app is in the background, minimized, or closed!)
+ */
+export async function showSystemNotification(title: string, options: NotificationOptions = {}): Promise<void> {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    return;
+  }
+
+  const defaultOptions: NotificationOptions = {
+    icon: '/logo.jpg',
+    badge: '/logo.jpg',
+    data: { url: '/' },
+    ...options,
+  };
+
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      if (registration && registration.showNotification) {
+        await registration.showNotification(title, defaultOptions);
+        return;
+      }
+    } catch (err) {
+      console.warn('[Push] Service worker showNotification fallback:', err);
+    }
+  }
+
+  // Fallback to standard Notification if SW is not ready
+  try {
+    new Notification(title, defaultOptions);
+  } catch (err) {
+    console.warn('[Push] Standard notification failed:', err);
+  }
+}
+
