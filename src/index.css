@@ -391,3 +391,43 @@ body {
   background: linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%);
   border-radius: 999px;
 }
+
+/* QR code smooth gray-to-black cycling animation for empty state */
+@keyframes qrGrayToBlack {
+  0%, 100% {
+    color: #e5e7eb;
+    transform: scale(0.96);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.02));
+  }
+  50% {
+    color: #1a1c1e;
+    transform: scale(1.04);
+    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.12));
+  }
+}
+
+.animate-qr-gray-black {
+  animation: qrGrayToBlack 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes scanBeam {
+  0% {
+    top: 12%;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.85;
+  }
+  80% {
+    opacity: 0.85;
+  }
+  100% {
+    top: 88%;
+    opacity: 0;
+  }
+}
+
+.animate-scan-beam {
+  animation: scanBeam 2.6s ease-in-out infinite alternate;
+}
+

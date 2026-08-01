@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import { parseRoute, parseQRCode } from './router';
+import { subscribeUserToPush } from './utils/pushNotifications';
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -2129,9 +2130,8 @@ function App() {
         setRedeemLoyalty(false);
       }
 
-      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-        Notification.requestPermission().catch(() => {});
-      }
+      // Register background Web Push subscription (works even when app/tab is closed!)
+      subscribeUserToPush(customerPhone || customerName).catch(() => {});
 
       // Fire-and-forget — the merchant notification doesn't need to block
       // anything on the customer's side, and previously it did.
@@ -3831,19 +3831,26 @@ function App() {
 
               {searchedStores.length === 0 ? (
                 /* Empty state — no stores scanned yet */
-                <div className="flex flex-col items-center justify-center py-14 text-center space-y-5">
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-5">
                   <button
                     onClick={startScanner}
                     aria-label="Scan a Store QR Code"
                     title="Scan a Store QR Code"
-                    className="w-36 h-36 bg-white border border-gray-100 rounded-[32px] flex items-center justify-center shadow-sm cursor-pointer active-scale hover:border-gray-200 hover:shadow-md transition-all"
+                    className="relative w-44 h-44 sm:w-48 sm:h-48 bg-white border border-gray-100/90 rounded-[40px] flex items-center justify-center shadow-sm cursor-pointer active-scale hover:border-amber-300 hover:shadow-lg transition-all duration-300 group overflow-hidden"
                   >
-                    <span className="relative inline-flex items-center justify-center w-16 h-16">
-                      <span className="material-symbols-outlined text-6xl text-gray-300 qr-fill-pulse-base">qr_code_2</span>
-                      <span className="material-symbols-outlined text-6xl text-[#1A1C1E] absolute inset-0 flex items-center justify-center qr-fill-pulse-fill" style={{ fontVariationSettings: "'FILL' 1" }}>qr_code_2</span>
+                    {/* Soft ambient background glow */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 via-transparent to-black/5 opacity-40 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                    
+                    {/* Animated scanning beam */}
+                    <div className="absolute inset-x-5 h-[2.5px] bg-gradient-to-r from-transparent via-[#FFD23F] to-transparent animate-scan-beam pointer-events-none opacity-80 z-10 shadow-[0_0_8px_#FFD23F]" />
+                    
+                    {/* Large animated QR Code icon */}
+                    <span className="material-symbols-outlined text-[96px] sm:text-[110px] animate-qr-gray-black select-none pointer-events-none transition-transform duration-300 leading-none">
+                      qr_code_2
                     </span>
                   </button>
-                  <div className="space-y-1.5 max-w-[220px]">
+
+                  <div className="space-y-1.5 max-w-[240px]">
                     <h3 className="text-base font-black text-[#1A1C1E]">No stores yet</h3>
                     <p className="text-xs text-gray-400 font-semibold leading-relaxed">Tap the QR icon above, or scan a store's QR code or barcode to instantly open their store profile and start shopping.</p>
                   </div>

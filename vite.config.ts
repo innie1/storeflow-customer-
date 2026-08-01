@@ -9,6 +9,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       // Serve .well-known files without extension check
       includeAssets: ['logo.jpg', 'favicon.svg', 'icons.svg', '.well-known/**'],
