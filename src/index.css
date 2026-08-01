@@ -315,5 +315,79 @@ body {
   color: #f87171 !important;
 }
 
+/* DayNightToggle background animations */
+@keyframes cloudPass {
+  0% { transform: translateX(-20px); opacity: 0; }
+  20% { opacity: 0.8; }
+  80% { opacity: 0.8; }
+  100% { transform: translateX(200px); opacity: 0; }
+}
 
+@keyframes darkCloudPass {
+  0% { transform: translateX(-20px); opacity: 0; }
+  20% { opacity: 0.4; }
+  80% { opacity: 0.4; }
+  100% { transform: translateX(200px); opacity: 0; }
+}
 
+@keyframes birdFly {
+  0% { transform: translate(-20px, 5px) scale(0.6); opacity: 0; }
+  15% { opacity: 1; transform: translate(10px, 0px) scale(0.7); }
+  85% { opacity: 1; transform: translate(150px, -5px) scale(0.5); }
+  100% { transform: translate(200px, -10px) scale(0.4); opacity: 0; }
+}
+
+@keyframes birdFlap {
+  0%, 100% { clip-path: polygon(0 20%, 50% 100%, 100% 20%, 50% 60%); }
+  50% { clip-path: polygon(0 60%, 50% 100%, 100% 60%, 50% 40%); }
+}
+
+@keyframes shootingStar {
+  0% { transform: translate(150px, -20px) rotate(-45deg) scale(0); opacity: 0; }
+  5% { transform: translate(140px, -10px) rotate(-45deg) scale(1); opacity: 1; }
+  15% { transform: translate(50px, 80px) rotate(-45deg) scale(0); opacity: 0; }
+  100% { transform: translate(50px, 80px) rotate(-45deg) scale(0); opacity: 0; }
+}
+
+.animate-cloud {
+  animation: cloudPass 15s linear infinite;
+}
+.animate-cloud-delayed {
+  animation: cloudPass 18s linear infinite;
+  animation-delay: 7s;
+}
+.animate-dark-cloud {
+  animation: darkCloudPass 20s linear infinite;
+}
+.animate-bird {
+  animation: birdFly 12s linear infinite;
+}
+.animate-bird-delayed {
+  animation: birdFly 15s linear infinite;
+  animation-delay: 5s;
+}
+.bird-shape {
+  width: 10px;
+  height: 6px;
+  background-color: rgba(255, 255, 255, 0.7);
+  animation: birdFlap 0.4s infinite alternate ease-in-out;
+}
+.dark-bird-shape {
+  width: 10px;
+  height: 6px;
+  background-color: rgba(0, 0, 0, 0.4);
+  animation: birdFlap 0.4s infinite alternate ease-in-out;
+}
+.animate-shooting-star {
+  animation: shootingStar 10s linear infinite;
+}
+.animate-shooting-star-delayed {
+  animation: shootingStar 14s linear infinite;
+  animation-delay: 4s;
+}
+.shooting-star-shape {
+  width: 30px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%);
+  border-radius: 999px;
+}

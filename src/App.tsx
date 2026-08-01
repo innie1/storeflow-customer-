@@ -185,7 +185,7 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
   if (prods.length === 0) {
     const { data: prodData, error: prodErr } = await supabase
       .from('products')
-      .select('*')
+      .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at')
       .eq('store_id', storeUuid)
       .eq('status', 'active');
     if (prodErr) throw prodErr;
@@ -923,7 +923,7 @@ function App() {
 
   const loadStoresData = async () => {
     try {
-      const { data, error } = await supabase.from('stores').select(STORE_PUBLIC_COLUMNS);
+      const { data, error } = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS);
       if (error) throw error;
       if (data) {
         setAllStores(data);
@@ -987,9 +987,9 @@ function App() {
 
       // 5. If the URL contains SF-TTEC9S (or starts with SF-), the query must search the stores.store_id column first
       if (cleanSid.toUpperCase().startsWith('SF-')) {
-        queryUsed = `supabase.from('stores').select(STORE_PUBLIC_COLUMNS).ilike('store_id', '${cleanSid}')`;
+        queryUsed = `supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).ilike('store_id', '${cleanSid}')`;
         console.log(`[StoreFlow QR] Prioritizing query on stores.store_id column first: ${queryUsed}`);
-        const res = await supabase.from('stores').select(STORE_PUBLIC_COLUMNS).ilike('store_id', cleanSid).maybeSingle();
+        const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).ilike('store_id', cleanSid).maybeSingle();
         storeData = res.data;
         storeErr = res.error;
       }
@@ -1002,9 +1002,9 @@ function App() {
         } else {
           orFilter = `store_id.ilike.${cleanSid},store_id.ilike.SF-${cleanSid},access_code.ilike.${cleanSid},qr_code.ilike.%/store/${cleanSid},qr_code.ilike.%/s/${cleanSid}`;
         }
-        queryUsed = `supabase.from('stores').select(STORE_PUBLIC_COLUMNS).or('${orFilter}')`;
+        queryUsed = `supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).or('${orFilter}')`;
         console.log(`[StoreFlow QR] Running fallback OR query: ${queryUsed}`);
-        const res = await supabase.from('stores').select(STORE_PUBLIC_COLUMNS).or(orFilter).maybeSingle();
+        const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).or(orFilter).maybeSingle();
         storeData = res.data;
         storeErr = res.error;
       }
@@ -1072,7 +1072,7 @@ function App() {
         try {
           // A. Test connection & check if RLS or permissions blocked the request
           const { count, error: countErr } = await supabase
-            .from('stores')
+            .from('stores_public')
             .select('id', { count: 'exact', head: true });
 
           if (countErr) {
@@ -1085,7 +1085,7 @@ function App() {
               // B. Check if it's a filter mismatch or a truly missing row by searching loosely
               const cleanSid = sid.replace(/^SF-/i, '');
               const { data: looseData, error: looseErr } = await supabase
-                .from('stores')
+                .from('stores_public')
                 .select('id, store_id, access_code, qr_code')
                 .or(`store_id.ilike.%${cleanSid}%,access_code.ilike.%${cleanSid}%,qr_code.ilike.%${cleanSid}%`);
               
@@ -1478,7 +1478,7 @@ function App() {
           if (parsedStoreId.toUpperCase().startsWith('SF-')) {
             console.log(`[StoreFlow QR] Scan/Manual: Prioritizing query on stores.store_id first for Store ID: "${parsedStoreId}"`);
             const res = await supabase
-              .from('stores')
+              .from('stores_public')
               .select('id')
               .eq('store_id', parsedStoreId)
               .maybeSingle();
@@ -1488,7 +1488,7 @@ function App() {
 
           if (!storeData && !storeErr) {
             const res = await supabase
-              .from('stores')
+              .from('stores_public')
               .select('id')
               .or(`id.eq.${parsedStoreId},store_id.eq.${parsedStoreId},store_id.eq.SF-${parsedStoreId.toUpperCase()},access_code.eq.${parsedStoreId}`)
               .maybeSingle();
@@ -1503,7 +1503,7 @@ function App() {
             if (parsedProductId) {
               const { data: prodData } = await supabase
                 .from('products')
-                .select('*')
+                .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at')
                 .eq('id', parsedProductId)
                 .maybeSingle();
               if (prodData) {
@@ -1524,13 +1524,21 @@ function App() {
         setLoading(true);
         const { data: prodDb } = await supabase
           .from('products')
-          .select('*, stores(*)')
+          .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at')
           .eq('barcode', codeValue)
           .limit(1)
           .maybeSingle();
 
-        if (prodDb) {
-          const storeObj = prodDb.stores;
+        if (prodDb && prodDb.store_id) {
+          // Was a PostgREST `stores(*)` embed — that relied on anon having
+          // direct SELECT on the raw stores table, which is now revoked
+          // (cost_price/total_profit redaction fix). Fetch through the
+          // redacted view instead.
+          const { data: storeObj } = await supabase
+            .from('stores_public')
+            .select(STORE_PUBLIC_COLUMNS)
+            .eq('id', prodDb.store_id)
+            .maybeSingle();
           if (storeObj) {
             setStore(storeObj);
             setStoreId(storeObj.id);
@@ -2393,7 +2401,7 @@ function App() {
       let targetProducts = products;
       if (store?.id !== order.store_id) {
         const { data: storeData, error: storeErr } = await supabase
-          .from('stores')
+          .from('stores_public')
           .select(STORE_PUBLIC_COLUMNS)
           .eq('id', order.store_id)
           .single();
