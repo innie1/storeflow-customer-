@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 
-// Default public VAPID key (or loaded from environment variable)
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-m9GYvJLH3n_YhD6l8aJ9u5H_N9hE2_08H7tV-s0199J9w1xX1057_k4y';
+// Default public VAPID key (matching deployed server keypair, or loaded from environment variable)
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BPynrw1Xha05EzgzG_YEMdVyRGsuSlG62pPzLxprxWumTfVetPfAe5kyBM_yLbH_PDId9QjVwdoElfUDtljmGTQ';
 
 /**
  * Utility to convert base64 URL VAPID key to Uint8Array required by pushManager.subscribe
@@ -63,26 +63,44 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
     const registration = await navigator.serviceWorker.ready;
     let subscription = await registration.pushManager.getSubscription();
 
-    // If no existing subscription, create a new one
+    // If an old subscription existed under a different VAPID key, clear it once so the new valid key can take over
+    if (subscription && !localStorage.getItem('storeflow_vapid_v2_active')) {
+      try {
+        console.log('[Push] Clearing outdated push subscription to register real server VAPID key...');
+        await subscription.unsubscribe();
+        subscription = null;
+        localStorage.setItem('storeflow_vapid_v2_active', 'true');
+      } catch (e) {
+        console.warn('[Push] Error refreshing old push subscription:', e);
+      }
+    }
+
+    // If no existing subscription, create a new one with real VAPID key
     if (!subscription) {
       const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: convertedVapidKey as unknown as BufferSource,
       });
-      console.log('[Push] Successfully created new Web Push Subscription:', subscription);
+      localStorage.setItem('storeflow_vapid_v2_active', 'true');
+      console.log('[Push] Successfully created real Web Push Subscription:', subscription);
     } else {
-      console.log('[Push] Found existing Web Push Subscription:', subscription);
+      console.log('[Push] Found active Web Push Subscription:', subscription);
     }
 
-    // Save PushSubscription details to Supabase so backend can send push messages even when offline/closed
+    // Save PushSubscription details to customer_push_subscriptions so backend can send push messages even when offline/closed
     const subscriptionJson = subscription.toJSON();
     const endpoint = subscription.endpoint;
     const p256dh = subscriptionJson.keys?.p256dh || '';
     const auth = subscriptionJson.keys?.auth || '';
 
-    if (endpoint) {
-      let identifier = customerIdentifier || 'anonymous';
+    const targetPhone = customerIdentifier || localStorage.getItem('storeflow_customer_phone') || localStorage.getItem('storeflow_saved_checkout_phone') || localStorage.getItem('storeflow_last_order_phone');
+    if (customerIdentifier && customerIdentifier.replace(/\D/g, '').length >= 10) {
+      localStorage.setItem('storeflow_customer_phone', customerIdentifier);
+    }
+
+    if (endpoint && targetPhone) {
+      let identifier = targetPhone;
       const cleaned = identifier.replace(/\D/g, '');
       if (cleaned.length >= 10) {
         if (cleaned.startsWith('234') && cleaned.length === 13) identifier = '+' + cleaned;
@@ -90,9 +108,9 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
         else if (cleaned.length === 10) identifier = '+234' + cleaned;
       }
 
-      const { error } = await supabase.from('push_subscriptions').upsert(
+      const { error } = await supabase.from('customer_push_subscriptions').upsert(
         {
-          customer_identifier: identifier,
+          customer_phone: identifier,
           endpoint: endpoint,
           p256dh: p256dh,
           auth: auth,
@@ -102,9 +120,9 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
       );
 
       if (error) {
-        console.warn('[Push] Supabase table `push_subscriptions` note:', error.message);
+        console.warn('[Push] Supabase table `customer_push_subscriptions` error:', error.message);
       } else {
-        console.log('[Push] Saved push subscription to Supabase `push_subscriptions` table for identifier:', identifier);
+        console.log('[Push] Successfully saved push subscription to Supabase `customer_push_subscriptions` table for:', identifier);
       }
     }
 
