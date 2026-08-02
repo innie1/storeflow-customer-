@@ -56,15 +56,17 @@ Deno.serve(async (req: Request) => {
 
       // 1A. Check if this is a cancellation or rejection — MUST alert merchant if app is closed!
       let merchantCancelsSent = 0;
-      if (normStatus === "cancelled" || normStatus === "rejected") {
+      const isCancel = normStatus.includes("cancel");
+      const isReject = normStatus.includes("reject");
+      if (isCancel || isReject) {
         const { data: merchantSubs } = await supabase
           .from("push_subscriptions")
           .select("id, endpoint, p256dh, auth")
           .eq("store_id", order.store_id);
 
         if (merchantSubs && merchantSubs.length > 0) {
-          const cancelTitle = normStatus === "cancelled" ? "🚫 Order Cancelled!" : "❌ Order Rejected";
-          const cancelBody = `${order.customer_name || "A customer"} order ${orderRef} is now ${rawStatus}. Tap to view in StoreFlow.`;
+          const cancelTitle = isCancel ? "🚫 Order Cancelled!" : "❌ Order Rejected";
+          const cancelBody = `${order.customer_name || "A customer"} ${isCancel ? "cancelled" : "rejected"} Order ${orderRef}${order.total ? ` (₦${Number(order.total).toLocaleString()})` : ""}. Tap to view in StoreFlow.`;
           const cancelPayload = JSON.stringify({
             title: cancelTitle,
             body: cancelBody,

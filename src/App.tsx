@@ -2493,6 +2493,14 @@ function App() {
       }).then(({ error }) => {
         if (error) console.warn('Failed to create order cancel notification in db:', error);
       });
+      supabase.functions.invoke('send-order-push', {
+        body: {
+          order_id: orderId,
+          new_status: 'Cancelled',
+          old_status: 'Pending',
+          is_customer_update: true
+        }
+      }).catch(err => console.warn('Failed to invoke push notification for cancellation:', err));
       checkAndNotifyOrderStatus(orderId, orderNumber || '', 'Cancelled');
       loadOrdersHistory();
     } catch (e: any) {
