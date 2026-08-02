@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import { parseRoute, parseQRCode } from './router';
-import { subscribeUserToPush, showSystemNotification } from './utils/pushNotifications';
+import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotifications } from './utils/pushNotifications';
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -756,7 +756,15 @@ function App() {
   // lightweight in-app notice instead when one is available, falling back
   // to alert() only if truly nothing else is wired up.
   const showLocalNotice = (msg: string) => {
-    showSystemNotification('StoreFlow', { body: msg });
+    // In-app toast only — no system notification for self-initiated actions
+    setOrderStatusToast({
+      id: 'local-notice',
+      orderNumber: '',
+      status: 'info',
+      message: msg,
+      timestamp: Date.now(),
+    });
+    setTimeout(() => setOrderStatusToast(current => current?.id === 'local-notice' ? null : current), 5000);
     console.log('[StoreFlow]', msg);
   };
 
@@ -841,17 +849,41 @@ function App() {
       if (navigator.onLine) loadOrdersHistory();
     }, 6000);
 
-    // Instant re-fetch when customer returns to app / tab
+    // When customer returns to app / tab: re-fetch AND clear stale system tray notifications
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine) {
-        loadOrdersHistory();
+      if (document.visibilityState === 'visible') {
+        clearAllStoreFlowNotifications();
+        if (navigator.onLine) loadOrdersHistory();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Listen for foreground push messages from SW (shown as in-app toast instead of system notification)
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'STOREFLOW_PUSH_RECEIVED') {
+        const { title, body, orderId: pushOrderId } = event.data;
+        setOrderStatusToast({
+          id: pushOrderId || 'push-' + Date.now(),
+          orderNumber: '',
+          status: title?.includes('Accepted') ? 'Accepted' : title?.includes('Ready') ? 'Ready' : 'info',
+          message: `${title}: ${body}`,
+          timestamp: Date.now(),
+        });
+        setTimeout(() => setOrderStatusToast(current => current?.timestamp === event.data.timestamp ? null : current), 6000);
+        // Also refresh order data
+        if (navigator.onLine) loadOrdersHistory();
+      }
+    };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    }
+
     return () => {
       clearInterval(pollId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      }
     };
   }, [currentUser?.phone, customerPhone, normalizeNigerianPhone]);
 
@@ -1180,23 +1212,10 @@ function App() {
         ? `Order ${orderNumStr} ${label}`.trim()
         : `Order ${orderNumStr} status updated to ${newStatus}`.trim();
 
-      // Only send OS System Notification when the app is in the background or unfocused
-      const isBackground = document.hidden || document.visibilityState === 'hidden' || !document.hasFocus();
+      // NOTE: No showSystemNotification() here. Background push notifications
+      // are handled entirely by the Edge Function + Service Worker pipeline.
+      // This function only manages the IN-APP toast banner.
 
-      if (isBackground) {
-        showSystemNotification('StoreFlow Order Update', {
-          body: message,
-          icon: '/logo.jpg',
-          tag: `order-${orderIdToCheck}-${newStatus}`,
-          data: {
-            url: `/?tracking_order_id=${orderIdToCheck}`,
-            orderId: orderIdToCheck,
-            orderNumber: orderNumberStr,
-          },
-        });
-      }
-
-      // Always display in-app banner toast for visual feedback inside the app
       const now = Date.now();
       setOrderStatusToast({
         id: orderIdToCheck,
@@ -1257,6 +1276,9 @@ function App() {
 
       setOrderId(targetOrderId);
       if (targetOrderNum) setOrderNumber(targetOrderNum);
+
+      // Clear system tray notifications for this specific order (WhatsApp-like behavior)
+      clearNotificationsForOrder(targetOrderId);
 
       // Instantly load order status
       const rawPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
@@ -2484,24 +2506,28 @@ function App() {
 
       setOrderStatus('Cancelled');
       setCancelReason('');
-      supabase.from('notifications').insert({
-        store_id: store?.id || '',
-        title: 'Order Cancelled 🚫',
-        message: `${currentUser?.name || customerName || 'A customer'} cancelled Order #${orderNumber || orderId.slice(0, 8)}${reason ? ` (Reason: ${reason})` : ''}.`,
-        type: 'order_cancelled',
-        is_read: false
-      }).then(({ error }) => {
-        if (error) console.warn('Failed to create order cancel notification in db:', error);
-      });
+
+      // Notify merchant via Edge Function — initiated_by: "customer" ensures
+      // the customer does NOT receive a push notification about their own action.
       supabase.functions.invoke('send-order-push', {
         body: {
           order_id: orderId,
           new_status: 'Cancelled',
           old_status: 'Pending',
-          is_customer_update: true
+          is_customer_update: true,
+          initiated_by: 'customer'
         }
-      }).catch(err => console.warn('Failed to invoke push notification for cancellation:', err));
-      checkAndNotifyOrderStatus(orderId, orderNumber || '', 'Cancelled');
+      }).catch(err => console.warn('[Push] Failed to invoke send-order-push for cancellation:', err));
+
+      // In-app confirmation toast only (no system notification for self-action)
+      setOrderStatusToast({
+        id: orderId,
+        orderNumber: orderNumber || '',
+        status: 'Cancelled',
+        message: `Order #${orderNumber || orderId.slice(0, 8)} has been cancelled.`,
+        timestamp: Date.now(),
+      });
+      setTimeout(() => setOrderStatusToast(current => current?.id === orderId ? null : current), 6000);
       loadOrdersHistory();
     } catch (e: any) {
       // Inline banner instead of alert() — matches the style already used

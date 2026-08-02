@@ -133,39 +133,30 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
   }
 }
 
+// ─── Notification Clearing Helpers ───────────────────────────────────────
+
 /**
- * Display a background-safe system notification via Service Worker registration if available
- * (This works when the app is in the background, minimized, or closed!)
+ * Clear system tray notifications for a specific order (e.g. when viewing its tracking screen)
  */
-export async function showSystemNotification(title: string, options: NotificationOptions = {}): Promise<void> {
-  if (!('Notification' in window) || Notification.permission !== 'granted') {
-    return;
-  }
-
-  const defaultOptions: NotificationOptions = {
-    icon: '/logo.jpg',
-    badge: '/logo.jpg',
-    data: { url: '/' },
-    ...options,
-  };
-
-  if ('serviceWorker' in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      if (registration && registration.showNotification) {
-        await registration.showNotification(title, defaultOptions);
-        return;
-      }
-    } catch (err) {
-      console.warn('[Push] Service worker showNotification fallback:', err);
-    }
-  }
-
-  // Fallback to standard Notification if SW is not ready
+export async function clearNotificationsForOrder(orderId: string): Promise<void> {
+  if (!isPushNotificationSupported()) return;
   try {
-    new Notification(title, defaultOptions);
+    const registration = await navigator.serviceWorker.ready;
+    registration.active?.postMessage({ type: 'CLEAR_NOTIFICATIONS', orderId });
   } catch (err) {
-    console.warn('[Push] Standard notification failed:', err);
+    console.warn('[Push] clearNotificationsForOrder error:', err);
   }
 }
 
+/**
+ * Clear all StoreFlow notifications from system tray (e.g. on app becoming visible)
+ */
+export async function clearAllStoreFlowNotifications(): Promise<void> {
+  if (!isPushNotificationSupported()) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    registration.active?.postMessage({ type: 'CLEAR_NOTIFICATIONS' });
+  } catch (err) {
+    console.warn('[Push] clearAllStoreFlowNotifications error:', err);
+  }
+}

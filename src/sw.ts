@@ -1,4 +1,13 @@
 /// <reference lib="webworker" />
+// StoreFlow Customer Service Worker
+//
+// Production-grade push notification handler with:
+// - Foreground suppression (no system notification if app window is visible)
+// - Auto-clear stale notifications via CLEAR_NOTIFICATIONS message
+// - Badge count management
+// - Tag-based deduplication (no renotify)
+// - Priority-based requireInteraction
+
 import { precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
 import { NetworkFirst, CacheFirst } from 'workbox-strategies';
@@ -6,60 +15,51 @@ import { ExpirationPlugin } from 'workbox-expiration';
 
 declare const self: ServiceWorkerGlobalScope;
 
-// Precache static assets compiled by Vite
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-// 1. Supabase REST API caching strategy
+// Supabase REST API caching
 registerRoute(
   /^https:\/\/[a-z]+\.supabase\.co\/rest\/.*/i,
   new NetworkFirst({
     cacheName: 'supabase-api',
     networkTimeoutSeconds: 3,
-    plugins: [
-      new ExpirationPlugin({
-        maxEntries: 50,
-        maxAgeSeconds: 60 * 5, // 5 minutes
-      }),
-    ],
+    plugins: [new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 300 })],
   })
 );
 
-// 2. Product images caching strategy
+// Product images caching
 registerRoute(
   /\.(png|jpg|jpeg|webp|svg|gif)$/i,
   new CacheFirst({
     cacheName: 'images',
-    plugins: [
-      new ExpirationPlugin({
-        maxEntries: 100,
-        maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-      }),
-    ],
+    plugins: [new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 604800 })],
   })
 );
 
-// 3. Google Fonts caching strategy
+// Google Fonts caching
 registerRoute(
   /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
   new CacheFirst({
     cacheName: 'google-fonts',
-    plugins: [
-      new ExpirationPlugin({
-        maxEntries: 20,
-        maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-      }),
-    ],
+    plugins: [new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 31536000 })],
   })
 );
 
-// =========================================================================
-// BACKGROUND PUSH NOTIFICATION HANDLER
-// Fires EVEN WHEN THE APP TAB IS CLOSED OR IN THE BACKGROUND
-// =========================================================================
-self.addEventListener('push', (event: PushEvent) => {
-  console.log('[SW Push] Background push event received:', event);
+// ─── Push Notifications ──────────────────────────────────────────────────
 
-  let data = {
+self.addEventListener('push', (event: PushEvent) => {
+  let data: {
+    title?: string;
+    body?: string;
+    icon?: string;
+    badge?: string;
+    url?: string;
+    tag?: string;
+    notification_id?: string;
+    orderId?: string;
+    orderNumber?: string;
+    priority?: 'critical' | 'normal';
+  } = {
     title: 'StoreFlow Order Update',
     body: 'You have a new status update on your order!',
     icon: '/logo.jpg',
@@ -79,70 +79,144 @@ self.addEventListener('push', (event: PushEvent) => {
     }
   }
 
-  const targetUrl = data.url && data.url !== '/' ? data.url : (data.orderId ? `/?tracking_order_id=${data.orderId}` : '/');
+  const tag = data.tag || data.notification_id || (data.orderId ? `order-${data.orderId}` : 'storeflow-push');
+  const targetUrl = data.url && data.url !== '/'
+    ? data.url
+    : (data.orderId ? `/?tracking_order_id=${data.orderId}` : '/');
+  const priority = data.priority || 'normal';
 
-  const notificationOptions: NotificationOptions = {
-    body: data.body,
-    icon: data.icon || '/logo.jpg',
-    badge: data.badge || '/logo.jpg',
-    data: {
-      url: targetUrl,
-      orderId: data.orderId || null,
-      orderNumber: data.orderNumber || null,
-      dateOfArrival: Date.now(),
-    },
-    tag: data.tag || (data.orderId ? `order-${data.orderId}` : 'storeflow-push'),
+  const showNotification = () => {
+    const options: any = {
+      body: data.body || 'New update received!',
+      icon: data.icon || '/logo.jpg',
+      badge: data.badge || '/logo.jpg',
+      data: {
+        url: targetUrl,
+        orderId: data.orderId || null,
+        orderNumber: data.orderNumber || null,
+      },
+      tag,
+      renotify: false, // Don't re-display same-tag notifications — dedup
+      requireInteraction: priority === 'critical', // Only pin critical ones
+      vibrate: priority === 'critical' ? [300, 100, 300, 100, 300] : [200, 100, 200],
+    };
+
+    return self.registration.showNotification(data.title || 'StoreFlow', options);
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, notificationOptions)
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+      // Check if any visible window exists
+      const visibleClient = clients.find(
+        (c) => (c as WindowClient).visibilityState === 'visible'
+      ) as WindowClient | undefined;
+
+      if (visibleClient) {
+        // App is in foreground — relay to app for in-app toast instead
+        visibleClient.postMessage({
+          type: 'STOREFLOW_PUSH_RECEIVED',
+          title: data.title || 'StoreFlow',
+          body: data.body || '',
+          url: targetUrl,
+          orderId: data.orderId || null,
+          orderNumber: data.orderNumber || null,
+          tag,
+          priority,
+        });
+        // Don't show system notification — app handles it
+        return;
+      }
+
+      // App is in background or closed — show system notification
+      await showNotification();
+
+      // Update badge
+      const existing = await self.registration.getNotifications();
+      if ('setAppBadge' in navigator) {
+        try { (navigator as any).setAppBadge(existing.length + 1); } catch {}
+      }
+    })
   );
 });
 
-// =========================================================================
-// NOTIFICATION TAP / CLICK HANDLER
-// Opens/focuses the app window and navigates directly to order tracking
-// =========================================================================
+// ─── Notification Click ──────────────────────────────────────────────────
+
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
-  console.log('[SW Notification] User tapped notification:', event.notification);
   event.notification.close();
 
-  const notificationData = event.notification.data || {};
-  const orderId = notificationData.orderId;
-  const orderNumber = notificationData.orderNumber || '';
-  const targetUrl = notificationData.url || (orderId ? `/?tracking_order_id=${orderId}` : '/');
+  const notifData = event.notification.data || {};
+  const orderId = notifData.orderId;
+  const orderNumber = notifData.orderNumber || '';
+  const targetUrl = notifData.url || (orderId ? `/?tracking_order_id=${orderId}` : '/');
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList: readonly Client[]) => {
-        // If an app window/tab is already open, focus it, navigate, and postMessage
-        for (const client of clientList) {
-          const windowClient = client as WindowClient;
-          if ('focus' in windowClient) {
-            windowClient.focus();
-            if ('navigate' in windowClient) {
-              windowClient.navigate(targetUrl);
-            }
-            if (orderId) {
-              windowClient.postMessage({
-                type: 'STOREFLOW_OPEN_ORDER',
-                orderId: orderId,
-                orderNumber: orderNumber,
-              });
-            }
-            return;
+    (async () => {
+      // Clear badge
+      if ('clearAppBadge' in navigator) {
+        try { (navigator as any).clearAppBadge(); } catch {}
+      }
+
+      const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+      // Find existing open window
+      for (const client of clientList) {
+        const wc = client as WindowClient;
+        if ('focus' in wc) {
+          await wc.focus();
+          if ('navigate' in wc) {
+            await wc.navigate(targetUrl).catch(() => {});
           }
+          if (orderId) {
+            wc.postMessage({
+              type: 'STOREFLOW_OPEN_ORDER',
+              orderId,
+              orderNumber,
+            });
+          }
+          return;
         }
-        // Otherwise open a new window directly with targetUrl
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
-        }
-      })
+      }
+
+      // No window open — open a new one
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })()
   );
 });
 
-// Immediately activate service worker upon update
+// ─── Message Handler (clear notifications from app) ──────────────────────
+
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  const msg = event.data;
+  if (!msg) return;
+
+  if (msg.type === 'CLEAR_NOTIFICATIONS') {
+    event.waitUntil(
+      (async () => {
+        const notifications = await self.registration.getNotifications();
+        const orderId = msg.orderId;
+
+        for (const n of notifications) {
+          if (orderId) {
+            if (n.data?.orderId === orderId || n.tag?.includes(orderId)) {
+              n.close();
+            }
+          } else {
+            n.close();
+          }
+        }
+
+        if ('clearAppBadge' in navigator) {
+          try { (navigator as any).clearAppBadge(); } catch {}
+        }
+      })()
+    );
+  }
+});
+
+// ─── Lifecycle ───────────────────────────────────────────────────────────
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
