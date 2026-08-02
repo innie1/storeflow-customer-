@@ -82,9 +82,17 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
     const auth = subscriptionJson.keys?.auth || '';
 
     if (endpoint) {
+      let identifier = customerIdentifier || 'anonymous';
+      const cleaned = identifier.replace(/\D/g, '');
+      if (cleaned.length >= 10) {
+        if (cleaned.startsWith('234') && cleaned.length === 13) identifier = '+' + cleaned;
+        else if (cleaned.startsWith('0') && cleaned.length === 11) identifier = '+234' + cleaned.substring(1);
+        else if (cleaned.length === 10) identifier = '+234' + cleaned;
+      }
+
       const { error } = await supabase.from('push_subscriptions').upsert(
         {
-          customer_identifier: customerIdentifier || 'anonymous',
+          customer_identifier: identifier,
           endpoint: endpoint,
           p256dh: p256dh,
           auth: auth,
@@ -96,7 +104,7 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
       if (error) {
         console.warn('[Push] Supabase table `push_subscriptions` note:', error.message);
       } else {
-        console.log('[Push] Saved push subscription to Supabase `push_subscriptions` table.');
+        console.log('[Push] Saved push subscription to Supabase `push_subscriptions` table for identifier:', identifier);
       }
     }
 

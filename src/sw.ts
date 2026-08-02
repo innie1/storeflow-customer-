@@ -66,6 +66,8 @@ self.addEventListener('push', (event: PushEvent) => {
     badge: '/logo.jpg',
     url: '/',
     tag: 'storeflow-notification',
+    orderId: '',
+    orderNumber: '',
   };
 
   if (event.data) {
@@ -77,15 +79,19 @@ self.addEventListener('push', (event: PushEvent) => {
     }
   }
 
+  const targetUrl = data.url && data.url !== '/' ? data.url : (data.orderId ? `/?tracking_order_id=${data.orderId}` : '/');
+
   const notificationOptions: NotificationOptions = {
     body: data.body,
     icon: data.icon || '/logo.jpg',
     badge: data.badge || '/logo.jpg',
     data: {
-      url: data.url || '/',
+      url: targetUrl,
+      orderId: data.orderId || null,
+      orderNumber: data.orderNumber || null,
       dateOfArrival: Date.now(),
     },
-    tag: data.tag || 'storeflow-push',
+    tag: data.tag || (data.orderId ? `order-${data.orderId}` : 'storeflow-push'),
   };
 
   event.waitUntil(

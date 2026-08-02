@@ -830,6 +830,12 @@ function App() {
 
     loadOrdersHistory();
 
+    // Auto-subscribe for Web Push Notifications (allows notifications when app is closed)
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const normalizedPhone = normalizeNigerianPhone(lookupPhone) || lookupPhone;
+      subscribeUserToPush(normalizedPhone).catch(() => {});
+    }
+
     // Fast polling every 6 seconds for background history sync
     const pollId = setInterval(() => {
       if (navigator.onLine) loadOrdersHistory();
@@ -847,7 +853,7 @@ function App() {
       clearInterval(pollId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentUser?.phone, customerPhone]);
+  }, [currentUser?.phone, customerPhone, normalizeNigerianPhone]);
 
   // Orders still in progress — drives the badge on the bottom-nav "Orders" tab
   const activeOrdersCount = useMemo(
