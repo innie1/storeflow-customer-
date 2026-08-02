@@ -1,10 +1,9 @@
 // send-order-push
 //
-// Handles two distinct push notification workflows:
-// 1) Merchant Notifications: Called by Postgres trigger when a new row is inserted into `orders`.
-//    Looks up subscriptions in `push_subscriptions` by store_id and alerts merchants.
-// 2) Customer Notifications: Called by Postgres trigger `on_order_status_update_send_push` when `orders.status` is updated.
-//    Looks up customer device endpoints in `customer_push_subscriptions` matching `customer_phone`, and alerts customers even if their browser/app is completely closed.
+// Handles comprehensive push notification workflows for StoreFlow:
+// 1) Merchant New Order Notification: Alert merchants when a new order is placed.
+// 2) Customer Status Update Notification: Alert customers when order status changes (Accepted, Preparing, Ready, Completed).
+// 3) Merchant Cancellation/Update Alert: Alert merchants immediately even when app is closed if an order is cancelled or rejected.
 //
 // Required secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
 // Already-available secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -17,7 +16,7 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
 const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:support@example.com";
+const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:support@storeflow.app";
 
 Deno.serve(async (req: Request) => {
   try {
@@ -48,94 +47,140 @@ Deno.serve(async (req: Request) => {
     }
 
     // =========================================================================
-    // BRANCH 1: CUSTOMER ORDER STATUS UPDATE NOTIFICATION
+    // BRANCH 1: ORDER STATUS UPDATE (Notify Customer + Merchant on Cancellation)
     // =========================================================================
     if (isCustomerUpdate) {
-      if (!order.customer_phone) {
-        return new Response(JSON.stringify({ message: "No customer_phone associated with order" }), { status: 200 });
-      }
-
-      // Extract last 10 digits of phone number to match any formatting (+23480..., 080..., 23480...)
-      const cleanedPhone = order.customer_phone.replace(/\D/g, "");
-      const phoneTail = cleanedPhone.length >= 10 ? cleanedPhone.slice(-10) : cleanedPhone;
-      if (!phoneTail || phoneTail.length < 5) {
-        return new Response(JSON.stringify({ message: "Invalid customer phone format" }), { status: 200 });
-      }
-
-      const { data: customerSubs, error: subsErr } = await supabase
-        .from("customer_push_subscriptions")
-        .select("id, endpoint, p256dh, auth")
-        .like("customer_phone", `%${phoneTail}%`);
-
-      if (subsErr) {
-        return new Response(JSON.stringify({ error: subsErr.message }), { status: 500 });
-      }
-      if (!customerSubs || customerSubs.length === 0) {
-        return new Response(JSON.stringify({ message: "No push subscriptions registered for this customer phone" }), { status: 200 });
-      }
-
       const rawStatus = (bodyJson.new_status || order.status || "").toString();
       const normStatus = rawStatus.toLowerCase().trim();
       const orderRef = order.order_number ? `#${order.order_number}` : `#${order.id.slice(0, 8)}`;
 
-      let title = "📦 Order Status Update";
-      let bodyText = `Your order ${orderRef} is now ${rawStatus}.`;
+      // 1A. Check if this is a cancellation or rejection — MUST alert merchant if app is closed!
+      let merchantCancelsSent = 0;
+      if (normStatus === "cancelled" || normStatus === "rejected") {
+        const { data: merchantSubs } = await supabase
+          .from("push_subscriptions")
+          .select("id, endpoint, p256dh, auth")
+          .eq("store_id", order.store_id);
 
-      if (normStatus === "accepted") {
-        title = "👍 Order Accepted!";
-        bodyText = `Great news! Your order ${orderRef} has been accepted by the store and is being processed.`;
-      } else if (normStatus === "preparing") {
-        title = "👨‍🍳 Preparing Your Order";
-        bodyText = `Your order ${orderRef} is actively being prepared!`;
-      } else if (normStatus === "ready") {
-        title = "🎉 Order Ready!";
-        bodyText = `Your order ${orderRef} is ready for pickup/delivery!`;
-      } else if (normStatus === "completed") {
-        title = "✅ Order Completed!";
-        bodyText = `Thank you! Your order ${orderRef} has been marked completed.`;
-      } else if (normStatus === "rejected") {
-        title = "❌ Order Rejected";
-        bodyText = `We are sorry, your order ${orderRef} could not be accepted by the store. Tap to view details.`;
-      } else if (normStatus === "cancelled") {
-        title = "🚫 Order Cancelled";
-        bodyText = `Your order ${orderRef} has been cancelled.`;
-      }
+        if (merchantSubs && merchantSubs.length > 0) {
+          const cancelTitle = normStatus === "cancelled" ? "🚫 Order Cancelled!" : "❌ Order Rejected";
+          const cancelBody = `${order.customer_name || "A customer"} order ${orderRef} is now ${rawStatus}. Tap to view in StoreFlow.`;
+          const cancelPayload = JSON.stringify({
+            title: cancelTitle,
+            body: cancelBody,
+            tag: `order-cancel-${order.id}`,
+            url: "/?tab=orders",
+            orderId: order.id
+          });
 
-      const payload = JSON.stringify({
-        title,
-        body: bodyText,
-        tag: `order-${order.id}`,
-        url: `/?tracking_order_id=${order.id}`,
-        orderId: order.id,
-        orderNumber: order.order_number || "",
-      });
+          const mResults = await Promise.allSettled(
+            merchantSubs.map((sub: any) =>
+              webpush.sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                cancelPayload
+              )
+            )
+          );
 
-      const results = await Promise.allSettled(
-        customerSubs.map((sub: any) =>
-          webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            payload
-          )
-        )
-      );
-
-      const deadSubIds: string[] = [];
-      results.forEach((r, i) => {
-        if (r.status === "rejected") {
-          const statusCode = (r.reason && (r.reason.statusCode || r.reason.status)) || null;
-          if (statusCode === 404 || statusCode === 410) {
-            deadSubIds.push(customerSubs[i].id);
-          } else {
-            console.error("Customer push send failed:", r.reason?.message || r.reason);
+          const deadMSubIds: string[] = [];
+          mResults.forEach((r, i) => {
+            if (r.status === "rejected") {
+              const statusCode = (r.reason && ((r.reason as any).statusCode || (r.reason as any).status)) || null;
+              if (statusCode === 404 || statusCode === 410) {
+                deadMSubIds.push(merchantSubs[i].id);
+              }
+            } else {
+              merchantCancelsSent++;
+            }
+          });
+          if (deadMSubIds.length > 0) {
+            await supabase.from("push_subscriptions").delete().in("id", deadMSubIds);
           }
         }
-      });
-      if (deadSubIds.length > 0) {
-        await supabase.from("customer_push_subscriptions").delete().in("id", deadSubIds);
+
+        // Also ensure an in-app notification row exists in database for the merchant
+        await supabase.from("notifications").insert({
+          store_id: order.store_id,
+          title: normStatus === "cancelled" ? "Order Cancelled 🚫" : "Order Rejected ❌",
+          message: `${order.customer_name || "A customer"} order ${orderRef} was set to ${rawStatus}.`,
+          type: normStatus === "cancelled" ? "order_cancelled" : "order_rejected",
+          is_read: false
+        });
       }
 
-      const sent = results.filter(r => r.status === "fulfilled").length;
-      return new Response(JSON.stringify({ target: "customer", sent, total: customerSubs.length, removed: deadSubIds.length }), {
+      // 1B. Notify customer of their status change
+      let customerSent = 0;
+      if (order.customer_phone) {
+        const cleanedPhone = order.customer_phone.replace(/\D/g, "");
+        const phoneTail = cleanedPhone.length >= 10 ? cleanedPhone.slice(-10) : cleanedPhone;
+        
+        if (phoneTail && phoneTail.length >= 5) {
+          const { data: customerSubs } = await supabase
+            .from("customer_push_subscriptions")
+            .select("id, endpoint, p256dh, auth")
+            .like("customer_phone", `%${phoneTail}%`);
+
+          if (customerSubs && customerSubs.length > 0) {
+            let title = "📦 Order Status Update";
+            let bodyText = `Your order ${orderRef} is now ${rawStatus}.`;
+
+            if (normStatus === "accepted") {
+              title = "👍 Order Accepted!";
+              bodyText = `Great news! Your order ${orderRef} has been accepted by the store and is being processed.`;
+            } else if (normStatus === "preparing") {
+              title = "👨‍🍳 Preparing Your Order";
+              bodyText = `Your order ${orderRef} is actively being prepared!`;
+            } else if (normStatus === "ready") {
+              title = "🎉 Order Ready!";
+              bodyText = `Your order ${orderRef} is ready for pickup/delivery!`;
+            } else if (normStatus === "completed") {
+              title = "✅ Order Completed!";
+              bodyText = `Thank you! Your order ${orderRef} has been marked completed.`;
+            } else if (normStatus === "rejected") {
+              title = "❌ Order Rejected";
+              bodyText = `We are sorry, your order ${orderRef} could not be accepted by the store. Tap to view details.`;
+            } else if (normStatus === "cancelled") {
+              title = "🚫 Order Cancelled";
+              bodyText = `Your order ${orderRef} has been cancelled.`;
+            }
+
+            const payload = JSON.stringify({
+              title,
+              body: bodyText,
+              tag: `order-${order.id}`,
+              url: `/?tracking_order_id=${order.id}`,
+              orderId: order.id,
+              orderNumber: order.order_number || "",
+            });
+
+            const results = await Promise.allSettled(
+              customerSubs.map((sub: any) =>
+                webpush.sendNotification(
+                  { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                  payload
+                )
+              )
+            );
+
+            const deadSubIds: string[] = [];
+            results.forEach((r, i) => {
+              if (r.status === "rejected") {
+                const statusCode = (r.reason && ((r.reason as any).statusCode || (r.reason as any).status)) || null;
+                if (statusCode === 404 || statusCode === 410) {
+                  deadSubIds.push(customerSubs[i].id);
+                }
+              } else {
+                customerSent++;
+              }
+            });
+            if (deadSubIds.length > 0) {
+              await supabase.from("customer_push_subscriptions").delete().in("id", deadSubIds);
+            }
+          }
+        }
+      }
+
+      return new Response(JSON.stringify({ target: "status_update", customerSent, merchantCancelsSent }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -155,10 +200,10 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ message: "No push subscriptions for this store" }), { status: 200 });
     }
 
-    const amount = order.total ? `\u20a6${Number(order.total).toLocaleString()}` : "";
+    const amount = order.total ? `₦${Number(order.total).toLocaleString()}` : "";
     const payload = JSON.stringify({
-      title: "\ud83d\udce6 New Order!",
-      body: `${order.customer_name || "A customer"} just placed an order${amount ? ` \u2014 ${amount}` : ""}. Tap to view.`,
+      title: "📦 New Order!",
+      body: `${order.customer_name || "A customer"} just placed an order${amount ? ` — ${amount}` : ""}. Tap to view.`,
       tag: `order-${order.id}`,
       url: "/?tab=orders",
     });
@@ -175,7 +220,7 @@ Deno.serve(async (req: Request) => {
     const deadSubIds: string[] = [];
     results.forEach((r, i) => {
       if (r.status === "rejected") {
-        const statusCode = (r.reason && (r.reason.statusCode || r.reason.status)) || null;
+        const statusCode = (r.reason && ((r.reason as any).statusCode || (r.reason as any).status)) || null;
         if (statusCode === 404 || statusCode === 410) {
           deadSubIds.push(subs[i].id);
         } else {

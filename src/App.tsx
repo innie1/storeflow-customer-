@@ -2484,6 +2484,15 @@ function App() {
 
       setOrderStatus('Cancelled');
       setCancelReason('');
+      supabase.from('notifications').insert({
+        store_id: store?.id || '',
+        title: 'Order Cancelled 🚫',
+        message: `${currentUser?.name || customerName || 'A customer'} cancelled Order #${orderNumber || orderId.slice(0, 8)}${reason ? ` (Reason: ${reason})` : ''}.`,
+        type: 'order_cancelled',
+        is_read: false
+      }).then(({ error }) => {
+        if (error) console.warn('Failed to create order cancel notification in db:', error);
+      });
       checkAndNotifyOrderStatus(orderId, orderNumber || '', 'Cancelled');
       loadOrdersHistory();
     } catch (e: any) {
@@ -2516,6 +2525,15 @@ function App() {
       if (!data?.success) throw new Error('Proposal could not be approved.');
 
       setChangeRequestMessage(data.change_request_message || '');
+      supabase.from('notifications').insert({
+        store_id: store?.id || '',
+        title: 'Order Changes Approved ✅',
+        message: `${currentUser?.name || customerName || 'A customer'} approved changes for Order #${orderId.slice(0, 8)}.`,
+        type: 'order_update',
+        is_read: false
+      }).then(({ error }) => {
+        if (error) console.warn('Failed to create order approve notification in db:', error);
+      });
       loadOrdersHistory();
       alert('Proposal approved! The merchant has been notified.');
     } catch (e: any) {
