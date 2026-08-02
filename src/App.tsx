@@ -569,6 +569,14 @@ function App() {
   const [scannedStoresVersion, setScannedStoresVersion] = useState(0);
   const [pendingCrossStoreAdd, setPendingCrossStoreAdd] = useState<{ product: Product; qty: number } | null>(null);
   const [ordersHistory, setOrdersHistory] = useState<Order[]>([]);
+  const knownOrderStatusesRef = useRef<Map<string, string>>(new Map());
+  const [orderStatusToast, setOrderStatusToast] = useState<{
+    id: string;
+    orderNumber: string;
+    status: string;
+    message: string;
+    timestamp: number;
+  } | null>(null);
 
   const [rejectionReason, setRejectionReason] = useState('');
   const [changeRequestMessage, setChangeRequestMessage] = useState('');
@@ -653,7 +661,19 @@ function App() {
     if (cachedStores) setAllStores(JSON.parse(cachedStores));
     if (cachedProducts) setProducts(JSON.parse(cachedProducts));
     if (cachedCategories) setCategories(JSON.parse(cachedCategories));
-    if (cachedHistory) setOrdersHistory(JSON.parse(cachedHistory));
+    if (cachedHistory) {
+      try {
+        const parsed = JSON.parse(cachedHistory);
+        setOrdersHistory(parsed);
+        parsed.forEach((o: any) => {
+          if (o.id && o.status) {
+            knownOrderStatusesRef.current.set(o.id, o.status);
+          }
+        });
+      } catch {
+        // ignore cached history parse failure
+      }
+    }
 
     // Cart loading from cache
     const cachedCart = localStorage.getItem('storeflow_cached_cart');
@@ -1122,9 +1142,54 @@ function App() {
     }
   };
 
+  const statusLabelMap: Record<string, string> = useMemo(() => ({
+    Accepted: 'was accepted! 🎉',
+    Preparing: 'is being prepared 👨‍🍳',
+    Ready: 'is ready for pickup/delivery 📦',
+    Completed: 'has been completed ✅',
+    Rejected: 'was declined by the store 😔',
+    Cancelled: 'was cancelled ❌',
+    'Changes Requested': 'requested changes on your order 📝',
+  }), []);
+
+  const checkAndNotifyOrderStatus = useCallback((orderIdToCheck: string, orderNumberStr: string, newStatus: string) => {
+    if (!orderIdToCheck || !newStatus) return;
+    const lastStatus = knownOrderStatusesRef.current.get(orderIdToCheck);
+    knownOrderStatusesRef.current.set(orderIdToCheck, newStatus);
+
+    if (lastStatus && lastStatus !== newStatus) {
+      const label = statusLabelMap[newStatus];
+      const orderNumStr = orderNumberStr ? `#${orderNumberStr}` : '';
+      const message = label
+        ? `Order ${orderNumStr} ${label}`.trim()
+        : `Order ${orderNumStr} status updated to ${newStatus}`.trim();
+
+      showSystemNotification('StoreFlow Order Update', {
+        body: message,
+        icon: '/logo.jpg',
+        tag: `order-${orderIdToCheck}-${newStatus}`,
+      });
+
+      const now = Date.now();
+      setOrderStatusToast({
+        id: orderIdToCheck,
+        orderNumber: orderNumberStr,
+        status: newStatus,
+        message: message,
+        timestamp: now,
+      });
+
+      setTimeout(() => {
+        setOrderStatusToast(current => (current?.timestamp === now ? null : current));
+      }, 6000);
+    }
+  }, [statusLabelMap]);
+
   const loadOrdersHistory = async () => {
-    const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
-    if (!lookupPhone) return;
+    const rawPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
+    if (!rawPhone) return;
+    const lookupPhone = normalizeNigerianPhone(rawPhone) || rawPhone;
+
     try {
       // Guest customers have no Supabase Auth session, so they can't read
       // the orders table directly under RLS anymore (it used to be fully
@@ -1135,36 +1200,14 @@ function App() {
       if (error) throw error;
       const next: any[] = data || [];
 
-      // Status-change notifications previously fired off a Realtime UPDATE
-      // payload. Polling has no payload to diff against, so compare the
-      // freshly-fetched list against what's currently in state instead.
-      setOrdersHistory(prev => {
-        const prevStatusById = new Map(prev.map((o: any) => [o.id, o.status]));
-        const statusLabel: Record<string, string> = {
-          Accepted: 'was accepted! 🎉',
-          Preparing: 'is being prepared 👨‍🍳',
-          Ready: 'is ready for pickup/delivery 📦',
-          Completed: 'has been completed ✅',
-          Rejected: 'was declined by the store 😔',
-          Cancelled: 'was cancelled',
-        };
-        for (const o of next) {
-          const prevStatus = prevStatusById.get(o.id);
-          if (prevStatus && prevStatus !== o.status) {
-            const label = statusLabel[o.status];
-            if (label) {
-              const orderNum = o.order_number || '';
-              const message = `Order ${orderNum ? '#' + orderNum : ''} ${label}`.trim();
-              showSystemNotification('StoreFlow Order Update', {
-                body: message,
-                icon: '/logo.jpg',
-                tag: `order-${o.id}-${o.status}`,
-              });
-            }
-          }
+      // Check for status changes on any order and trigger notifications
+      for (const o of next) {
+        if (o.id && o.status) {
+          checkAndNotifyOrderStatus(o.id, o.order_number || '', o.status);
         }
-        return next;
-      });
+      }
+
+      setOrdersHistory(next);
       localStorage.setItem('storeflow_cached_orders_history', JSON.stringify(next));
     } catch (e) {
       console.warn('Orders history loading failed:', e);
@@ -1174,28 +1217,26 @@ function App() {
 
   // ─── Order status tracking ──────────────────────────────────────────────
   //
-  // Previously used a direct table read plus a Supabase Realtime
-  // subscription for instant push updates. Guest customers have no
-  // Supabase Auth session, so once the orders table's SELECT policy was
-  // locked down to store staff only (it used to be fully public — any
-  // order from any customer was readable by anyone with just the app's
-  // public key), both the direct read and the Realtime channel stopped
-  // working for guest customers — Realtime enforces the same RLS as a
-  // normal read, so it just silently never fires, no error. This RPC
-  // verifies the phone number server-side; polling trades instant push for
-  // an update landing within ~20s, which is the honest cost of no longer
-  // exposing every customer's order data to anyone with the public key.
+  // Polls status every 10s while on the Tracking screen and triggers
+  // notifications & history updates on status change (e.g. Accepted,
+  // Preparing, Ready, Completed, Rejected, Changes Requested).
   useEffect(() => {
     if (!orderId || screen !== 'tracking' || orderId.startsWith('pending-') || orderId.startsWith('offline-')) return;
-    const lookupPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
-    if (!lookupPhone) return;
+    const rawPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
+    if (!rawPhone) return;
+    const lookupPhone = normalizeNigerianPhone(rawPhone) || rawPhone;
 
     const fetchStatus = () => {
       supabase
         .rpc('get_customer_order_status', { p_order_id: orderId, p_customer_phone: lookupPhone })
         .then(({ data, error }) => {
           if (!error && data?.status) {
-            setOrderStatus(data.status);
+            const newStatus = data.status;
+
+            // Fire notification if merchant updated order status
+            checkAndNotifyOrderStatus(orderId, orderNumber || '', newStatus);
+
+            setOrderStatus(newStatus);
             setOrderStatusHistory(data.status_history || []);
             try {
               const parsedNotes = data.notes ? JSON.parse(data.notes) : null;
@@ -1210,10 +1251,10 @@ function App() {
     fetchStatus();
     const pollId = setInterval(() => {
       if (navigator.onLine) fetchStatus();
-    }, 20000);
+    }, 10000);
 
     return () => clearInterval(pollId);
-  }, [orderId, screen, currentUser?.phone, customerPhone]);
+  }, [orderId, screen, currentUser?.phone, customerPhone, orderNumber, checkAndNotifyOrderStatus, normalizeNigerianPhone]);
 
   // Guest order lookup — "Track an Order" with no local history required.
   // Phone path reuses the existing get_customer_orders RPC (already
@@ -2145,6 +2186,7 @@ function App() {
         if (error) console.warn('Failed to create order notification in db:', error);
       });
 
+      knownOrderStatusesRef.current.set(orderUuid, 'Pending');
       loadOrdersHistory();
     } catch (e: any) {
       // Genuine failure after retries — don't lose the order. Queue it for
@@ -2350,6 +2392,7 @@ function App() {
 
       setOrderStatus('Cancelled');
       setCancelReason('');
+      checkAndNotifyOrderStatus(orderId, orderNumber || '', 'Cancelled');
       loadOrdersHistory();
     } catch (e: any) {
       // Inline banner instead of alert() — matches the style already used
@@ -6201,6 +6244,36 @@ function App() {
           </div>
         );
       })()}
+
+      {/* ─── Order Status Update Floating In-App Notice ─── */}
+      {orderStatusToast && (
+        <div 
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[400] w-[92%] max-w-md bg-[#1A1C1E] text-white p-4 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-between gap-3 animate-slide-down cursor-pointer"
+          onClick={() => {
+            openOrderFromLookup({ id: orderStatusToast.id, order_number: orderStatusToast.orderNumber, status: orderStatusToast.status });
+            setOrderStatusToast(null);
+          }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-[#FFD23F] text-[#1A1C1E] flex items-center justify-center font-black text-lg shrink-0">
+              🔔
+            </div>
+            <div className="min-w-0">
+              <p className="font-black text-[10px] text-[#FFD23F] uppercase tracking-wider">Order Status Update</p>
+              <p className="text-xs text-gray-200 font-semibold truncate mt-0.5">{orderStatusToast.message}</p>
+            </div>
+          </div>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setOrderStatusToast(null);
+            }}
+            className="text-gray-400 hover:text-white p-1 shrink-0 cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      )}
       {showItsMeUpdatePrompt && pendingItsMeUpdate && (
         <div className="absolute inset-0 z-[300] flex items-end justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-t-3xl w-full p-6 space-y-4 animate-slide-up">
