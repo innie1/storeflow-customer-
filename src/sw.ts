@@ -95,30 +95,40 @@ self.addEventListener('push', (event: PushEvent) => {
 
 // =========================================================================
 // NOTIFICATION TAP / CLICK HANDLER
-// Opens/focuses the app window when user taps system notification banner
+// Opens/focuses the app window and navigates directly to order tracking
 // =========================================================================
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   console.log('[SW Notification] User tapped notification:', event.notification);
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url || '/';
+  const notificationData = event.notification.data || {};
+  const orderId = notificationData.orderId;
+  const orderNumber = notificationData.orderNumber || '';
+  const targetUrl = notificationData.url || (orderId ? `/?tracking_order_id=${orderId}` : '/');
 
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList: readonly Client[]) => {
-        // If a window is already open, focus it and navigate
+        // If an app window/tab is already open, focus it, navigate, and postMessage
         for (const client of clientList) {
           const windowClient = client as WindowClient;
           if ('focus' in windowClient) {
             windowClient.focus();
-            if ('navigate' in windowClient && windowClient.url !== targetUrl) {
+            if ('navigate' in windowClient) {
               windowClient.navigate(targetUrl);
+            }
+            if (orderId) {
+              windowClient.postMessage({
+                type: 'STOREFLOW_OPEN_ORDER',
+                orderId: orderId,
+                orderNumber: orderNumber,
+              });
             }
             return;
           }
         }
-        // Otherwise open a new window
+        // Otherwise open a new window directly with targetUrl
         if (self.clients.openWindow) {
           return self.clients.openWindow(targetUrl);
         }

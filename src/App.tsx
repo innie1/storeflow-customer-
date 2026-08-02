@@ -830,12 +830,22 @@ function App() {
 
     loadOrdersHistory();
 
+    // Fast polling every 6 seconds for background history sync
     const pollId = setInterval(() => {
       if (navigator.onLine) loadOrdersHistory();
-    }, 30000);
+    }, 6000);
+
+    // Instant re-fetch when customer returns to app / tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        loadOrdersHistory();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(pollId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentUser?.phone, customerPhone]);
 
@@ -1164,12 +1174,23 @@ function App() {
         ? `Order ${orderNumStr} ${label}`.trim()
         : `Order ${orderNumStr} status updated to ${newStatus}`.trim();
 
-      showSystemNotification('StoreFlow Order Update', {
-        body: message,
-        icon: '/logo.jpg',
-        tag: `order-${orderIdToCheck}-${newStatus}`,
-      });
+      // Only send OS System Notification when the app is in the background or unfocused
+      const isBackground = document.hidden || document.visibilityState === 'hidden' || !document.hasFocus();
 
+      if (isBackground) {
+        showSystemNotification('StoreFlow Order Update', {
+          body: message,
+          icon: '/logo.jpg',
+          tag: `order-${orderIdToCheck}-${newStatus}`,
+          data: {
+            url: `/?tracking_order_id=${orderIdToCheck}`,
+            orderId: orderIdToCheck,
+            orderNumber: orderNumberStr,
+          },
+        });
+      }
+
+      // Always display in-app banner toast for visual feedback inside the app
       const now = Date.now();
       setOrderStatusToast({
         id: orderIdToCheck,
@@ -1215,9 +1236,74 @@ function App() {
   };
   loadOrdersHistoryRef.current = loadOrdersHistory;
 
+  // ─── Deep-link & Notification Click Handler ───────────────────────────────
+  // Opens the exact order's tracking page when user clicks a notification
+  useEffect(() => {
+    const handleOpenOrder = async (targetOrderId: string, targetOrderNum?: string) => {
+      if (!targetOrderId) return;
+      
+      // Clean up search params from URL bar
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('tracking_order_id')) {
+        url.searchParams.delete('tracking_order_id');
+        window.history.replaceState(null, '', url.pathname + (url.search ? url.search : ''));
+      }
+
+      setOrderId(targetOrderId);
+      if (targetOrderNum) setOrderNumber(targetOrderNum);
+
+      // Instantly load order status
+      const rawPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
+      if (rawPhone) {
+        const lookupPhone = normalizeNigerianPhone(rawPhone) || rawPhone;
+        supabase
+          .rpc('get_customer_order_status', { p_order_id: targetOrderId, p_customer_phone: lookupPhone })
+          .then(({ data }) => {
+            if (data?.status) {
+              setOrderStatus(data.status);
+              setOrderStatusHistory(data.status_history || []);
+              try {
+                const parsedNotes = data.notes ? JSON.parse(data.notes) : null;
+                setProcessingStage(parsedNotes?.processingStage || null);
+              } catch {
+                setProcessingStage(null);
+              }
+            }
+          });
+      }
+
+      localStorage.setItem('storeflow_tracking_order_id', targetOrderId);
+      if (targetOrderNum) localStorage.setItem('storeflow_tracking_order_number', targetOrderNum);
+      navigateToScreen('tracking');
+    };
+
+    // 1. Check URL parameters on mount / page load (e.g. ?tracking_order_id=uuid)
+    const params = new URLSearchParams(window.location.search);
+    const paramOrderId = params.get('tracking_order_id');
+    if (paramOrderId) {
+      handleOpenOrder(paramOrderId);
+    }
+
+    // 2. Listen for postMessage from Service Worker when tab is focused via notification tap
+    const messageHandler = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'STOREFLOW_OPEN_ORDER' && event.data.orderId) {
+        handleOpenOrder(event.data.orderId, event.data.orderNumber);
+      }
+    };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', messageHandler);
+    }
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', messageHandler);
+      }
+    };
+  }, [currentUser?.phone, customerPhone, normalizeNigerianPhone]);
+
   // ─── Order status tracking ──────────────────────────────────────────────
   //
-  // Polls status every 10s while on the Tracking screen and triggers
+  // Fast polls status every 3s while on the Tracking screen and triggers
   // notifications & history updates on status change (e.g. Accepted,
   // Preparing, Ready, Completed, Rejected, Changes Requested).
   useEffect(() => {
@@ -1251,7 +1337,7 @@ function App() {
     fetchStatus();
     const pollId = setInterval(() => {
       if (navigator.onLine) fetchStatus();
-    }, 10000);
+    }, 3000);
 
     return () => clearInterval(pollId);
   }, [orderId, screen, currentUser?.phone, customerPhone, orderNumber, checkAndNotifyOrderStatus, normalizeNigerianPhone]);
