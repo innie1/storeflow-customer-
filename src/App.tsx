@@ -5017,40 +5017,6 @@ function App() {
               </div>
             )}
 
-            {/* Remove store confirmation modal */}
-            {storeToRemove && (
-              <div className="fixed inset-0 bg-black/50 z-[100] flex items-end sm:items-center justify-center p-4 animate-fade-in" onClick={() => setStoreToRemove(null)}>
-                <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-xl text-center animate-scale-in" onClick={e => e.stopPropagation()}>
-                  <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mx-auto text-2xl">
-                    <span className="material-symbols-outlined text-2xl">storefront</span>
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-black text-base text-[#1A1C1E]">Remove Store?</h3>
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      Are you sure you want to remove <span className="font-bold text-gray-900">{storeToRemove.name}</span> from Your Stores? You can always re-scan it later.
-                    </p>
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={() => setStoreToRemove(null)}
-                      className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-[#1A1C1E] font-bold rounded-xl text-xs uppercase tracking-wider transition cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        removeScannedStore(storeToRemove.id);
-                        setStoreToRemove(null);
-                      }}
-                      className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-md shadow-rose-500/20"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Reference Badge Card */}
             <div className="bg-white border border-gray-100 rounded-[20px] p-5 flex items-center justify-between shadow-sm">
               <div>
@@ -6503,6 +6469,40 @@ function App() {
                 className="h-12 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl text-sm cursor-pointer hover:bg-black active:scale-95 transition"
               >
                 Update ✦
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove store confirmation modal */}
+      {storeToRemove && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-end sm:items-center justify-center p-4 animate-fade-in" onClick={() => setStoreToRemove(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-xl text-center animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mx-auto text-2xl">
+              <span className="material-symbols-outlined text-2xl">storefront</span>
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-black text-base text-[#1A1C1E]">Remove Store?</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Are you sure you want to remove <span className="font-bold text-gray-900">{storeToRemove.name}</span> from Your Stores? You can always re-scan it later.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setStoreToRemove(null)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-[#1A1C1E] font-bold rounded-xl text-xs uppercase tracking-wider transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  removeScannedStore(storeToRemove.id);
+                  setStoreToRemove(null);
+                }}
+                className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shadow-md shadow-rose-500/20"
+              >
+                Remove
               </button>
             </div>
           </div>
