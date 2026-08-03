@@ -559,6 +559,7 @@ function App() {
   const [orderStatusHistory, setOrderStatusHistory] = useState<{ status: string; at: string }[]>([]);
   const [processingStage, setProcessingStage] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [storeToRemove, setStoreToRemove] = useState<{ id: string; name: string } | null>(null);
   const [cancelOrderError, setCancelOrderError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('');
   // In-app replacement for the native browser alert() previously used to
@@ -4056,9 +4057,7 @@ function App() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm(`Remove ${s.business_name} from Your Stores? You can always re-scan it later.`)) {
-                            removeScannedStore(s.id);
-                          }
+                          setStoreToRemove({ id: s.id, name: s.business_name });
                         }}
                         className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-gray-50 hover:bg-rose-50 text-gray-400 hover:text-rose-500 flex items-center justify-center transition cursor-pointer z-10"
                         title="Remove from Your Stores"
