@@ -108,16 +108,16 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
         else if (cleaned.length === 10) identifier = '+234' + cleaned;
       }
 
-      const { error } = await supabase.from('customer_push_subscriptions').upsert(
-        {
-          customer_phone: identifier,
-          endpoint: endpoint,
-          p256dh: p256dh,
-          auth: auth,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'endpoint' }
-      );
+      // NOTE: this table no longer accepts direct public writes (RLS locked down
+      // to close a subscription-hijack hole — anyone could previously overwrite
+      // any other customer's endpoint/keys). Same upsert-on-endpoint behavior,
+      // now done server-side via a SECURITY DEFINER function.
+      const { error } = await supabase.rpc('upsert_customer_push_subscription', {
+        p_customer_phone: identifier,
+        p_endpoint: endpoint,
+        p_p256dh: p256dh,
+        p_auth: auth,
+      });
 
       if (error) {
         console.warn('[Push] Supabase table `customer_push_subscriptions` error:', error.message);

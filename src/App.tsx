@@ -3442,34 +3442,33 @@ function App() {
       if (isSubmittingRating || !store) return;
       setIsSubmittingRating(true);
       try {
-        const prevRating = store.data?.marketplaceSettings?.rating || 0;
-        const prevCount = store.data?.marketplaceSettings?.reviewsCount || 0;
-        const newCount = prevCount + 1;
-        const newRating = prevRating > 0 ? (prevRating * prevCount + stars) / newCount : stars;
+        // NOTE: this used to write directly to stores.data, which silently
+        // failed for guest customers — the stores table's RLS UPDATE policy
+        // only allows the store owner to write. Ratings were never actually
+        // saving. Now goes through a dedicated store_ratings table + RPC that
+        // guests can legitimately call, and re-rating updates your existing
+        // rating instead of padding the count.
+        const identifier = customerPhone || currentUser?.phone || 'anonymous';
 
+        const { data: result, error } = await supabase.rpc('submit_store_rating', {
+          p_store_id: store.id,
+          p_customer_phone: identifier,
+          p_rating: stars,
+        });
+
+        if (error) throw error;
+
+        const row = Array.isArray(result) ? result[0] : result;
         const updatedData = {
           ...store.data,
           marketplaceSettings: {
             ...store.data?.marketplaceSettings,
-            rating: parseFloat(newRating.toFixed(2)),
-            reviewsCount: newCount
+            rating: row?.new_rating ?? stars,
+            reviewsCount: row?.new_count ?? 1
           }
         };
 
-        const updatedStore = {
-          ...store,
-          data: updatedData
-        };
-
-        // Update database
-        const { error } = await supabase
-          .from('stores')
-          .update({ data: updatedData })
-          .eq('id', store.id);
-
-        if (error) throw error;
-
-        setStore(updatedStore);
+        setStore({ ...store, data: updatedData });
         setUserRating(stars);
         alert(`Thank you for rating this store ${stars} stars!`);
       } catch (err: any) {
