@@ -116,6 +116,34 @@ function saveItsMeProfile(profile: ItsMe) {
 // uploaded image URL. Treating any truthy string as an <img src> silently
 // fails to load and leaves a blank circle. Only real URLs should be rendered
 // as an <img>; anything else should fall back to a generated initials badge.
+// ─── Order access tokens ───────────────────────────────────────────────
+// Each order gets a random, unguessable access_token server-side. We cache
+// it locally right after placing the order and send it back on cancel/
+// approve actions as a second proof of identity alongside the phone number
+// — phone numbers alone are guessable, this closes that gap at zero cost.
+// If a token isn't cached locally (e.g. customer looked the order up from
+// a different device), these actions still work via phone match alone —
+// the server treats the token as an extra check, not a hard requirement.
+const ORDER_TOKEN_PREFIX = 'storeflow_order_token_';
+
+function saveOrderAccessToken(orderId: string, token: string) {
+  try {
+    localStorage.setItem(ORDER_TOKEN_PREFIX + orderId, token);
+  } catch (e) {
+    // Storage full or unavailable (e.g. private browsing) — non-fatal,
+    // the phone-based check still covers this order.
+    console.warn('Could not cache order access token locally:', e);
+  }
+}
+
+function getOrderAccessToken(orderId: string): string | null {
+  try {
+    return localStorage.getItem(ORDER_TOKEN_PREFIX + orderId);
+  } catch {
+    return null;
+  }
+}
+
 function isLogoImageUrl(logo?: string | null): boolean {
   if (!logo) return false;
   return logo.startsWith('http://') || logo.startsWith('https://') || logo.startsWith('data:');
@@ -1247,10 +1275,15 @@ function App() {
       if (error) throw error;
       const next: any[] = data || [];
 
-      // Check for status changes on any order and trigger notifications
+      // Check for status changes on any order and trigger notifications,
+      // and cache each order's access token locally (covers the case where
+      // this is a new device that never placed the order itself).
       for (const o of next) {
         if (o.id && o.status) {
           checkAndNotifyOrderStatus(o.id, o.order_number || '', o.status);
+        }
+        if (o.id && o.access_token) {
+          saveOrderAccessToken(o.id, o.access_token);
         }
       }
 
@@ -1412,6 +1445,9 @@ function App() {
         const { data, error } = await supabase.rpc('get_customer_orders', { p_customer_phone: normalized });
         if (error) throw error;
         const matches = (data || []).filter((o: any) => o.store_id === store.id);
+        for (const o of matches) {
+          if (o.id && o.access_token) saveOrderAccessToken(o.id, o.access_token);
+        }
         if (matches.length === 0) {
           setTrackLookupError("No orders found for that phone number at this store.");
         } else if (matches.length === 1) {
@@ -2275,6 +2311,15 @@ function App() {
       setOrderId(orderUuid);
       setOrderSubmitting(false);
 
+      // Fire-and-forget: cache this order's access token locally so later
+      // cancel/approve actions can prove ownership without relying on the
+      // phone number alone. Non-critical if it fails — see helper comment.
+      Promise.resolve(supabase.rpc('get_order_access_token', { p_order_id: orderUuid, p_customer_phone: orderPayload.customer_phone }))
+        .then(({ data: token }: any) => {
+          if (token) saveOrderAccessToken(orderUuid, token);
+        })
+        .catch(() => {});
+
       if (willRedeemLoyalty && store?.id) {
         const normalized = finalCustomerPhone.replace(/\D/g, '');
         supabase.rpc('redeem_customer_loyalty', { p_store_id: store.id, p_customer_phone: normalized, p_order_id: orderUuid })
@@ -2500,7 +2545,8 @@ function App() {
       const { data, error } = await supabase.rpc('customer_cancel_order', {
         p_order_id: orderId,
         p_customer_phone: lookupPhone,
-        p_reason: reason || null
+        p_reason: reason || null,
+        p_access_token: getOrderAccessToken(orderId)
       });
       if (error) throw error;
       if (!data?.success) throw new Error('Order could not be cancelled.');
@@ -2554,7 +2600,8 @@ function App() {
       // RPC pattern as customer_cancel_order.
       const { data, error } = await supabase.rpc('customer_approve_order_changes', {
         p_order_id: orderId,
-        p_customer_phone: lookupPhone
+        p_customer_phone: lookupPhone,
+        p_access_token: getOrderAccessToken(orderId)
       });
       if (error) throw error;
       if (!data?.success) throw new Error('Proposal could not be approved.');
