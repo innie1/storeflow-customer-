@@ -2734,8 +2734,8 @@ function App() {
       <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center">
         {/* Manual Input Fallback Dialog */}
         {showManualInput && (
-          <div className="absolute inset-0 z-[60] bg-black/90 flex items-center justify-center p-6 animate-fade-in">
-            <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-left space-y-4 shadow-2xl">
+          <div className="absolute inset-0 z-[60] bg-black/90 flex items-center justify-center p-6 animate-fade-in" onClick={() => { setShowManualInput(false); setManualInputVal(''); }}>
+            <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-left space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
               <h3 className="font-extrabold text-[#1A1C1E] text-base">Enter Store ID or Barcode</h3>
               <p className="text-xs text-gray-400 font-semibold leading-relaxed">
                 Type the Store ID/slug name or a product barcode to open it manually.
@@ -4688,8 +4688,8 @@ function App() {
 
           {/* Track an Order — guest lookup, no local history needed */}
           {showTrackLookup && (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4">
-              <div className="w-full sm:max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-5 pb-8 sm:pb-5">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4" onClick={() => setShowTrackLookup(false)}>
+              <div className="w-full sm:max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-5 pb-8 sm:pb-5" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-base font-black text-[#1A1C1E]">Track an Order</h3>
                   <button onClick={() => setShowTrackLookup(false)} className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100">

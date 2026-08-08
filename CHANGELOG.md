@@ -67,3 +67,7 @@ All notable changes to the StoreFlow Customer app are logged here.
 - Efficiency audit (asked for this pass): indexes on `products.store_id`, `orders.store_id`, `order_items.order_id` all already exist — no missing index on the hot paths. Didn't add anything to the schema since that needs your sign-off per your own Section 3 (flagging one optional idea below, not applied). Trimmed one diagnostic `select('*', {count:'exact', head:true})` to `select('id', ...)` for clarity — no functional change, head:true already avoided transferring rows.
 - Optional, not applied — composite index `(store_id, status)` on `products` for the relational-table fallback path. Low priority: most of the actual cost in this store's case was architectural (0 relational rows, not a missing index). Say the word if you want this added.
 [2026-08-03] v1.0.8 — Locked down 3 RLS holes (push subscriptions, notifications, store ratings) + fixed guest ratings never saving — 🔴 critical
+
+## [2026-08-08] Modal close-on-outside-click — 🟢 Low
+
+- Two dialogs (manual store/barcode entry fallback, Track an Order lookup) were missing click-outside-to-close. Fixed. Rest of the app already had it correctly.
