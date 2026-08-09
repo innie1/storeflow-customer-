@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import { parseRoute, parseQRCode } from './router';
 import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotifications } from './utils/pushNotifications';
+import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -33,7 +34,8 @@ interface Store {
   address?: string;
   logo?: string;
   currency: string;
-  status?: string; // 'active' | 'inactive'
+  subscription_status?: string;
+  data?: any;
 }
 
 interface CartItem {
@@ -72,31 +74,30 @@ interface ItsMe {
   displayName: string;
   phone: string;
   email: string;
+  profilePhoto?: string;
   addresses: string[];
   landmarks: string[];
   deliveryInstructions: string;
   preferredPayment: string;
-  profilePhoto?: string;
   dateJoined: string;
   lastUpdated: string;
 }
 
 function loadItsMeProfile(): ItsMe {
-  try {
-    const raw = localStorage.getItem('storeflow_itsme');
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  const id = localStorage.getItem('storeflow_customer_uuid') || crypto.randomUUID();
-  localStorage.setItem('storeflow_customer_uuid', id);
+  const parsed = safeGetJSON<ItsMe | null>('storeflow_itsme', null);
+  if (parsed && typeof parsed === 'object') return parsed;
+
+  const id = safeGetItem('storeflow_customer_uuid') || crypto.randomUUID();
+  safeSetItem('storeflow_customer_uuid', id);
   return {
     customerId: id,
-    displayName: localStorage.getItem('storeflow_saved_checkout_name') || '',
-    phone: localStorage.getItem('storeflow_saved_checkout_phone') || '',
+    displayName: safeGetItem('storeflow_saved_checkout_name') || '',
+    phone: safeGetItem('storeflow_saved_checkout_phone') || '',
     email: '',
-    addresses: localStorage.getItem('storeflow_pref_address') ? [localStorage.getItem('storeflow_pref_address')!] : [],
-    landmarks: localStorage.getItem('storeflow_saved_checkout_landmark') ? [localStorage.getItem('storeflow_saved_checkout_landmark')!] : [],
-    deliveryInstructions: localStorage.getItem('storeflow_saved_checkout_notes') || '',
-    preferredPayment: localStorage.getItem('storeflow_pref_payment_method') || 'cash',
+    addresses: safeGetItem('storeflow_pref_address') ? [safeGetItem('storeflow_pref_address')!] : [],
+    landmarks: safeGetItem('storeflow_saved_checkout_landmark') ? [safeGetItem('storeflow_saved_checkout_landmark')!] : [],
+    deliveryInstructions: safeGetItem('storeflow_saved_checkout_notes') || '',
+    preferredPayment: safeGetItem('storeflow_pref_payment_method') || 'cash',
     dateJoined: new Date().toISOString(),
     lastUpdated: new Date().toISOString(),
   };
@@ -104,7 +105,7 @@ function loadItsMeProfile(): ItsMe {
 
 function saveItsMeProfile(profile: ItsMe) {
   const updated = { ...profile, lastUpdated: new Date().toISOString() };
-  localStorage.setItem('storeflow_itsme', JSON.stringify(updated));
+  safeSetJSON('storeflow_itsme', updated);
   return updated;
 }
 
@@ -882,10 +883,17 @@ function App() {
       subscribeUserToPush(normalizedPhone).catch(() => {});
     }
 
-    // Fast polling every 6 seconds for background history sync
-    const pollId = setInterval(() => {
-      if (navigator.onLine) loadOrdersHistory();
-    }, 6000);
+    // Smart polling: 6 seconds when active/visible, 20 seconds when backgrounded to save battery
+    let pollId: any = null;
+    const startSmartPolling = () => {
+      if (pollId) clearInterval(pollId);
+      const interval = document.hidden ? 20000 : 6000;
+      pollId = setInterval(() => {
+        if (navigator.onLine) loadOrdersHistory();
+      }, interval);
+    };
+
+    startSmartPolling();
 
     // When customer returns to app / tab: re-fetch AND clear stale system tray notifications
     const handleVisibilityChange = () => {
@@ -893,6 +901,7 @@ function App() {
         clearAllStoreFlowNotifications();
         if (navigator.onLine) loadOrdersHistory();
       }
+      startSmartPolling();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -3114,7 +3123,7 @@ function App() {
         <div className="relative bg-white rounded-t-[28px] -mt-8 pt-20 pb-4 px-4 md:px-6 text-center flex flex-col items-center max-w-5xl lg:max-w-6xl mx-auto">
           <div className="absolute -top-16 w-32 h-32 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden flex items-center justify-center shrink-0 animate-fade-in">
             {isLogoImageUrl(store?.logo) ? (
-              <img src={store!.logo} className="w-full h-full object-cover" alt="" />
+              <img src={store!.logo} className="w-full h-full object-cover" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             ) : (
               <div className="w-full h-full bg-[#1A1C1E] flex flex-col items-center justify-center text-white">
                 <span className="material-symbols-outlined text-[#FFD23F] text-3xl font-bold">shopping_cart</span>
@@ -3578,7 +3587,8 @@ function App() {
       }
     };
 
-    const activeRatingVal = userRating || selectedStars;
+    const savedReview = store?.id ? (JSON.parse(localStorage.getItem('storeflow_user_reviews') || '{}')[store.id] || null) : null;
+    const activeRatingVal = userRating || selectedStars || savedReview?.stars || null;
     const ratingInfo = activeRatingVal ? RATING_MESSAGES[activeRatingVal] : null;
 
     return (
@@ -3718,6 +3728,33 @@ function App() {
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold pt-1">
                   ✓ Rating submitted! Thank you for your feedback.
                 </p>
+              )}
+
+              {savedReview && !selectedStars && (
+                <div className="p-3.5 bg-gray-50 dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl space-y-1.5 text-left animate-fade-in mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs">verified</span> Your Submitted Review
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedStars(savedReview.stars);
+                        setRatingComment(savedReview.comment || '');
+                      }}
+                      className="text-[10px] font-extrabold text-[#1A1C1E] dark:text-[#FFD23F] hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-xs">edit</span> Edit
+                    </button>
+                  </div>
+                  {savedReview.comment && (
+                    <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300 italic">
+                      "{savedReview.comment}"
+                    </p>
+                  )}
+                  <p className="text-[9px] text-gray-400 dark:text-zinc-500 font-bold">
+                    Submitted on {new Date(savedReview.date).toLocaleDateString()}
+                  </p>
+                </div>
               )}
             </div>
 
@@ -4202,7 +4239,7 @@ function App() {
                       </button>
                       <div className="w-16 h-16 bg-[#F8F9FA] border border-gray-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
                         {isLogoImageUrl(s.logo) ? (
-                          <img className="w-full h-full object-cover" src={s.logo} alt="" />
+                          <img className="w-full h-full object-cover" src={s.logo} alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
                           <span className="text-3xl">🏪</span>
                         )}
@@ -4240,7 +4277,7 @@ function App() {
                   >
                     <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-xl mb-3 overflow-hidden flex items-center justify-center">
                       {p.image ? (
-                        <img src={p.image} className="w-full h-full object-contain p-2" alt="" />
+                        <img src={p.image} className="w-full h-full object-contain p-2" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <span className="text-2xl">📦</span>
                       )}
@@ -4334,7 +4371,7 @@ function App() {
                     >
                       <div className="w-16 h-16 bg-[#F8F9FA] border border-gray-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
                         {isLogoImageUrl(s.logo) ? (
-                          <img className="w-full h-full object-cover" src={s.logo} alt="" />
+                          <img className="w-full h-full object-cover" src={s.logo} alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
                           <span className="text-3xl">🏪</span>
                         )}
@@ -5638,7 +5675,7 @@ function App() {
             <div className="space-y-4 mb-6">
               <div className="w-full h-56 bg-surface-container-low rounded-2xl flex items-center justify-center overflow-hidden">
                 {selectedProduct.image ? (
-                  <img src={selectedProduct.image} className="w-full h-full object-contain p-4" alt="" />
+                  <img src={selectedProduct.image} className="w-full h-full object-contain p-4" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                 ) : selectedProduct.isService ? (
                   <span className="text-6xl">🧺</span>
                 ) : (
@@ -5753,7 +5790,7 @@ function App() {
                     <div key={item.product.id} className="flex gap-4 items-center pb-4 border-b border-gray-100">
                       <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
                         {item.product.image ? (
-                          <img src={item.product.image} className="w-full h-full object-contain p-1" alt="" />
+                          <img src={item.product.image} className="w-full h-full object-contain p-1" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
                           <span className="text-2xl">📦</span>
                         )}
