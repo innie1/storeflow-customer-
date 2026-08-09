@@ -3543,6 +3543,14 @@ function App() {
       5: { title: 'Excellent! 🎉', subtitle: 'Awesome! What did you love most about this store?' },
     };
 
+    const RATING_SUGGESTION_CHIPS: Record<number, string[]> = {
+      1: ['Late delivery', 'Wrong items', 'Poor quality', 'Damaged items', 'Bad customer service'],
+      2: ['Slow processing', 'Missing items', 'Too expensive', 'Needs improvement', 'Order delayed'],
+      3: ['Okay service', 'Fair prices', 'Decent quality', 'Could be faster', 'Average experience'],
+      4: ['Fast delivery!', 'Good quality!', 'Great service!', 'Well packaged', 'Friendly staff'],
+      5: ['Super fast delivery! 🚀', 'Fresh & top quality! ⭐', 'Great customer service!', 'Highly recommended! 🙌', 'Best store ever! 🎉'],
+    };
+
     const handleRateStore = async () => {
       const stars = selectedStars;
       if (!stars || isSubmittingRating || !store) return;
@@ -3691,6 +3699,34 @@ function App() {
               {/* Simple message field for ratings */}
               {selectedStars && !userRating && (
                 <div className="space-y-3 animate-fade-in pt-1">
+                  {/* Quick-tap suggestion chips */}
+                  {RATING_SUGGESTION_CHIPS[selectedStars] && (
+                    <div className="space-y-1.5 text-left">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+                        Quick Tap Phrases (Tap to add):
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {RATING_SUGGESTION_CHIPS[selectedStars].map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => {
+                              if (!ratingComment) {
+                                setRatingComment(chip);
+                              } else if (!ratingComment.includes(chip)) {
+                                setRatingComment(prev => `${prev}, ${chip}`);
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-amber-50 dark:bg-amber-500/10 border border-amber-200/80 dark:border-amber-500/20 hover:border-[#FFD23F] dark:hover:border-[#FFD23F] text-[11px] font-extrabold text-amber-900 dark:text-amber-300 rounded-full transition-all active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1"
+                          >
+                            <span className="font-black">+</span>
+                            <span>{chip}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <textarea
                     value={ratingComment}
                     onChange={e => setRatingComment(e.target.value)}
