@@ -80,6 +80,39 @@
 body {
   font-family: 'Inter', sans-serif;
   background-color: #fbf9f9;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgb(255 210 63 / 45%);
+  outline-offset: 2px;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* Prevent broken remote images from creating awkward empty layout areas. */
+img:not([src]),
+img[src=""] {
+  visibility: hidden;
 }
 
 .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -98,6 +131,10 @@ body {
 .animate-spin-slow { animation: spin 0.8s linear infinite; }
 .active-scale:active { transform: scale(0.95); }
 
+/* Keep fixed mobile UI above device safe areas without changing layout logic. */
+.pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.safe-bottom { bottom: max(0px, env(safe-area-inset-bottom)); }
+
 /* Accessibility and mobile hardening. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
@@ -108,4 +145,12 @@ body {
 html, body, #root {
   max-width: 100%;
   overflow-x: hidden;
+}
+
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
