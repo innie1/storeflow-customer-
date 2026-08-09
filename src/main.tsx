@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import './design-system.css'
 import App from './App.tsx'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import { subscribeUserToPush } from './utils/pushNotifications'
 
 // Register Service Worker for background Push Notifications when user exits app
@@ -29,8 +30,16 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-createRoot(document.getElementById('root')!).render(
+const root = document.getElementById('root');
+
+if (!root) {
+  throw new Error('StoreFlow root element was not found.');
+}
+
+createRoot(root).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>,
 )
