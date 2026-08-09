@@ -3502,7 +3502,7 @@ function App() {
         </div>
 
         {/* Quick Action Buttons */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-extrabold text-center pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-extrabold text-center pt-1">
           {hasPhone && (
             <a 
               href={'tel:' + phone}
@@ -3534,24 +3534,6 @@ function App() {
               <span>Directions</span>
             </a>
           )}
-          <button 
-            onClick={() => {
-              if (navigator.share) {
-                navigator.share({
-                  title: store?.business_name || 'StoreFlow Store',
-                  text: 'Shop online at ' + (store?.business_name || 'StoreFlow') + '!',
-                  url: window.location.href
-                }).catch(() => {});
-              } else {
-                navigator.clipboard.writeText(window.location.href);
-                alert('Link copied to clipboard!');
-              }
-            }}
-            className="bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
-          >
-            <span className="material-symbols-outlined text-lg text-amber-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>share</span>
-            <span>Share Store</span>
-          </button>
         </div>
 
         {loyaltyBalance?.enabled && (
