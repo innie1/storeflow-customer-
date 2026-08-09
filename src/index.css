@@ -48,14 +48,12 @@
   --color-on-secondary: #ffffff;
   --color-on-primary-container: #705d00;
   --color-inverse-on-surface: #f2f0f0;
-
   --spacing-gutter: 16px;
   --spacing-container-padding: 24px;
   --spacing-stack-sm: 8px;
   --spacing-stack-md: 16px;
   --spacing-stack-lg: 32px;
   --spacing-base: 8px;
-
   --font-headline-lg: "Plus Jakarta Sans", sans-serif;
   --font-label-sm: "Inter", sans-serif;
   --font-body-md: "Inter", sans-serif;
@@ -101,19 +99,16 @@ textarea:focus-visible {
 }
 
 button,
-a {
-  touch-action: manipulation;
-}
-
-img {
-  max-width: 100%;
-}
+a { touch-action: manipulation; }
+img { max-width: 100%; }
 
 /* Prevent broken remote images from creating awkward empty layout areas. */
-img:not([src]),
-img[src=""] {
-  visibility: hidden;
-}
+img:not([src]), img[src=""] { visibility: hidden; }
+
+/* Legacy utility aliases: preserve existing visual states while screens are
+   refactored incrementally. */
+.bg-emerald-55 { background-color: #ecfdf5; }
+.border-amber-105 { border-color: #fef3c7; }
 
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -124,33 +119,21 @@ img[src=""] {
   90% { opacity: 1; }
   100% { top: 90%; opacity: 0; }
 }
-
 @keyframes spin { to { transform: rotate(360deg); } }
-
 .animate-scan-line { animation: scan-line 2s linear infinite; }
 .animate-spin-slow { animation: spin 0.8s linear infinite; }
 .active-scale:active { transform: scale(0.95); }
-
-/* Keep fixed mobile UI above device safe areas without changing layout logic. */
 .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 .safe-bottom { bottom: max(0px, env(safe-area-inset-bottom)); }
 
-/* Accessibility and mobile hardening. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
   .animate-scan-line, .animate-spin-slow { animation: none !important; }
   .active-scale:active { transform: none; }
 }
 
-html, body, #root {
-  max-width: 100%;
-  overflow-x: hidden;
-}
+html, body, #root { max-width: 100%; overflow-x: hidden; }
 
 @media (max-width: 640px) {
-  input,
-  select,
-  textarea {
-    font-size: 16px;
-  }
+  input, select, textarea { font-size: 16px; }
 }
