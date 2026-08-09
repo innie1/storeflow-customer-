@@ -662,7 +662,10 @@ function App() {
   const [quickOrderInput, setQuickOrderInput] = useState('');
 
   // User Profile
-  const [profileName, setProfileName] = useState('');
+  const [profileName, setProfileName] = useState(() => {
+    const initialItsMe = loadItsMeProfile();
+    return initialItsMe.displayName || localStorage.getItem('storeflow_profile_name') || '';
+  });
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
   if (false) console.log({ profilePhone, setProfilePhone });
@@ -2466,6 +2469,10 @@ function App() {
   const updateItsMeProfileAndSync = async (newProfile: ItsMe) => {
     const updated = saveItsMeProfile(newProfile);
     setItsMeProfile(updated);
+    if (newProfile.displayName) {
+      setProfileName(newProfile.displayName);
+      localStorage.setItem('storeflow_profile_name', newProfile.displayName);
+    }
     if (currentUser) {
       try {
         await supabase.auth.updateUser({
@@ -2475,6 +2482,23 @@ function App() {
         console.error('Failed to sync updated profile to cloud:', e);
       }
     }
+  };
+
+  const handleSaveDisplayName = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      alert('Please enter a display name.');
+      return;
+    }
+    setProfileName(trimmed);
+    localStorage.setItem('storeflow_profile_name', trimmed);
+
+    const updatedItsMe = {
+      ...itsMeProfile,
+      displayName: trimmed,
+    };
+    await updateItsMeProfileAndSync(updatedItsMe);
+    alert('Display name updated and synchronized with your It\'sMe identity!');
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -5296,14 +5320,41 @@ function App() {
 
             {/* Form actions */}
             <div className="space-y-4 text-left">
-              <div className="space-y-1 px-1">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Display Name</label>
-                <input
-                  type="text"
-                  value={profileName}
-                  onChange={e => setProfileName(e.target.value)}
-                  className="w-full px-4 h-12 bg-white dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 rounded-2xl border border-gray-200 dark:border-zinc-800 focus:outline-none focus:border-[#FFD23F] text-xs font-bold shadow-sm"
-                />
+              <div className="p-4.5 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl shadow-sm space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-gray-400 dark:text-zinc-400 uppercase tracking-wider">Display Name</label>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-500/20 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Synced with It'sMe
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={e => setProfileName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        handleSaveDisplayName(profileName);
+                      }
+                    }}
+                    placeholder="Enter your display name..."
+                    className="flex-1 px-4 h-12 bg-[#F8F9FA] dark:bg-zinc-950 text-[#1A1C1E] dark:text-zinc-100 rounded-xl border border-gray-200 dark:border-zinc-800 focus:outline-none focus:border-[#FFD23F] text-xs font-extrabold shadow-inner"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSaveDisplayName(profileName)}
+                    className="px-4 h-12 bg-[#1A1C1E] dark:bg-[#FFD23F] text-[#FFD23F] dark:text-[#1A1C1E] font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active-scale hover:bg-black dark:hover:bg-[#f5c62e] transition-colors shrink-0 shadow-sm flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-base font-bold">check</span>
+                    <span>Save Name</span>
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-gray-400 dark:text-zinc-500 font-semibold px-0.5">
+                  Your display name matches your It'sMe identity across all storefronts and order receipts.
+                </p>
               </div>
 
               {/* Dark mode toggler */}
