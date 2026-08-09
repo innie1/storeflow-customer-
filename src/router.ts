@@ -1,14 +1,14 @@
 /**
  * StoreFlow Customer — URL Router
- * 
+ *
  * Permanent URL architecture. These paths must NEVER change.
  * Future native app will intercept via Universal Links (iOS) / App Links (Android).
  *
  * Supported patterns:
- *   /s/{storeId}              → Store home
+ *   /s/{storeId}                → Store home
  *   /s/{storeId}/p/{productId} → Product deep-link inside store
- *   /store/{storeId}          → Legacy redirect → /s/{storeId}
- *   /?storeId={id}            → Query param fallback
+ *   /store/{storeId}            → Legacy redirect → /s/{storeId}
+ *   /?storeId={id}              → Query param fallback
  */
 
 export interface RouteResult {
@@ -22,56 +22,77 @@ export interface QRData {
   token: string;
   storeId: string;
   timestamp: number;
-  type: string; // 'store' | 'product' | 'shelf' | 'customer' | 'staff' | 'payment' | 'receipt' | 'inventory' | 'promotion'
+  type: string;
   payload: any;
 }
 
-// Decodes and validates the secure QR payload
+/** Decode the StoreFlow QR payload without throwing on malformed input. */
 export function decodeQRData(encoded: string): QRData | null {
   try {
-    const obfuscated = decodeURIComponent(escape(atob(encoded)));
+    if (!encoded || encoded.length > 8192) return null;
+
+    // QR payloads can arrive URL-encoded and/or as base64url. Normalize both
+    // forms before decoding so scanner/browser differences don't break links.
+    const normalized = decodeURIComponent(encoded)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+
     const key = 0x5F;
-    let jsonStr = '';
-    for (let i = 0; i < obfuscated.length; i++) {
-      jsonStr += String.fromCharCode(obfuscated.charCodeAt(i) ^ key);
+    const decodedBytes = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) decodedBytes[i] = bytes[i] ^ key;
+
+    const jsonStr = new TextDecoder().decode(decodedBytes);
+    const parsed = JSON.parse(jsonStr) as Partial<QRData>;
+
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.storeId !== 'string' || !parsed.storeId.trim()) {
+      return null;
     }
-    return JSON.parse(jsonStr) as QRData;
-  } catch (e) {
+
+    return parsed as QRData;
+  } catch {
     return null;
   }
 }
 
-export function parseRoute(): RouteResult {
-  const path = window.location.pathname;
-  const segments = path.split('/').filter(Boolean);
+function parsePathSegments(pathname: string): RouteResult {
+  const segments = pathname.split('/').filter(Boolean);
+  const root = segments[0];
 
-  // Pattern: /s/{storeId}/p/{productId} or /store/{storeId}/p/{productId}
-  if ((segments[0] === 's' || segments[0] === 'store') && segments[1] && segments[2] === 'p' && segments[3]) {
+  if ((root === 's' || root === 'store') && segments[1] && segments[2] === 'p' && segments[3]) {
     const decodedStore = decodeQRData(segments[1]);
     const decodedProduct = decodeQRData(segments[3]);
-    const storeId = decodedStore ? decodedStore.storeId : segments[1];
-    const productId = decodedProduct ? (decodedProduct.payload?.id || decodedProduct.storeId) : segments[3];
-    return { storeId, productId };
+    return {
+      storeId: decodedStore?.storeId || segments[1],
+      productId: decodedProduct?.payload?.id || decodedProduct?.storeId || segments[3],
+    };
   }
 
-  // Pattern: /s/{storeId} or /store/{storeId}
-  if ((segments[0] === 's' || segments[0] === 'store') && segments[1]) {
+  if ((root === 's' || root === 'store') && segments[1]) {
     const decodedStore = decodeQRData(segments[1]);
-    if (decodedStore && decodedStore.storeId) {
-      const storeId = decodedStore.storeId;
-      const productId = decodedStore.type === 'product' && decodedStore.payload?.id ? decodedStore.payload.id : null;
-      return { storeId, productId };
+    if (decodedStore?.storeId) {
+      return {
+        storeId: decodedStore.storeId,
+        productId: decodedStore.type === 'product' && decodedStore.payload?.id ? decodedStore.payload.id : null,
+      };
     }
     return { storeId: segments[1], productId: null };
   }
 
-  // Query param fallback: ?storeId=xxx or ?store=xxx
+  return { storeId: null, productId: null };
+}
+
+export function parseRoute(): RouteResult {
+  const pathResult = parsePathSegments(window.location.pathname);
+  if (pathResult.storeId) return pathResult;
+
   const params = new URLSearchParams(window.location.search);
   const qsId = params.get('storeId') || params.get('store');
   if (qsId) {
     const decodedStore = decodeQRData(qsId);
-    const storeId = decodedStore ? decodedStore.storeId : qsId;
-    return { storeId, productId: null };
+    return { storeId: decodedStore?.storeId || qsId, productId: null };
   }
 
   return { storeId: null, productId: null };
@@ -79,55 +100,32 @@ export function parseRoute(): RouteResult {
 
 /**
  * Parse a scanned QR code string and return routing info.
- * Handles full URLs or bare IDs.
+ * Handles full URLs, secure StoreFlow payloads, and bare store IDs.
  */
 export function parseQRCode(raw: string): RouteResult {
   const s = raw.trim();
+  if (!s || s.length > 8192) return { storeId: null, productId: null };
 
-  // If the scanned text starts with "SF-" (case-insensitive), treat it as a StoreFlow Store ID
   if (s.toUpperCase().startsWith('SF-')) {
     return { storeId: s.toUpperCase(), productId: null };
   }
 
-  // Try decoding as secure StoreFlow QR first
   const decoded = decodeQRData(s);
-  if (decoded && decoded.storeId) {
-    const storeId = decoded.storeId;
-    const productId = decoded.type === 'product' && decoded.payload?.id ? decoded.payload.id : null;
-    return { storeId, productId };
+  if (decoded?.storeId) {
+    return {
+      storeId: decoded.storeId,
+      productId: decoded.type === 'product' && decoded.payload?.id ? decoded.payload.id : null,
+    };
   }
 
-  // Try as URL first
   try {
-    const url = new URL(s.startsWith('http') ? s : `https://${s}`);
-    const segments = url.pathname.split('/').filter(Boolean);
-
-    // /s/{storeId}/p/{productId} or /store/{storeId}/p/{productId}
-    if ((segments[0] === 's' || segments[0] === 'store') && segments[1] && segments[2] === 'p' && segments[3]) {
-      const decodedStore = decodeQRData(segments[1]);
-      const decodedProduct = decodeQRData(segments[3]);
-      const storeId = decodedStore ? decodedStore.storeId : segments[1];
-      const productId = decodedProduct ? (decodedProduct.payload?.id || decodedProduct.storeId) : segments[3];
-      return { storeId, productId };
-    }
-    // /s/{storeId} or /store/{storeId}
-    if ((segments[0] === 's' || segments[0] === 'store') && segments[1]) {
-      const decodedStore = decodeQRData(segments[1]);
-      if (decodedStore && decodedStore.storeId) {
-        const storeId = decodedStore.storeId;
-        const productId = decodedStore.type === 'product' && decodedStore.payload?.id ? decodedStore.payload.id : null;
-        return { storeId, productId };
-      }
-      return { storeId: segments[1], productId: null };
-    }
+    const url = new URL(s.startsWith('http://') || s.startsWith('https://') ? s : `https://${s}`);
+    const result = parsePathSegments(url.pathname);
+    if (result.storeId) return result;
   } catch {
-    // Not a URL — treat as bare store ID
+    // Not a URL; continue to bare-ID handling below.
   }
 
-  // Bare ID (e.g. "freshmart-uuid")
-  if (s && !s.includes(' ')) {
-    return { storeId: s, productId: null };
-  }
-
+  if (!/\s/.test(s)) return { storeId: s, productId: null };
   return { storeId: null, productId: null };
 }

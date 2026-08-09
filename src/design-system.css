@@ -1,0 +1,87 @@
+/* StoreFlow Customer — safe visual foundation
+ * Additive only: these utilities do not replace existing classes or business logic.
+ * New screens/components can adopt them incrementally.
+ */
+:root {
+  --sf-brand: #1a1c1e;
+  --sf-accent: #ffd23f;
+  --sf-accent-strong: #e7b900;
+  --sf-bg: #fbf9f9;
+  --sf-surface: #ffffff;
+  --sf-surface-soft: #f5f3f3;
+  --sf-text: #1a1c1e;
+  --sf-text-muted: #6b7280;
+  --sf-border: #e5e7eb;
+  --sf-success: #16845b;
+  --sf-danger: #c62828;
+  --sf-radius-sm: 10px;
+  --sf-radius-md: 14px;
+  --sf-radius-lg: 18px;
+  --sf-radius-pill: 999px;
+  --sf-shadow-sm: 0 2px 10px rgba(0, 0, 0, .045);
+  --sf-shadow-md: 0 8px 24px rgba(0, 0, 0, .07);
+  --sf-touch: 44px;
+}
+
+/* Stable mobile interaction defaults. */
+.sf-touch-target {
+  min-width: var(--sf-touch);
+  min-height: var(--sf-touch);
+}
+
+.sf-card {
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  box-shadow: var(--sf-shadow-sm);
+}
+
+.sf-card-interactive {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.sf-card-interactive:hover {
+  box-shadow: var(--sf-shadow-md);
+}
+
+.sf-card-interactive:active {
+  transform: scale(.99);
+}
+
+.sf-pill {
+  border-radius: var(--sf-radius-pill);
+}
+
+.sf-focus-ring:focus-visible {
+  outline: 3px solid rgba(255, 210, 63, .55);
+  outline-offset: 2px;
+}
+
+/* Respect reduced-motion preferences without changing existing animations. */
+@media (prefers-reduced-motion: reduce) {
+  .sf-card-interactive {
+    transition: none;
+  }
+
+  .sf-card-interactive:active {
+    transform: none;
+  }
+}
+
+.dark {
+  --sf-bg: #121315;
+  --sf-surface: #18191b;
+  --sf-surface-soft: #1f2023;
+  --sf-text: #f3f4f6;
+  --sf-text-muted: #9ca3af;
+  --sf-border: #2d3034;
+  --sf-shadow-sm: 0 2px 10px rgba(0, 0, 0, .2);
+  --sf-shadow-md: 0 10px 28px rgba(0, 0, 0, .3);
+}
+
+@media (max-width: 640px) {
+  .sf-mobile-gutter {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
