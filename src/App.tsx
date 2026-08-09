@@ -125,6 +125,162 @@ function saveItsMeProfile(profile: ItsMe) {
 // If a token isn't cached locally (e.g. customer looked the order up from
 // a different device), these actions still work via phone match alone —
 // the server treats the token as an extra check, not a hard requirement.
+function getProductCategoryType(name: string = '', category: string = '', unit: string = ''): 'bottle' | 'box' | 'sachet' | 'can' | 'fresh' | 'service' | 'general' {
+  const text = (name + ' ' + category + ' ' + unit).toLowerCase();
+
+  if (
+    text.includes('bottle') || text.includes('drink') || text.includes('water') ||
+    text.includes('juice') || text.includes('soda') || text.includes('syrup') ||
+    text.includes('wine') || text.includes('beer') || text.includes('beverage') ||
+    text.includes('oil') || text.includes('liquid') || text.includes('liter') ||
+    text.includes('cl') || text.includes('ml') || text.includes('spirit') ||
+    text.includes('coke') || text.includes('fanta') || text.includes('sprite') ||
+    text.includes('pepsi') || text.includes('zobo') || text.includes('kunu')
+  ) {
+    return 'bottle';
+  }
+
+  if (
+    text.includes('sachet') || text.includes('pouch') || text.includes('maggi') ||
+    text.includes('knorr') || text.includes('seasoning') || text.includes('tea') ||
+    text.includes('coffee') || text.includes('powder') || text.includes('spice') ||
+    text.includes('detergent') || text.includes('soap') || text.includes('salt') ||
+    text.includes('sugar') || text.includes('biscuit') || text.includes('snack') ||
+    text.includes('chips') || text.includes('noodle') || text.includes('indomie') ||
+    text.includes('sweet') || text.includes('candy') || text.includes('gummy')
+  ) {
+    return 'sachet';
+  }
+
+  if (
+    text.includes('can') || text.includes('tin') || text.includes('tomato') ||
+    text.includes('paste') || text.includes('sardine') || text.includes('tuna') ||
+    text.includes('corned beef') || text.includes('milo') || text.includes('bournvita') ||
+    text.includes('red bull') || text.includes('monster')
+  ) {
+    return 'can';
+  }
+
+  if (
+    text.includes('box') || text.includes('carton') || text.includes('cereal') ||
+    text.includes('cornflakes') || text.includes('oats') || text.includes('custard') ||
+    text.includes('rice') || text.includes('flour') || text.includes('semovita') ||
+    text.includes('garri') || text.includes('spaghetti') || text.includes('pasta') ||
+    text.includes('tissue') || text.includes('diaper') || text.includes('pad') ||
+    text.includes('pack')
+  ) {
+    return 'box';
+  }
+
+  if (
+    text.includes('fresh') || text.includes('bread') || text.includes('cake') ||
+    text.includes('apple') || text.includes('fruit') || text.includes('veg') ||
+    text.includes('meat') || text.includes('chicken') || text.includes('fish') ||
+    text.includes('egg') || text.includes('yam') || text.includes('plantain') ||
+    text.includes('banana') || text.includes('orange')
+  ) {
+    return 'fresh';
+  }
+
+  if (text.includes('service') || text.includes('wash') || text.includes('laundry') || text.includes('clean')) {
+    return 'service';
+  }
+
+  return 'general';
+}
+
+function ProductImageWithFallback({
+  src,
+  alt = '',
+  className = '',
+  productName = '',
+  category = '',
+  unit = '',
+  isService = false,
+}: {
+  src?: string;
+  alt?: string;
+  className?: string;
+  productName?: string;
+  category?: string;
+  unit?: string;
+  isService?: boolean;
+}) {
+  const [hasError, setHasError] = useState(false);
+
+  if (src && !hasError) {
+    return (
+      <img
+        src={src}
+        alt={alt || productName}
+        className={className}
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
+  const type = isService
+    ? 'service'
+    : getProductCategoryType(productName, category, unit);
+
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center group-hover:scale-105 transition-transform">
+      {type === 'bottle' && (
+        <svg className="w-10 h-10 text-amber-500/80 dark:text-amber-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M10 2h4v3a2 2 0 0 0 .5 1.3l1.8 2.2a3 3 0 0 1 .7 1.9V20a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9.6a3 3 0 0 1 .7-1.9l1.8-2.2A2 2 0 0 0 10 5V2z" fill="currentColor" fillOpacity="0.15" />
+          <line x1="8" y1="13" x2="16" y2="13" strokeDasharray="2 2" />
+          <rect x="9" y="1" width="6" height="2" rx="0.5" fill="currentColor" />
+        </svg>
+      )}
+      {type === 'sachet' && (
+        <svg className="w-10 h-10 text-emerald-500/80 dark:text-emerald-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="currentColor" fillOpacity="0.15" />
+          <line x1="5" y1="6" x2="19" y2="6" />
+          <line x1="5" y1="18" x2="19" y2="18" />
+          <rect x="8.5" y="9.5" width="7" height="5" rx="1" fill="currentColor" fillOpacity="0.2" />
+        </svg>
+      )}
+      {type === 'box' && (
+        <svg className="w-10 h-10 text-sky-500/80 dark:text-sky-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="currentColor" fillOpacity="0.15" />
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+          <line x1="12" y1="22.08" x2="12" y2="12" />
+        </svg>
+      )}
+      {type === 'can' && (
+        <svg className="w-10 h-10 text-rose-500/80 dark:text-rose-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <ellipse cx="12" cy="5" rx="7" ry="3" fill="currentColor" fillOpacity="0.2" />
+          <path d="M5 5v14c0 1.66 3.13 3 7 3s7-1.34 7-3V5" />
+          <ellipse cx="12" cy="12" rx="7" ry="2" strokeDasharray="2 2" />
+        </svg>
+      )}
+      {type === 'fresh' && (
+        <svg className="w-10 h-10 text-emerald-600/80 dark:text-emerald-300/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <circle cx="12" cy="13" r="7" fill="currentColor" fillOpacity="0.15" />
+          <path d="M12 6c.5-2 2-3.5 4-3.5 0 2-1.5 3.5-4 3.5z" fill="currentColor" />
+          <path d="M12 6c-.5-2-2-3.5-4-3.5 0 2 1.5 3.5 4 3.5z" />
+        </svg>
+      )}
+      {type === 'service' && (
+        <svg className="w-10 h-10 text-purple-500/80 dark:text-purple-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8" />
+          <circle cx="12" cy="12" r="4" fill="currentColor" fillOpacity="0.2" />
+        </svg>
+      )}
+      {type === 'general' && (
+        <svg className="w-10 h-10 text-indigo-500/80 dark:text-indigo-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" fill="currentColor" fillOpacity="0.15" />
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <path d="M16 10a4 4 0 0 1-8 0" />
+        </svg>
+      )}
+      <span className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400 dark:text-zinc-500 mt-1 truncate max-w-[90%]">
+        {type}
+      </span>
+    </div>
+  );
+}
+
 const ORDER_TOKEN_PREFIX = 'storeflow_order_token_';
 
 function saveOrderAccessToken(orderId: string, token: string) {
@@ -2964,6 +3120,14 @@ function App() {
       result = [...result].sort((a, b) => a.name.localeCompare(b.name));
     }
 
+    // Always sort sold-out items (quantity <= 0 or out_of_stock) to the very bottom
+    result.sort((a, b) => {
+      const aInStock = (a.quantity > 0 && a.status !== 'out_of_stock') ? 1 : 0;
+      const bInStock = (b.quantity > 0 && b.status !== 'out_of_stock') ? 1 : 0;
+      if (aInStock !== bInStock) return bInStock - aInStock;
+      return 0;
+    });
+
     return result;
   }, [products, searchQuery, selectedCategory, showInStockOnly, sortBy, getPrice]);
 
@@ -4312,11 +4476,15 @@ function App() {
                     className="relative bg-white border border-gray-100 rounded-[24px] p-3 cursor-pointer hover:border-gray-200 transition-all flex flex-col justify-between active-scale shadow-sm"
                   >
                     <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-xl mb-3 overflow-hidden flex items-center justify-center">
-                      {p.image ? (
-                        <img src={p.image} className="w-full h-full object-contain p-2" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                      ) : (
-                        <span className="text-2xl">📦</span>
-                      )}
+                      <ProductImageWithFallback
+                        src={p.image}
+                        alt={p.name}
+                        className="w-full h-full object-contain p-2"
+                        productName={p.name}
+                        category={p.category}
+                        unit={p.unit}
+                        isService={p.isService}
+                      />
                     </div>
                     <div className="space-y-1 text-left">
                       <p className="font-bold text-xs text-[#1A1C1E] truncate">{p.name}</p>
@@ -4675,14 +4843,16 @@ function App() {
                                 </span>
                               </button>
 
-                              <div className="relative w-full aspect-square bg-[#F8F9FA] rounded-2xl mb-4 overflow-hidden flex items-center justify-center">
-                                {p.image ? (
-                                  <img src={p.image} className="w-full h-full object-contain p-2" alt="" />
-                                ) : p.isService ? (
-                                  <span className="material-symbols-outlined text-gray-300 text-3xl">dry_cleaning</span>
-                                ) : (
-                                  <span className="material-symbols-outlined text-gray-300 text-3xl">image</span>
-                                )}
+                              <div className="relative w-full aspect-square bg-[#F8F9FA] dark:bg-zinc-900 rounded-2xl mb-4 overflow-hidden flex items-center justify-center">
+                                <ProductImageWithFallback
+                                  src={p.image}
+                                  alt={p.name}
+                                  className="w-full h-full object-contain p-2"
+                                  productName={p.name}
+                                  category={p.category}
+                                  unit={p.unit}
+                                  isService={p.isService}
+                                />
                               </div>
 
                               <div className="space-y-0.5">
@@ -5710,13 +5880,15 @@ function App() {
 
             <div className="space-y-4 mb-6">
               <div className="w-full h-56 bg-surface-container-low rounded-2xl flex items-center justify-center overflow-hidden">
-                {selectedProduct.image ? (
-                  <img src={selectedProduct.image} className="w-full h-full object-contain p-4" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                ) : selectedProduct.isService ? (
-                  <span className="text-6xl">🧺</span>
-                ) : (
-                  <span className="text-6xl">📦</span>
-                )}
+                <ProductImageWithFallback
+                  src={selectedProduct.image}
+                  alt={selectedProduct.name}
+                  className="w-full h-full object-contain p-4"
+                  productName={selectedProduct.name}
+                  category={selectedProduct.category}
+                  unit={selectedProduct.unit}
+                  isService={selectedProduct.isService}
+                />
               </div>
               <div>
                 <h2 className="text-xl font-extrabold text-on-background font-headline-lg">{selectedProduct.name}</h2>
@@ -5825,11 +5997,15 @@ function App() {
                   {cart.map(item => (
                     <div key={item.product.id} className="flex gap-4 items-center pb-4 border-b border-gray-100">
                       <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
-                        {item.product.image ? (
-                          <img src={item.product.image} className="w-full h-full object-contain p-1" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                        ) : (
-                          <span className="text-2xl">📦</span>
-                        )}
+                        <ProductImageWithFallback
+                          src={item.product.image}
+                          alt={item.product.name}
+                          className="w-full h-full object-contain p-1"
+                          productName={item.product.name}
+                          category={item.product.category}
+                          unit={item.product.unit}
+                          isService={item.product.isService}
+                        />
                       </div>
                       <div className="flex-1 min-w-0 text-left">
                         <h4 className="font-bold text-sm text-[#1A1C1E] truncate">{item.product.name}</h4>
