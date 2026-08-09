@@ -274,6 +274,8 @@ function App() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showReviewsModal, setShowReviewsModal] = useState(false);
   const [userRating, setUserRating] = useState<number | null>(null);
+  const [selectedStars, setSelectedStars] = useState<number | null>(null);
+  const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [isStoreFavorited, setIsStoreFavorited] = useState(false);
   
@@ -665,6 +667,10 @@ function App() {
   const [profilePhone, setProfilePhone] = useState('');
   if (false) console.log({ profilePhone, setProfilePhone });
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('storeflow_dark_mode') === 'true');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
 
   // ─── It'sMe Identity State ───────────────────────────────────────────────────
   const [itsMeProfile, setItsMeProfile] = useState<ItsMe>(() => loadItsMeProfile());
@@ -2996,7 +3002,7 @@ function App() {
         <div className="h-4 w-64 bg-gray-100 rounded-md mt-2 animate-shimmer" />
       </div>
 
-      <div className="mt-6 px-4 max-w-lg md:max-w-2xl mx-auto space-y-6">
+      <div className="mt-6 px-4 md:px-8 max-w-5xl lg:max-w-6xl mx-auto space-y-6">
         {/* Info Card Skeleton */}
         <div className="bg-white p-5 rounded-[24px] border border-gray-100 shadow-sm space-y-4">
           <div className="h-4 w-36 bg-gray-200 rounded-md animate-shimmer" />
@@ -3081,7 +3087,7 @@ function App() {
         </div>
 
         {/* Center the store branding */}
-        <div className="relative bg-white rounded-t-[28px] -mt-8 pt-20 pb-4 px-4 md:px-6 text-center flex flex-col items-center max-w-lg md:max-w-2xl mx-auto">
+        <div className="relative bg-white rounded-t-[28px] -mt-8 pt-20 pb-4 px-4 md:px-6 text-center flex flex-col items-center max-w-5xl lg:max-w-6xl mx-auto">
           <div className="absolute -top-16 w-32 h-32 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden flex items-center justify-center shrink-0 animate-fade-in">
             {isLogoImageUrl(store?.logo) ? (
               <img src={store!.logo} className="w-full h-full object-cover" alt="" />
@@ -3170,87 +3176,41 @@ function App() {
     const hasDistance = !!distance;
 
     return (
-      <div className="bg-white rounded-[24px] p-5 border border-gray-100 shadow-sm text-left space-y-5 animate-fade-in">
-        <h3 className="font-extrabold text-sm uppercase tracking-wider text-gray-400">Store Information</h3>
-
-        <div className="space-y-4 text-xs">
-          {hasAddress && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">location_on</span>
-              <div className="min-w-0">
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Full Address</p>
-                <p className="mt-0.5 leading-relaxed font-semibold text-gray-800 break-words">{address}</p>
-              </div>
-            </div>
+      <div className="bg-white dark:bg-zinc-900 rounded-[24px] p-4 sm:p-5 border border-gray-100 dark:border-zinc-800 shadow-sm text-left space-y-4 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <h3 className="font-black text-xs sm:text-sm uppercase tracking-wider text-gray-400 dark:text-zinc-500">Store Information</h3>
+          {hasDistance && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-100 dark:border-emerald-500/20">
+              <span className="material-symbols-outlined text-xs">near_me</span>
+              {distance} away
+            </span>
           )}
+        </div>
 
-          {hasPhone && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">call</span>
-              <div>
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Phone Number</p>
-                <p className="mt-0.5 font-semibold text-gray-800">{phone}</p>
-              </div>
-            </div>
-          )}
-
-          {hasEmail && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">mail</span>
-              <div>
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Email Address</p>
-                <p className="mt-0.5 font-semibold text-gray-800 break-all">{email}</p>
-              </div>
-            </div>
-          )}
-
-          {hasWebsite && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">language</span>
-              <div className="min-w-0">
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Website</p>
-                <a 
-                  href={website.startsWith('http') ? website : 'https://' + website}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-0.5 font-semibold text-[#1A1C1E] hover:underline cursor-pointer block truncate"
-                >
-                  {website}
-                </a>
-              </div>
-            </div>
-          )}
-
-          {hasHours && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">schedule</span>
-              <div>
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Opening Hours</p>
-                <p className="mt-0.5 font-semibold text-[#1A1C1E]">
-                  {openingTime} – {closingTime}
-                </p>
-              </div>
-            </div>
-          )}
-
+        {/* Compact 2-col (mobile) / 4-col (desktop) Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
           {hasDelivery && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">local_shipping</span>
-              <div>
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Delivery Details</p>
-                <p className="mt-0.5 font-semibold text-gray-800">
-                  Time: {deliveryTime} | Fee: {deliveryFee === 0 ? 'Free' : '₦' + deliveryFee.toLocaleString()}
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">local_shipping</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Delivery</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">
+                  {deliveryTime} • {deliveryFee === 0 ? 'Free' : '₦' + deliveryFee.toLocaleString()}
                 </p>
               </div>
             </div>
           )}
 
           {hasMinOrder && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">payments</span>
-              <div>
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Minimum Order</p>
-                <p className="mt-0.5 font-semibold text-gray-800">
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">payments</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Min Order</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">
                   {minimumOrder === 0 ? 'No Minimum' : '₦' + minimumOrder.toLocaleString()}
                 </p>
               </div>
@@ -3258,44 +3218,100 @@ function App() {
           )}
 
           {hasStoreType && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">storefront</span>
-              <div>
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Store Type</p>
-                <p className="mt-0.5 font-semibold text-gray-800 capitalize">{storeType}</p>
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">storefront</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Store Type</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate capitalize mt-0.5">{storeType}</p>
               </div>
             </div>
           )}
 
           {hasProducts && (
-            <div className="flex gap-3 items-start py-0.5 border-b border-gray-50 pb-3">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">inventory_2</span>
-              <div>
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Catalog Size</p>
-                <p className="mt-0.5 font-semibold text-gray-800">{numProducts} products listed</p>
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">inventory_2</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Catalog</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{numProducts} items</p>
               </div>
             </div>
           )}
 
-          {hasDistance && (
-            <div className="flex gap-3 items-start py-0.5">
-              <span className="material-symbols-outlined text-gray-400 text-lg shrink-0">near_me</span>
-              <div>
-                <p className="font-bold text-gray-400 uppercase text-[9px] tracking-wider">Distance</p>
-                <p className="mt-0.5 font-semibold text-gray-800">{distance} away from your location</p>
+          {hasHours && (
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">schedule</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Opening Hours</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{openingTime} – {closingTime}</p>
+              </div>
+            </div>
+          )}
+
+          {hasAddress && (
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
+              <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">location_on</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Address</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{address}</p>
+              </div>
+            </div>
+          )}
+
+          {hasPhone && (
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">call</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Phone</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{phone}</p>
+              </div>
+            </div>
+          )}
+
+          {hasEmail && (
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
+              <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">mail</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Email</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{email}</p>
+              </div>
+            </div>
+          )}
+
+          {hasWebsite && (
+            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
+              <div className="w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-base font-bold">language</span>
+              </div>
+              <div className="min-w-0">
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Website</p>
+                <a href={website.startsWith('http') ? website : 'https://' + website} target="_blank" rel="noreferrer" className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 hover:underline truncate block mt-0.5">
+                  {website}
+                </a>
               </div>
             </div>
           )}
         </div>
 
         {/* Quick Action Buttons */}
-        <div className="grid grid-cols-4 gap-2 text-[10px] font-bold text-center pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-extrabold text-center pt-1">
           {hasPhone && (
             <a 
               href={'tel:' + phone}
-              className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
+              className="bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer text-[#1A1C1E] dark:text-zinc-100 active-scale transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800"
             >
-              <span className="material-symbols-outlined text-lg text-[#FFD23F] font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>call</span>
+              <span className="material-symbols-outlined text-base text-[#FFD23F] font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>call</span>
               <span>Call</span>
             </a>
           )}
@@ -3304,9 +3320,9 @@ function App() {
               href={'https://wa.me/' + phone.replace(/\D/g, '')}
               target="_blank"
               rel="noreferrer"
-              className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
+              className="bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer text-[#1A1C1E] dark:text-zinc-100 active-scale transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800"
             >
-              <span className="material-symbols-outlined text-lg text-emerald-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
+              <span className="material-symbols-outlined text-base text-emerald-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
               <span>WhatsApp</span>
             </a>
           )}
@@ -3315,9 +3331,9 @@ function App() {
               href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address)}
               target="_blank"
               rel="noreferrer"
-              className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
+              className="bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer text-[#1A1C1E] dark:text-zinc-100 active-scale transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800"
             >
-              <span className="material-symbols-outlined text-lg text-sky-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>directions</span>
+              <span className="material-symbols-outlined text-base text-sky-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>directions</span>
               <span>Directions</span>
             </a>
           )}
@@ -3334,7 +3350,7 @@ function App() {
                 alert('Link copied to clipboard!');
               }
             }}
-            className="bg-[#F8F9FA] border border-gray-100 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
+            className="bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 py-3 rounded-[16px] flex flex-col items-center gap-1 cursor-pointer text-[#1A1C1E] active-scale transition-colors hover:bg-gray-100"
           >
             <span className="material-symbols-outlined text-lg text-amber-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>share</span>
             <span>Share Store</span>
@@ -3486,16 +3502,19 @@ function App() {
     const rating = store?.data?.marketplaceSettings?.rating;
     const reviewsCount = store?.data?.marketplaceSettings?.reviewsCount || 0;
 
-    const handleRateStore = async (stars: number) => {
-      if (isSubmittingRating || !store) return;
+    const RATING_MESSAGES: Record<number, { title: string; subtitle: string }> = {
+      1: { title: 'Terrible 😞', subtitle: "We're sorry to hear that. What went wrong?" },
+      2: { title: 'Poor 🙁', subtitle: 'Thanks for letting us know. How can this store improve?' },
+      3: { title: 'Average 😐', subtitle: 'Thank you! What could make your experience 5 stars?' },
+      4: { title: 'Good! 🙂', subtitle: 'Glad you had a good experience! Any highlights to share?' },
+      5: { title: 'Excellent! 🎉', subtitle: 'Awesome! What did you love most about this store?' },
+    };
+
+    const handleRateStore = async () => {
+      const stars = selectedStars;
+      if (!stars || isSubmittingRating || !store) return;
       setIsSubmittingRating(true);
       try {
-        // NOTE: this used to write directly to stores.data, which silently
-        // failed for guest customers — the stores table's RLS UPDATE policy
-        // only allows the store owner to write. Ratings were never actually
-        // saving. Now goes through a dedicated store_ratings table + RPC that
-        // guests can legitimately call, and re-rating updates your existing
-        // rating instead of padding the count.
         const identifier = customerPhone || currentUser?.phone || 'anonymous';
 
         const { data: result, error } = await supabase.rpc('submit_store_rating', {
@@ -3505,6 +3524,14 @@ function App() {
         });
 
         if (error) throw error;
+
+        if (ratingComment.trim()) {
+          try {
+            const saved = JSON.parse(localStorage.getItem('storeflow_user_reviews') || '{}');
+            saved[store.id] = { stars, comment: ratingComment.trim(), date: new Date().toISOString() };
+            localStorage.setItem('storeflow_user_reviews', JSON.stringify(saved));
+          } catch {}
+        }
 
         const row = Array.isArray(result) ? result[0] : result;
         const updatedData = {
@@ -3527,33 +3554,36 @@ function App() {
       }
     };
 
+    const activeRatingVal = userRating || selectedStars;
+    const ratingInfo = activeRatingVal ? RATING_MESSAGES[activeRatingVal] : null;
+
     return (
       <div 
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center animate-fade-in" 
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in" 
         onClick={() => setShowReviewsModal(false)}
       >
         <div 
-          className="bg-white w-full rounded-t-3xl overflow-hidden p-6 animate-slide-up max-h-[80vh] flex flex-col text-left" 
+          className="bg-white dark:bg-zinc-950 w-full max-w-lg md:max-w-xl mx-auto rounded-t-3xl sm:rounded-3xl overflow-hidden p-6 animate-slide-up max-h-[85vh] flex flex-col text-left border border-gray-100 dark:border-zinc-800 shadow-2xl" 
           onClick={e => e.stopPropagation()}
         >
-          <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-5 shrink-0" />
+          <div className="w-12 h-1 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto mb-5 shrink-0" />
           <div className="flex justify-between items-center mb-4 shrink-0">
-            <h3 className="font-extrabold text-lg text-[#1A1C1E]">Store Ratings & Reviews</h3>
+            <h3 className="font-extrabold text-lg text-[#1A1C1E] dark:text-zinc-100">Store Ratings & Reviews</h3>
             <button 
               onClick={() => setShowReviewsModal(false)} 
-              className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
+              className="w-8 h-8 rounded-full bg-gray-100 dark:bg-zinc-900 flex items-center justify-center cursor-pointer hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors text-gray-500 dark:text-zinc-400"
             >
               <span className="material-symbols-outlined text-lg">close</span>
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-6 pb-6">
+          <div className="flex-1 overflow-y-auto space-y-5 pb-4 hide-scrollbar">
             {rating ? (
-              <div className="bg-gray-50 rounded-[20px] p-5 flex items-center gap-6 border border-gray-100/50">
+              <div className="bg-gray-50 dark:bg-zinc-900/60 rounded-[20px] p-4 sm:p-5 flex items-center gap-6 border border-gray-100 dark:border-zinc-800/80">
                 <div className="text-center shrink-0">
-                  <h1 className="text-4xl font-black text-[#1A1C1E]">{rating.toFixed(1)}</h1>
-                  <p className="text-[9px] text-gray-400 font-extrabold mt-1 uppercase tracking-wider">Out of 5.0</p>
-                  <p className="text-[8px] text-gray-400 font-bold mt-0.5">({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</p>
+                  <h1 className="text-4xl font-black text-[#1A1C1E] dark:text-zinc-100">{rating.toFixed(1)}</h1>
+                  <p className="text-[9px] text-gray-400 dark:text-zinc-500 font-extrabold mt-1 uppercase tracking-wider">Out of 5.0</p>
+                  <p className="text-[8px] text-gray-400 dark:text-zinc-500 font-bold mt-0.5">({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</p>
                 </div>
                 
                 <div className="flex-1 space-y-1">
@@ -3565,44 +3595,44 @@ function App() {
                     { stars: 1, pct: '1%' }
                   ].map(item => (
                     <div key={item.stars} className="flex items-center gap-2 text-xs">
-                      <span className="w-3 text-right font-bold text-gray-500">{item.stars}</span>
+                      <span className="w-3 text-right font-bold text-gray-500 dark:text-zinc-400">{item.stars}</span>
                       <span className="text-amber-400 font-bold">★</span>
-                      <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#1A1C1E] rounded-full" style={{ width: item.pct }} />
+                      <div className="flex-1 h-1.5 bg-gray-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-[#1A1C1E] dark:bg-[#FFD23F] rounded-full" style={{ width: item.pct }} />
                       </div>
-                      <span className="w-8 text-right font-medium text-gray-400">{item.pct}</span>
+                      <span className="w-8 text-right font-medium text-gray-400 dark:text-zinc-500">{item.pct}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="bg-gray-50 rounded-[20px] p-6 text-center border border-gray-100/50 space-y-2">
+              <div className="bg-gray-50 dark:bg-zinc-900/60 rounded-[20px] p-6 text-center border border-gray-100 dark:border-zinc-800/80 space-y-2">
                 <div className="text-4xl">⭐</div>
-                <p className="text-sm font-extrabold text-[#1A1C1E]">No Ratings Yet</p>
-                <p className="text-xs text-gray-400 max-w-[240px] mx-auto leading-relaxed">
+                <p className="text-sm font-extrabold text-[#1A1C1E] dark:text-zinc-100">No Ratings Yet</p>
+                <p className="text-xs text-gray-400 dark:text-zinc-500 max-w-[240px] mx-auto leading-relaxed">
                   Be the first to rate this store and help others in the community discover it!
                 </p>
               </div>
             )}
 
             {/* Interactive Rating Selector */}
-            <div className="border-t border-gray-100 pt-5 text-center space-y-3">
-              <p className="text-xs font-black text-[#1A1C1E] uppercase tracking-wider">
+            <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 text-center space-y-4">
+              <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 uppercase tracking-wider">
                 {userRating ? 'Your Rating' : 'Rate this Store'}
               </p>
               <div className="flex justify-center gap-2">
                 {Array.from({ length: 5 }).map((_, s) => {
                   const starVal = s + 1;
-                  const active = userRating ? userRating >= starVal : false;
+                  const active = activeRatingVal ? activeRatingVal >= starVal : false;
                   return (
                     <button
                       key={s}
                       disabled={userRating !== null || isSubmittingRating}
-                      onClick={() => handleRateStore(starVal)}
-                      className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                      onClick={() => setSelectedStars(starVal)}
+                      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${
                         active 
-                          ? 'bg-amber-400 text-white shadow-md' 
-                          : 'bg-gray-50 text-gray-400 hover:text-amber-400 hover:bg-amber-50'
+                          ? 'bg-amber-400 text-white shadow-md scale-105' 
+                          : 'bg-gray-100 dark:bg-zinc-900 text-gray-400 hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-zinc-800'
                       } cursor-pointer disabled:cursor-default`}
                     >
                       <span 
@@ -3615,15 +3645,60 @@ function App() {
                   );
                 })}
               </div>
+
+              {/* Dynamic message based on selection */}
+              {ratingInfo && (
+                <div className="p-3 bg-amber-50/80 dark:bg-amber-500/10 border border-amber-200/80 dark:border-amber-500/20 rounded-2xl animate-fade-in space-y-0.5 text-center">
+                  <p className="text-xs font-extrabold text-amber-900 dark:text-amber-300">{ratingInfo.title}</p>
+                  <p className="text-[11px] font-semibold text-amber-800/80 dark:text-amber-400">{ratingInfo.subtitle}</p>
+                </div>
+              )}
+
+              {/* Simple message field for ratings */}
+              {selectedStars && !userRating && (
+                <div className="space-y-3 animate-fade-in pt-1">
+                  <textarea
+                    value={ratingComment}
+                    onChange={e => setRatingComment(e.target.value)}
+                    placeholder="Write a simple message or feedback (optional)..."
+                    rows={3}
+                    maxLength={280}
+                    className="w-full p-3 bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl text-xs font-semibold text-[#1A1C1E] dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#FFD23F] resize-none"
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-zinc-500 px-1">
+                    <span>Optional customer review</span>
+                    <span>{ratingComment.length}/280</span>
+                  </div>
+
+                  <button
+                    onClick={handleRateStore}
+                    disabled={isSubmittingRating}
+                    className="w-full py-3.5 bg-[#1A1C1E] dark:bg-[#FFD23F] text-[#FFD23F] dark:text-[#1A1C1E] font-black text-xs uppercase tracking-wider rounded-2xl cursor-pointer active-scale disabled:opacity-50 transition-all shadow-sm flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingRating ? (
+                      <>
+                        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-sm">send</span>
+                        <span>Send Rating</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {userRating && (
-                <p className="text-xs text-emerald-600 font-bold">
-                  Submitted! Thank you for your feedback.
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold pt-1">
+                  ✓ Rating submitted! Thank you for your feedback.
                 </p>
               )}
             </div>
 
-            <div className="text-xs text-gray-500 leading-relaxed space-y-2 border-t border-gray-100 pt-4">
-              <p className="font-extrabold text-[#1A1C1E] text-sm">Verified Ratings Policy</p>
+            <div className="text-xs text-gray-500 dark:text-zinc-400 leading-relaxed space-y-2 border-t border-gray-100 dark:border-zinc-800 pt-4">
+              <p className="font-extrabold text-[#1A1C1E] dark:text-zinc-100 text-sm">Verified Ratings Policy</p>
               <p>
                 Ratings are dynamically aggregated based on checkout feedback from registered StoreFlow shoppers who placed completed orders at this storefront. Detailed customer reviews will be rendered once approved by our moderation team.
               </p>
@@ -3846,7 +3921,7 @@ function App() {
 
       {/* ─── 4. Location Selector Screen ─── */}
       {screen === 'location' && (
-        <div className="flex-1 p-6 flex flex-col justify-between">
+        <div className="flex-1 p-6 max-w-md md:max-w-2xl lg:max-w-3xl mx-auto w-full flex flex-col justify-between">
           <header className="flex items-center gap-3 mb-6">
             <button onClick={() => navigateToScreen('home')} className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center cursor-pointer active-scale text-[#1A1C1E] shadow-sm">
               <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -3982,7 +4057,7 @@ function App() {
             </div>
           </header>
 
-          <main className="px-4 md:px-gutter mt-4 space-y-8">
+          <main className="px-4 md:px-8 max-w-5xl lg:max-w-6xl mx-auto mt-4 space-y-8">
             {/* Search Bar */}
             <div className="relative w-full h-14 bg-white rounded-full flex items-center px-4 border border-gray-200 focus-within:border-gray-400 focus-within:ring-2 focus-within:ring-gray-100 transition-all shadow-sm">
               <span className="material-symbols-outlined text-gray-400 mr-3">search</span>
@@ -4050,17 +4125,8 @@ function App() {
 
             {/* Your Scanned Stores */}
             <section className="text-left">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4">
                 <h2 className="text-xl font-black text-[#1A1C1E] font-headline-md tracking-tight">Your Stores</h2>
-                {searchedStores.length > 0 && (
-                  <button
-                    onClick={startScanner}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1A1C1E] text-[#FFD23F] rounded-full text-[10px] font-black cursor-pointer hover:bg-black shadow-sm"
-                  >
-                    <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
-                    <span>Scan New</span>
-                  </button>
-                )}
               </div>
 
               {searchedStores.length === 0 ? (
@@ -4199,7 +4265,7 @@ function App() {
             </button>
           </header>
 
-          <main className="px-4 mt-4 space-y-5">
+          <main className="px-4 md:px-8 max-w-5xl lg:max-w-6xl mx-auto mt-4 space-y-5">
             {/* Search */}
             <div className="relative w-full h-13 bg-white rounded-full flex items-center px-4 border border-gray-200 focus-within:border-gray-400 focus-within:ring-2 focus-within:ring-gray-100 transition-all shadow-sm">
               <span className="material-symbols-outlined text-gray-400 mr-3">search</span>
@@ -4320,7 +4386,7 @@ function App() {
                 {renderStoreHeader()}
 
                 {/* Main Content Layout Container */}
-                <div className="px-4 max-w-lg md:max-w-2xl mx-auto space-y-6">
+                <div className="px-4 md:px-8 max-w-5xl lg:max-w-6xl mx-auto space-y-6">
                   {/* 2. Store Status badge & Closed Warning */}
                   {renderStoreStatus()}
 
@@ -4421,7 +4487,7 @@ function App() {
 
                   {/* 8. Product Grid & Loading states */}
                   {productsLoading ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 md:gap-6">
                       {[1, 2, 3, 4].map(n => (
                         <div key={n} className="bg-white p-3 rounded-[24px] border border-gray-100 shadow-sm space-y-3 animate-pulse">
                           <div className="aspect-square bg-gray-100 rounded-2xl animate-shimmer" />
@@ -4455,7 +4521,7 @@ function App() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-5 gap-y-7">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-x-4 md:gap-x-6 gap-y-6">
                       {filteredProducts.map(p => {
                         const qtyInCart = getQty(p.id);
                         const isOutOfStock = p.quantity <= 0;
@@ -4756,14 +4822,14 @@ function App() {
 
       {/* ─── 7. Order Tracking timeline ─── */}
       {screen === 'tracking' && (
-        <div className="bg-[#F8F9FA] min-h-screen text-[#1A1C1E] pb-32">
+        <div className="bg-[#F8F9FA] dark:bg-zinc-950 min-h-screen text-[#1A1C1E] dark:text-zinc-100 pb-32">
           {/* Header */}
-          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 px-4 text-[#1A1C1E]">
+          <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 dark:border-zinc-800 px-4 text-[#1A1C1E] dark:text-zinc-100">
             <button 
               onClick={() => {
                 goBack('store');
               }} 
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] active:scale-95 transition cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 active:scale-95 transition cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
@@ -4771,7 +4837,7 @@ function App() {
             <div className="w-10 h-10" />
           </header>
 
-          <main className="mt-6 px-4 max-w-md mx-auto space-y-6 text-left">
+          <main className="mt-6 px-4 md:px-8 max-w-md md:max-w-2xl lg:max-w-3xl mx-auto space-y-6 text-left">
             {/* Store identity chip */}
             {store && (
               <div className="flex items-center justify-center gap-2">
@@ -5144,28 +5210,28 @@ function App() {
 
       {/* ─── 8. Profile Hub Screen ─── */}
       {screen === 'profile' && (
-        <div className="bg-[#F8F9FA] min-h-screen text-[#1A1C1E] pb-32">
+        <div className="bg-[#F8F9FA] dark:bg-zinc-950 min-h-screen text-[#1A1C1E] dark:text-zinc-100 pb-32">
           {/* Header */}
-          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 px-4 text-[#1A1C1E]">
+          <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 dark:border-zinc-800 px-4 text-[#1A1C1E] dark:text-zinc-100">
             <button 
               onClick={() => navigateToScreen('home')} 
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] active:scale-95 transition cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 active:scale-95 transition cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
-            <span className="text-sm font-black tracking-wider uppercase">Profile Hub</span>
+            <span className="text-sm font-black tracking-wider uppercase text-[#1A1C1E] dark:text-zinc-100">Profile Hub</span>
             <div className="w-10 h-10" />
           </header>
 
-          <main className="mt-6 px-4 max-w-md mx-auto space-y-6 text-left">
+          <main className="mt-6 px-4 md:px-8 max-w-md md:max-w-2xl lg:max-w-3xl mx-auto space-y-6 text-left">
             {/* User credentials details */}
-            <div className="p-5 bg-white border border-gray-100 rounded-3xl flex items-center gap-4 shadow-sm">
+            <div className="p-5 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl flex items-center gap-4 shadow-sm">
               <div className="w-14 h-14 bg-[#FFD23F] rounded-full flex items-center justify-center font-black text-slate-950 text-xl uppercase shadow-sm">
                 {profileName ? profileName.slice(0, 2) : 'GS'}
               </div>
               <div className="space-y-0.5 text-left">
-                <h4 className="font-extrabold text-base text-[#1A1C1E]">{profileName || 'Guest Shopper'}</h4>
-                <p className="text-xs text-gray-400 font-semibold">{profileEmail || 'Shopping anonymously'}</p>
+                <h4 className="font-extrabold text-base text-[#1A1C1E] dark:text-zinc-100">{profileName || 'Guest Shopper'}</h4>
+                <p className="text-xs text-gray-400 dark:text-zinc-500 font-semibold">{profileEmail || 'Shopping anonymously'}</p>
                 {currentUser ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 mt-1">
                     Registered Member
@@ -5214,6 +5280,21 @@ function App() {
               </div>
             </button>
 
+            {/* Compact profile overview — additive only, existing data sources unchanged */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { value: ordersHistory.length, label: 'Orders', icon: 'receipt_long' },
+                { value: itsMeProfile.addresses.length, label: 'Addresses', icon: 'location_on' },
+                { value: itsMeProfile.preferredPayment || 'Cash', label: 'Payment', icon: 'payments' },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 p-3 text-center shadow-sm">
+                  <span className="material-symbols-outlined text-[#FFD23F] text-base">{item.icon}</span>
+                  <p className="mt-1 text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate">{item.value}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-zinc-500">{item.label}</p>
+                </div>
+              ))}
+            </div>
+
             {/* Form actions */}
             <div className="space-y-4 text-left">
               <div className="space-y-1 px-1">
@@ -5222,12 +5303,12 @@ function App() {
                   type="text"
                   value={profileName}
                   onChange={e => setProfileName(e.target.value)}
-                  className="w-full px-4 h-12 bg-white text-[#1A1C1E] rounded-2xl border border-gray-200 focus:outline-none focus:border-gray-400 text-xs font-bold shadow-sm"
+                  className="w-full px-4 h-12 bg-white dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 rounded-2xl border border-gray-200 dark:border-zinc-800 focus:outline-none focus:border-[#FFD23F] text-xs font-bold shadow-sm"
                 />
               </div>
 
               {/* Dark mode toggler */}
-              <div className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl shadow-sm">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">{darkMode ? 'dark_mode' : 'light_mode'}</span>
                   <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{darkMode ? 'Dark Mode' : 'Light Mode'}</span>
@@ -5240,16 +5321,16 @@ function App() {
                   }}
                   aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
                   title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                  className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer active:scale-90 transition-all focus:outline-none"
+                  className="w-10 h-10 rounded-full bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 flex items-center justify-center cursor-pointer active:scale-90 transition-all focus:outline-none"
                 >
-                  <span className="material-symbols-outlined text-lg text-[#1A1C1E]">{darkMode ? 'light_mode' : 'dark_mode'}</span>
+                  <span className="material-symbols-outlined text-lg text-[#1A1C1E] dark:text-zinc-100">{darkMode ? 'light_mode' : 'dark_mode'}</span>
                 </button>
               </div>
 
               {/* Saved list options */}
               <button 
                 onClick={() => { navigateToScreen('history'); loadOrdersHistory(); }} 
-                className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-left font-extrabold text-xs uppercase tracking-wider flex items-center justify-between cursor-pointer hover:bg-gray-50 active:scale-98 transition text-[#1A1C1E] shadow-sm"
+                className="w-full p-4 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl text-left font-extrabold text-xs uppercase tracking-wider flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800 active:scale-98 transition text-[#1A1C1E] dark:text-zinc-100 shadow-sm"
               >
                 <span className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">receipt_long</span>
@@ -5280,7 +5361,7 @@ function App() {
                 Log Out Account
               </button>
             ) : (
-              <button onClick={() => navigateToScreen('login')} className="w-full h-14 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl active-scale transition cursor-pointer uppercase tracking-wider text-xs hover:bg-black">
+              <button onClick={() => navigateToScreen('login')} className="w-full h-14 bg-[#1A1C1E] dark:bg-[#FFD23F] text-[#FFD23F] dark:text-[#1A1C1E] font-black rounded-2xl active-scale transition cursor-pointer uppercase tracking-wider text-xs hover:bg-black dark:hover:bg-[#f5c62e]">
                 Sign In / Register
               </button>
             )}
@@ -5290,12 +5371,12 @@ function App() {
 
       {/* ─── 9. Orders History Screen ─── */}
       {screen === 'history' && (
-        <div className="bg-[#F8F9FA] min-h-screen text-[#1A1C1E] pb-32">
+        <div className="bg-[#F8F9FA] dark:bg-zinc-950 min-h-screen text-[#1A1C1E] dark:text-zinc-100 pb-32">
           {/* Header */}
-          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 px-4 text-[#1A1C1E]">
+          <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 dark:border-zinc-800 px-4 text-[#1A1C1E] dark:text-zinc-100">
             <button 
               onClick={() => navigateToScreen('home')} 
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] active:scale-95 transition cursor-pointer"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 active:scale-95 transition cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
@@ -5303,7 +5384,7 @@ function App() {
             <div className="w-10 h-10" />
           </header>
 
-          <main className="mt-6 px-4 max-w-md mx-auto space-y-4 text-left">
+          <main className="mt-6 px-4 md:px-8 max-w-md md:max-w-2xl lg:max-w-3xl mx-auto space-y-4 text-left">
             {ordersHistory.length > 0 && (
               <div className="relative w-full h-11 bg-white rounded-xl flex items-center px-4 border border-gray-200 shadow-sm">
                 <span className="material-symbols-outlined text-gray-400 text-sm mr-2.5">search</span>
@@ -5379,7 +5460,7 @@ function App() {
                       <div className="flex-1 h-px bg-gray-200" />
                     </div>
                   )}
-                  <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                  <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-4 text-left">
                     {/* Header: Store Logo, Name & Date */}
                     <div className="flex justify-between items-start border-b border-gray-100 pb-3">
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -5999,12 +6080,12 @@ function App() {
 
       {/* ─── It'sMe Identity Screen Overlay ─── */}
       {showItsMeScreen && (
-        <div className="absolute inset-0 z-[200] bg-[#F8F9FA] flex flex-col overflow-hidden">
+        <div className="absolute inset-0 z-[200] bg-[#F8F9FA] dark:bg-zinc-950 text-[#1A1C1E] dark:text-zinc-100 flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="bg-white border-b border-gray-100 px-4 h-16 flex items-center justify-between shrink-0">
+          <div className="bg-white dark:bg-zinc-950 border-b border-gray-100 dark:border-zinc-800 px-4 h-16 flex items-center justify-between shrink-0">
             <button
               onClick={() => setShowItsMeScreen(false)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] cursor-pointer active:scale-95 transition"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 cursor-pointer active:scale-95 transition"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
             </button>
@@ -6081,7 +6162,7 @@ function App() {
             </div>
 
             {/* QR Code Identity Card */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm flex flex-col items-center justify-center text-center space-y-3">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm flex flex-col items-center justify-center text-center space-y-3">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Your Personal QR Code</p>
               <div className="bg-[#1A1C1E] p-4 rounded-[24px] shadow-md border border-white/5">
                 <img
@@ -6094,7 +6175,7 @@ function App() {
             </div>
 
             {/* Contact Info */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Contact Info</h3>
                 <button onClick={tryBrowserAutofill} className="text-[10px] text-[#1A1C1E] font-black flex items-center gap-1 cursor-pointer hover:text-gray-600">
@@ -6110,7 +6191,7 @@ function App() {
                     autoComplete="name"
                     value={itsMeEditName}
                     onChange={e => setItsMeEditName(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200 focus:border-gray-400 focus:outline-none text-[#1A1C1E] rounded-xl text-sm font-semibold"
+                    className="w-full px-4 py-3 bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 focus:border-[#FFD23F] focus:outline-none text-[#1A1C1E] dark:text-zinc-100 rounded-xl text-sm font-semibold"
                     placeholder="Your full name"
                   />
                 </div>
@@ -6121,7 +6202,7 @@ function App() {
                     autoComplete="tel"
                     value={itsMeEditPhone}
                     onChange={e => setItsMeEditPhone(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200 focus:border-gray-400 focus:outline-none text-[#1A1C1E] rounded-xl text-sm font-semibold"
+                    className="w-full px-4 py-3 bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 focus:border-[#FFD23F] focus:outline-none text-[#1A1C1E] dark:text-zinc-100 rounded-xl text-sm font-semibold"
                     placeholder="+234 xxx xxx xxxx"
                   />
                 </div>
@@ -6132,7 +6213,7 @@ function App() {
                     autoComplete="email"
                     value={itsMeEditEmail}
                     onChange={e => setItsMeEditEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200 focus:border-gray-400 focus:outline-none text-[#1A1C1E] rounded-xl text-sm font-semibold"
+                    className="w-full px-4 py-3 bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 focus:border-[#FFD23F] focus:outline-none text-[#1A1C1E] dark:text-zinc-100 rounded-xl text-sm font-semibold"
                     placeholder="your@email.com"
                   />
                 </div>
@@ -6140,13 +6221,13 @@ function App() {
             </div>
 
             {/* Delivery Addresses */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Saved Addresses</h3>
               {itsMeProfile.addresses.map((addr, i) => (
                 <div key={i} className="flex items-center justify-between bg-[#F8F9FA] rounded-2xl px-4 py-3 border border-gray-100">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <span className="material-symbols-outlined text-[#FFD23F] text-base">location_on</span>
-                    <span className="text-xs text-[#1A1C1E] font-semibold truncate">{addr}</span>
+                    <span className="text-xs text-[#1A1C1E] dark:text-zinc-100 font-semibold truncate">{addr}</span>
                   </div>
                   <button
                     onClick={() => {
@@ -6165,7 +6246,7 @@ function App() {
                   autoComplete="street-address"
                   value={itsMeAddressInput}
                   onChange={e => setItsMeAddressInput(e.target.value)}
-                  className="flex-1 px-4 py-2.5 bg-[#F8F9FA] border border-gray-200 focus:border-gray-400 focus:outline-none text-[#1A1C1E] rounded-xl text-sm font-semibold"
+                  className="flex-1 px-4 py-2.5 bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 focus:border-[#FFD23F] focus:outline-none text-[#1A1C1E] dark:text-zinc-100 rounded-xl text-sm font-semibold"
                   placeholder="Add new address…"
                   onKeyDown={e => {
                     if (e.key === 'Enter' && itsMeAddressInput.trim()) {
@@ -6190,13 +6271,13 @@ function App() {
             </div>
 
             {/* Landmarks */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Saved Landmarks</h3>
               {itsMeProfile.landmarks.map((lm, i) => (
                 <div key={i} className="flex items-center justify-between bg-[#F8F9FA] rounded-2xl px-4 py-3 border border-gray-100">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <span className="material-symbols-outlined text-[#FFD23F] text-base">place</span>
-                    <span className="text-xs text-[#1A1C1E] font-semibold truncate">{lm}</span>
+                    <span className="text-xs text-[#1A1C1E] dark:text-zinc-100 font-semibold truncate">{lm}</span>
                   </div>
                   <button
                     onClick={() => {
@@ -6214,7 +6295,7 @@ function App() {
                   type="text"
                   value={itsMeLandmarkInput}
                   onChange={e => setItsMeLandmarkInput(e.target.value)}
-                  className="flex-1 px-4 py-2.5 bg-[#F8F9FA] border border-gray-200 focus:border-gray-400 focus:outline-none text-[#1A1C1E] rounded-xl text-sm font-semibold"
+                  className="flex-1 px-4 py-2.5 bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 focus:border-[#FFD23F] focus:outline-none text-[#1A1C1E] dark:text-zinc-100 rounded-xl text-sm font-semibold"
                   placeholder="e.g. Near GTBank, after bridge…"
                   onKeyDown={e => {
                     if (e.key === 'Enter' && itsMeLandmarkInput.trim()) {
@@ -6239,19 +6320,19 @@ function App() {
             </div>
 
             {/* Delivery Instructions */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-3">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Preferred Delivery Instructions</h3>
               <textarea
                 value={itsMeEditInstructions}
                 onChange={e => setItsMeEditInstructions(e.target.value)}
                 rows={3}
-                className="w-full px-4 py-3 bg-[#F8F9FA] border border-gray-200 focus:border-gray-400 focus:outline-none text-[#1A1C1E] rounded-xl text-sm font-semibold resize-none"
+                className="w-full px-4 py-3 bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 focus:border-[#FFD23F] focus:outline-none text-[#1A1C1E] dark:text-zinc-100 rounded-xl text-sm font-semibold resize-none"
                 placeholder="e.g. Call me 5 minutes before arrival…"
               />
             </div>
 
             {/* Payment Preference */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-3">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Preferred Payment</h3>
               <div className="grid grid-cols-3 gap-2">
                 {(['cash', 'transfer', 'opay'] as const).map(method => (
@@ -6270,7 +6351,7 @@ function App() {
 
             {/* Recent Orders */}
             {ordersHistory.length > 0 && (
-              <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-3">
+              <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Recent Orders</h3>
                   <button onClick={() => { setShowItsMeScreen(false); navigateToScreen('history'); loadOrdersHistory(); }} className="text-[10px] font-black text-[#1A1C1E] cursor-pointer hover:text-gray-500">
@@ -6297,7 +6378,7 @@ function App() {
               const favStores = allStores.filter(s => localStorage.getItem('storeflow_fav_store_' + s.id) === 'true');
               if (favStores.length === 0) return null;
               return (
-                <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-3">
+                <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-3">
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Favourite Stores</h3>
                   {favStores.map(s => (
                     <div
@@ -6320,7 +6401,7 @@ function App() {
             })()}
 
             {/* Identity Metadata */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-3">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider">Identity Details</h3>
               <div className="space-y-2">
                 <div className="flex justify-between items-center py-2 border-b border-gray-50">

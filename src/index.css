@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --color-surface-variant: #e3e2e2;
@@ -133,7 +134,78 @@ img:not([src]), img[src=""] { visibility: hidden; }
 }
 
 html, body, #root { max-width: 100%; overflow-x: hidden; }
-
 @media (max-width: 640px) {
   input, select, textarea { font-size: 16px; }
 }
+
+/* Global Dark Mode Overrides */
+.dark {
+  background-color: #121315 !important;
+  color: #f3f4f6 !important;
+  color-scheme: dark;
+}
+
+.dark .bg-white,
+.dark header,
+.dark nav,
+.dark .bg-surface,
+.dark .bg-surface-container,
+.dark .bg-surface-container-low,
+.dark .bg-surface-container-high {
+  background-color: #18191b !important;
+  color: #f3f4f6 !important;
+  border-color: #26282b !important;
+}
+
+.dark .bg-\[\#F8F9FA\] {
+  background-color: #121315 !important;
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #1f2023 !important;
+  color: #ffffff !important;
+  border-color: #2d3034 !important;
+}
+
+.dark .text-\[\#1A1C1E\],
+.dark .text-slate-900,
+.dark .text-gray-900,
+.dark .text-on-surface,
+.dark .text-on-background,
+.dark h1,
+.dark h2,
+.dark h3,
+.dark p,
+.dark span:not(.material-symbols-outlined) {
+  color: #f3f4f6;
+}
+
+.dark .text-gray-400,
+.dark .text-gray-500 {
+  color: #9ca3af;
+}
+
+.dark .border-gray-50,
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-outline-variant\/10 {
+  border-color: #26282b !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-gray-100 {
+  background-color: #1f2023 !important;
+  color: #ffffff !important;
+}
+
+.dark .bg-\[\#1A1C1E\] {
+  background-color: #1f2023 !important;
+  border: 1px solid rgba(255, 210, 63, 0.3) !important;
+}
+
+.dark .text-\[\#FFD23F\] {
+  color: #FFD23F !important;
+}
+
