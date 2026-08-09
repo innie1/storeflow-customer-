@@ -49,7 +49,6 @@
   --color-on-primary-container: #705d00;
   --color-inverse-on-surface: #f2f0f0;
 
-  /* Custom spacings */
   --spacing-gutter: 16px;
   --spacing-container-padding: 24px;
   --spacing-stack-sm: 8px;
@@ -57,7 +56,6 @@
   --spacing-stack-lg: 32px;
   --spacing-base: 8px;
 
-  /* Custom font families */
   --font-headline-lg: "Plus Jakarta Sans", sans-serif;
   --font-label-sm: "Inter", sans-serif;
   --font-body-md: "Inter", sans-serif;
@@ -68,7 +66,6 @@
   --font-label-lg: "Inter", sans-serif;
 }
 
-/* Material Symbols configuration */
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   display: inline-block;
@@ -80,354 +77,35 @@
   direction: ltr;
 }
 
-/* Global resets & styling rules */
 body {
   font-family: 'Inter', sans-serif;
   background-color: #fbf9f9;
 }
 
-/* Hide scrollbar utility */
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Custom keyframes & animation utilities */
 @keyframes scan-line {
-  0%   { top: 10%; opacity: 0; }
-  10%  { opacity: 1; }
-  90%  { opacity: 1; }
+  0% { top: 10%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
   100% { top: 90%; opacity: 0; }
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.animate-scan-line { animation: scan-line 2s linear infinite; }
+.animate-spin-slow { animation: spin 0.8s linear infinite; }
+.active-scale:active { transform: scale(0.95); }
+
+/* Accessibility and mobile hardening. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+  .animate-scan-line, .animate-spin-slow { animation: none !important; }
+  .active-scale:active { transform: none; }
 }
 
-.animate-scan-line {
-  animation: scan-line 2s linear infinite;
+html, body, #root {
+  max-width: 100%;
+  overflow-x: hidden;
 }
-
-.animate-spin-slow {
-  animation: spin 0.8s linear infinite;
-}
-
-/* Active press scale utility */
-.active-scale:active {
-  transform: scale(0.95);
-}
-
-/* Skeleton Loading Shimmer */
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.animate-shimmer {
-  background: linear-gradient(90deg, #e3e2e2 25%, #efeded 50%, #e3e2e2 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite linear;
-}
-
-.dark .animate-shimmer {
-  background: linear-gradient(90deg, #26282B 25%, #32353A 50%, #26282B 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite linear;
-}
-
-/* Fade In / Fade Up Page Animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-up {
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-
-.animate-slide-up {
-  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Glassmorphism Classes */
-.glass-header {
-  background: rgba(26, 28, 30, 0.65);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
-.dark .glass-card {
-  background: rgba(38, 40, 43, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* Soft Premium Shadow */
-.premium-shadow {
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
-}
-
-.premium-shadow-lg {
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
-}
-
-/* Pure fade-in animation */
-@keyframes pureFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.animate-fade-in {
-  animation: pureFadeIn 0.35s ease-out forwards;
-}
-
-/* Floating cart bounce animation */
-@keyframes cart-pop {
-  0% { transform: translate(-50%, 0) scale(1); }
-  50% { transform: translate(-50%, -6px) scale(1.05); }
-  100% { transform: translate(-50%, 0) scale(1); }
-}
-
-.animate-cart-pop {
-  animation: cart-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-/* Home "Scan a Store QR Code" tile — the QR icon quietly fills solid
-   black then eases back to gray on a loop, signalling it's tappable
-   without needing a separate button underneath it. */
-@keyframes qrFillPulse {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
-}
-
-.qr-fill-pulse-fill {
-  animation: qrFillPulse 2.6s ease-in-out infinite;
-}
-
-/* ─── Global Dark Mode Overrides ─── */
-.dark {
-  background-color: #121315 !important;
-  color: #f3f4f6 !important;
-}
-
-.dark .bg-white,
-.dark header,
-.dark nav,
-.dark .bg-surface,
-.dark .bg-surface-container,
-.dark .bg-surface-container-low,
-.dark .bg-surface-container-high {
-  background-color: #18191b !important;
-  color: #f3f4f6 !important;
-  border-color: #26282b !important;
-}
-
-.dark .bg-\[\#F8F9FA\] {
-  background-color: #121315 !important;
-}
-
-.dark input,
-.dark textarea,
-.dark select {
-  background-color: #1f2023 !important;
-  color: #ffffff !important;
-  border-color: #2d3034 !important;
-}
-
-.dark .text-\[\#1A1C1E\],
-.dark .text-slate-900,
-.dark .text-gray-900,
-.dark .text-on-surface,
-.dark .text-on-background,
-.dark h1,
-.dark h2,
-.dark h3,
-.dark p,
-.dark span {
-  color: #f3f4f6 !important;
-}
-
-.dark .text-gray-400,
-.dark .text-gray-500 {
-  color: #9ca3af !important;
-}
-
-.dark .border-gray-50,
-.dark .border-gray-100,
-.dark .border-gray-200,
-.dark .border-outline-variant\/10 {
-  border-color: #26282b !important;
-}
-
-.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
-.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #26282b !important;
-}
-
-.dark .bg-gray-50,
-.dark .bg-gray-100 {
-  background-color: #1f2023 !important;
-  color: #ffffff !important;
-}
-
-.dark .bg-\[\#1A1C1E\] {
-  background-color: #1f2023 !important;
-  border: 1px solid rgba(255, 210, 63, 0.3) !important;
-}
-
-.dark .text-\[\#FFD23F\] {
-  color: #FFD23F !important;
-}
-
-.dark .bg-emerald-50 {
-  background-color: rgba(16, 185, 129, 0.1) !important;
-  color: #34d399 !important;
-}
-
-.dark .bg-amber-50 {
-  background-color: rgba(245, 158, 11, 0.1) !important;
-  color: #fbbf24 !important;
-}
-
-.dark .bg-rose-50 {
-  background-color: rgba(239, 68, 68, 0.1) !important;
-  color: #f87171 !important;
-}
-
-/* DayNightToggle background animations */
-@keyframes cloudPass {
-  0% { transform: translateX(-20px); opacity: 0; }
-  20% { opacity: 0.8; }
-  80% { opacity: 0.8; }
-  100% { transform: translateX(200px); opacity: 0; }
-}
-
-@keyframes darkCloudPass {
-  0% { transform: translateX(-20px); opacity: 0; }
-  20% { opacity: 0.4; }
-  80% { opacity: 0.4; }
-  100% { transform: translateX(200px); opacity: 0; }
-}
-
-@keyframes birdFly {
-  0% { transform: translate(-20px, 5px) scale(0.6); opacity: 0; }
-  15% { opacity: 1; transform: translate(10px, 0px) scale(0.7); }
-  85% { opacity: 1; transform: translate(150px, -5px) scale(0.5); }
-  100% { transform: translate(200px, -10px) scale(0.4); opacity: 0; }
-}
-
-@keyframes birdFlap {
-  0%, 100% { clip-path: polygon(0 20%, 50% 100%, 100% 20%, 50% 60%); }
-  50% { clip-path: polygon(0 60%, 50% 100%, 100% 60%, 50% 40%); }
-}
-
-@keyframes shootingStar {
-  0% { transform: translate(150px, -20px) rotate(-45deg) scale(0); opacity: 0; }
-  5% { transform: translate(140px, -10px) rotate(-45deg) scale(1); opacity: 1; }
-  15% { transform: translate(50px, 80px) rotate(-45deg) scale(0); opacity: 0; }
-  100% { transform: translate(50px, 80px) rotate(-45deg) scale(0); opacity: 0; }
-}
-
-.animate-cloud {
-  animation: cloudPass 15s linear infinite;
-}
-.animate-cloud-delayed {
-  animation: cloudPass 18s linear infinite;
-  animation-delay: 7s;
-}
-.animate-dark-cloud {
-  animation: darkCloudPass 20s linear infinite;
-}
-.animate-bird {
-  animation: birdFly 12s linear infinite;
-}
-.animate-bird-delayed {
-  animation: birdFly 15s linear infinite;
-  animation-delay: 5s;
-}
-.bird-shape {
-  width: 10px;
-  height: 6px;
-  background-color: rgba(255, 255, 255, 0.7);
-  animation: birdFlap 0.4s infinite alternate ease-in-out;
-}
-.dark-bird-shape {
-  width: 10px;
-  height: 6px;
-  background-color: rgba(0, 0, 0, 0.4);
-  animation: birdFlap 0.4s infinite alternate ease-in-out;
-}
-.animate-shooting-star {
-  animation: shootingStar 10s linear infinite;
-}
-.animate-shooting-star-delayed {
-  animation: shootingStar 14s linear infinite;
-  animation-delay: 4s;
-}
-.shooting-star-shape {
-  width: 30px;
-  height: 2px;
-  background: linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%);
-  border-radius: 999px;
-}
-
-/* QR code smooth gray-to-black cycling animation for empty state */
-@keyframes qrGrayToBlack {
-  0%, 100% {
-    color: #e5e7eb;
-    transform: scale(0.96);
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.02));
-  }
-  50% {
-    color: #1a1c1e;
-    transform: scale(1.04);
-    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.12));
-  }
-}
-
-.animate-qr-gray-black {
-  animation: qrGrayToBlack 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
-@keyframes scanBeam {
-  0% {
-    top: 12%;
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.85;
-  }
-  80% {
-    opacity: 0.85;
-  }
-  100% {
-    top: 88%;
-    opacity: 0;
-  }
-}
-
-.animate-scan-beam {
-  animation: scanBeam 2.6s ease-in-out infinite alternate;
-}
-
