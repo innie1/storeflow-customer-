@@ -3762,8 +3762,7 @@ function App() {
   }, [scannedStores, searchQuery]);
 
   return (
-    <div className="min-h-screen w-full flex justify-center bg-[#121315] text-[#1A1C1E] antialiased">
-      <div className={`w-full max-w-screen-xl min-h-screen flex flex-col relative shadow-[0_0_60px_rgba(0,0,0,0.2)] border-x border-zinc-850/10 overflow-x-hidden ${darkMode ? 'dark bg-zinc-950 text-zinc-100' : 'bg-[#F8F9FA] text-[#1A1C1E]'}`}>
+    <div className={`w-full min-h-screen flex flex-col relative overflow-x-hidden antialiased ${darkMode ? 'dark bg-zinc-950 text-zinc-100' : 'bg-[#F8F9FA] text-[#1A1C1E]'}`}>
 
 
       
@@ -4242,7 +4241,7 @@ function App() {
           </main>
 
           {/* ⚡ Quick Order FAB */}
-          <div className="fixed bottom-24 left-0 right-0 w-full max-w-screen-xl mx-auto px-4 z-40 pointer-events-none">
+          <div className="fixed bottom-24 left-0 right-0 w-full max-w-5xl lg:max-w-6xl mx-auto px-4 z-40 pointer-events-none">
             <div className="flex justify-end pointer-events-auto">
               <button
                 onClick={() => setShowQuickOrder(true)}
@@ -4648,7 +4647,7 @@ function App() {
 
           {/* 10. Bottom Cart Bar */}
           {totalItemsCount > 0 && (
-            <div className="fixed bottom-20 left-0 right-0 z-40 w-full max-w-screen-xl mx-auto px-4">
+            <div className="fixed bottom-20 left-0 right-0 z-40 w-full max-w-5xl lg:max-w-6xl mx-auto px-4">
               <button
                 onClick={() => setIsCartOpen(true)}
                 className="w-full bg-[#1A1C1E] border border-white/5 text-white py-4 px-6 rounded-full flex justify-between items-center shadow-2xl active:scale-98 transition-all cursor-pointer font-black"
@@ -6642,7 +6641,7 @@ function App() {
 
       {/* ─── Global Bottom Navigation ─── */}
       {['home', 'explore', 'store', 'tracking', 'profile', 'history'].includes(screen) && !isCartOpen && (
-        <nav className="fixed bottom-0 left-0 right-0 w-full max-w-screen-xl mx-auto z-40 flex justify-around items-center px-4 py-3 bg-white shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] rounded-t-2xl border-t border-gray-100 text-[#1A1C1E]">
+        <nav className="fixed bottom-0 left-0 right-0 w-full z-40 flex justify-around items-center px-4 py-3 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800 shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] text-[#1A1C1E] dark:text-zinc-100">
           <button onClick={() => navigateToScreen('home')} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'home' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
             <span className="material-symbols-outlined text-xl">home</span>
             <span className={`text-[10px] mt-1 ${screen === 'home' ? 'font-bold' : 'font-semibold'}`}>Home</span>
@@ -6668,8 +6667,8 @@ function App() {
         </nav>
       )}
     </div>
-    </div>
   );
 }
+
 
 export default App;
