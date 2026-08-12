@@ -369,10 +369,11 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
   }
 
   const template = storeData?.data?.businessTemplate;
-if (prods.length === 0 && Array.isArray(template?.offerings) && template.offerings.length > 0) {
-  prods = template.offerings.map((o: any, index: number) => ({ id: String(o.id || `service-${index}`), store_id: storeUuid, name: o.name || 'Service', description: o.description || '', selling_price: Number(o.price ?? o.sellingPrice ?? 0), wholesale_price: Number(o.price ?? o.sellingPrice ?? 0), retail_price: Number(o.price ?? o.sellingPrice ?? 0), quantity: 999999, unit: o.pricing === 'time' ? 'session' : 'service', isService: true, turnaround: o.turnaround || '', category: 'Services', image: o.image || '', status: 'active' }));
-}
-if (prods.length === 0) {
+  const serviceTypes = new Set(['laundry','barber','salon','tailoring','repair','printing','cyber_cafe','car_wash','photography','cleaning','spa','games','gaming','restaurant']);
+  const templateType = String(template?.type || storeData?.data?.storeType || storeData?.storeType || '').toLowerCase();
+  const serviceBusiness = serviceTypes.has(templateType) || (Array.isArray(template?.modes) && template.modes.includes('services'));
+
+  if (prods.length === 0) {
   const { data: prodData, error: prodErr } = await supabase
       .from('products')
       .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at, is_service')
@@ -385,6 +386,35 @@ if (prods.length === 0) {
       wholesale_price: p.wholesale_price ?? p.selling_price ?? 0,
       retail_price: p.retail_price ?? p.selling_price ?? 0
     }));
+  }
+
+  // businessTemplate.offerings is the merchant's source of truth for services.
+  // An offering is visible only while it is enabled (not discontinued/inactive).
+  // Merge these with normal products so a service business can expose services
+  // even when its relational product table also contains other rows.
+  if (serviceBusiness && Array.isArray(template?.offerings)) {
+    const existingIds = new Set(prods.map((p: any) => String(p.id)));
+    const existingNames = new Set(prods.map((p: any) => String(p.name || '').trim().toLowerCase()));
+    const enabledServices = template.offerings
+      .filter((o: any) => o && o.discontinued !== true && o.enabled !== false && o.active !== false && o.status !== 'inactive')
+      .map((o: any, index: number) => ({
+        id: String(o.id || `service-${index}`),
+        store_id: storeUuid,
+        name: o.name || 'Service',
+        description: o.description || '',
+        selling_price: Number(o.price ?? o.sellingPrice ?? 0),
+        wholesale_price: Number(o.price ?? o.sellingPrice ?? 0),
+        retail_price: Number(o.price ?? o.sellingPrice ?? 0),
+        quantity: 999999,
+        unit: o.pricing === 'time' ? 'session' : 'service',
+        isService: true,
+        turnaround: o.turnaround || '',
+        category: 'Services',
+        image: o.image || '',
+        status: 'active'
+      }))
+      .filter((o: any) => !existingIds.has(String(o.id)) && !existingNames.has(String(o.name).trim().toLowerCase()));
+    prods = [...prods, ...enabledServices];
   }
 
   return prods;
