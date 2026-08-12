@@ -34,8 +34,11 @@ function clothingOptions(store: StoreRecord | null) { const t=store?.data?.busin
 
 export default function ServiceBusinessExperience() {
  const route=parseRoute(); const [store,setStore]=useState<StoreRecord|null>(null); const [loading,setLoading]=useState(Boolean(route.storeId)); const [selected,setSelected]=useState<Offering|null>(null); const [values,setValues]=useState<Record<string,any>>({}); const [submitting,setSubmitting]=useState(false); const [submitted,setSubmitted]=useState(false); const [message,setMessage]=useState('');
- useEffect(()=>{let cancelled=false;(async()=>{if(!route.storeId){setLoading(false);return;}const {data}=await supabase.from('stores').select('id,business_name,phone,logo,data').eq('id',route.storeId).maybeSingle();if(!cancelled){setStore(data as StoreRecord|null);setLoading(false);}})();return()=>{cancelled=true;};},[route.storeId]);
- const type=store?businessType(store):''; const template=store?.data?.businessTemplate||{}; const isServiceStore=SERVICE_TYPES.has(type)||Boolean(template?.modes?.includes?.('services')); const preset=useMemo(()=>presetFor(type,template),[type,template]); const offerings=useMemo<Offering[]>(()=> (Array.isArray(template.offerings)?template.offerings:[]).filter(isEnabledOffering),[template]); const clothes=useMemo(()=>clothingOptions(store),[store]);
+ useEffect(()=>{let cancelled=false;(async()=>{if(!route.storeId){setLoading(false);return;}const {data,error}=await supabase.from('stores_public').select('id,business_name,phone,logo,data').eq('id',route.storeId).maybeSingle();if(!cancelled){if(error)console.warn('[ServiceBusinessExperience] public store load failed:',error);setStore(data as StoreRecord|null);setLoading(false);}})();return()=>{cancelled=true;};},[route.storeId]);
+ const type=store?businessType(store):''; const template=store?.data?.businessTemplate||{}; const offerings=useMemo<Offering[]>(()=> (Array.isArray(template.offerings)?template.offerings:[]).filter(isEnabledOffering),[template]);
+ const hasServiceProducts=Array.isArray(store?.data?.products) && store!.data.products.some((p:any)=>p?.isService===true && p?.discontinued!==true);
+ const isServiceStore=SERVICE_TYPES.has(type)||Boolean(template?.modes?.includes?.('services'))||offerings.length>0||hasServiceProducts;
+ const preset=useMemo(()=>presetFor(type,template),[type,template]); const clothes=useMemo(()=>clothingOptions(store),[store]);
  if(!route.storeId||!isServiceStore||(!loading&&!store)) return null; if(loading) return null;
  const setValue=(id:string,v:any)=>setValues(prev=>({...prev,[id]:v}));
  const qty=(id:string)=>Number(values[id]||0);
