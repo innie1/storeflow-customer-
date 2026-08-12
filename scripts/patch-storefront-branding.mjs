@@ -50,7 +50,10 @@ function getStoreLogoUrl(s: any): string | null {
   const values = [s?.logo, s?.data?.profile?.logo, s?.data?.logo, s?.data?.marketplaceSettings?.logo];
   return values.find((v: any) => isLogoImageUrl(v)) || null;
 }
-function escapeStoreLogoXml(v: string): string { return v.replace(/[&<>\"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;', "'":'&apos;' })[c]); }
+function escapeStoreLogoXml(v: string): string {
+  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&apos;' };
+  return v.replace(/[&<>\"']/g, c => map[c] || c);
+}
 function getStoreLogoMarkup(name: string, style: string): string {
   const n = escapeStoreLogoXml(name || 'Store');
   const i = escapeStoreLogoXml((name || 'S').charAt(0).toUpperCase());
