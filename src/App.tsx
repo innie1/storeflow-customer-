@@ -368,15 +368,20 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
     }).filter((p: any) => p.status === 'active');
   }
 
-  if (prods.length === 0) {
-    const { data: prodData, error: prodErr } = await supabase
+  const template = storeData?.data?.businessTemplate;
+if (prods.length === 0 && Array.isArray(template?.offerings) && template.offerings.length > 0) {
+  prods = template.offerings.map((o: any, index: number) => ({ id: String(o.id || `service-${index}`), store_id: storeUuid, name: o.name || 'Service', description: o.description || '', selling_price: Number(o.price ?? o.sellingPrice ?? 0), wholesale_price: Number(o.price ?? o.sellingPrice ?? 0), retail_price: Number(o.price ?? o.sellingPrice ?? 0), quantity: 999999, unit: o.pricing === 'time' ? 'session' : 'service', isService: true, turnaround: o.turnaround || '', category: 'Services', image: o.image || '', status: 'active' }));
+}
+if (prods.length === 0) {
+  const { data: prodData, error: prodErr } = await supabase
       .from('products')
-      .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at')
+      .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at, is_service')
       .eq('store_id', storeUuid)
       .eq('status', 'active');
     if (prodErr) throw prodErr;
     prods = (prodData || []).map((p: any) => ({
       ...p,
+      isService: Boolean(p.isService ?? p.is_service),
       wholesale_price: p.wholesale_price ?? p.selling_price ?? 0,
       retail_price: p.retail_price ?? p.selling_price ?? 0
     }));
@@ -393,6 +398,11 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
 // straight into localStorage for every store, on every device. Column
 // list confirmed by checking what the app actually reads off `store`.
 const STORE_PUBLIC_COLUMNS = 'id, store_id, business_name, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';
+
+const SERVICE_BUSINESS_TYPES = new Set(['laundry','barber','salon','tailoring','repair','printing','cyber_cafe','car_wash','photography','cleaning','spa','games','gaming','restaurant']);
+function getStoreBusinessType(storeData: any): string { return String(storeData?.data?.businessTemplate?.type || storeData?.data?.storeType || storeData?.storeType || storeData?.business_type || '').toLowerCase(); }
+function isServiceStore(storeData: any): boolean { const type=getStoreBusinessType(storeData); const modes=storeData?.data?.businessTemplate?.modes; return SERVICE_BUSINESS_TYPES.has(type) || (Array.isArray(modes) && modes.includes('services')); }
+
 
 function App() {
   // Navigation & State Management
@@ -3102,13 +3112,16 @@ function App() {
 
   // ─── Search Filtering & Sorting logic ──────────────────────────────────────
 
+  const serviceBusiness = isServiceStore(store);
+const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
+
   const filteredProducts = useMemo(() => {
     let result = products.filter(p => {
       const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (p.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
         (p.category?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
       const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
-      const matchStock = !showInStockOnly || p.quantity > 0;
+      const matchStock = p.isService ? true : (!showInStockOnly || p.quantity > 0);
       return matchSearch && matchCat && matchStock;
     });
 
@@ -4471,7 +4484,7 @@ function App() {
                     <div className="space-y-1 text-left">
                       <p className="font-bold text-xs text-[#1A1C1E] truncate">{p.name}</p>
                       <div className="flex items-center justify-between gap-1">
-                        <p className="font-black text-sm text-[#1A1C1E]">₦{getPrice(p).toLocaleString()}</p>
+                        <p className="font-black text-sm text-[#1A1C1E]">{p.isService && getPrice(p) <= 0 ? 'Price on request' : `₦${getPrice(p).toLocaleString()}`}</p>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSmartAddToCart(p, 1); }}
                           className="w-7 h-7 rounded-full bg-[#1A1C1E] text-[#FFD23F] flex items-center justify-center shrink-0 active:scale-90 transition cursor-pointer"
@@ -4652,7 +4665,7 @@ function App() {
                           value={searchQuery}
                           onChange={e => setSearchQuery(e.target.value)}
                           placeholder={
-                            store?.data?.storeType === 'laundry' ? 'Search laundry items...'
+                            serviceBusiness ? 'Search services...'
                             : store?.data?.storeType === 'gas_filling' ? 'Search gas & fuel...'
                             : 'Search products...'
                           }
@@ -4687,7 +4700,7 @@ function App() {
                         }`}
                         title="Filters & Sort"
                       >
-                        <span className="material-symbols-outlined">filter_list</span>
+                        <span className="material-symbols-outlined">{serviceBusiness ? 'tune' : 'filter_list'}</span>
                       </button>
                     </div>
 
@@ -4747,11 +4760,11 @@ function App() {
                     /* 9. Empty States */
                     <div className="bg-white border border-gray-100 rounded-[28px] p-10 text-center shadow-sm space-y-4 animate-fade-in">
                       <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-300">
-                        <span className="material-symbols-outlined text-4xl">shopping_basket</span>
+                        <span className="material-symbols-outlined text-4xl">{serviceBusiness ? 'design_services' : 'shopping_basket'}</span>
                       </div>
                       <div className="space-y-1">
-                        <p className="font-extrabold text-[#1A1C1E] text-base">No Products Found</p>
-                        <p className="text-xs text-gray-400 font-medium">This store hasn't added products yet or matches your query.</p>
+                        <p className="font-extrabold text-[#1A1C1E] text-base">No {storefrontNoun} Found</p>
+                        <p className="text-xs text-gray-400 font-medium">This business hasn't added any {storefrontNoun.toLowerCase()} yet or nothing matches your search.</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -4770,7 +4783,7 @@ function App() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-x-4 md:gap-x-6 gap-y-6">
                       {filteredProducts.map(p => {
                         const qtyInCart = getQty(p.id);
-                        const isOutOfStock = p.quantity <= 0;
+                        const isOutOfStock = !p.isService && p.quantity <= 0;
                         const showLimitedStock = store?.data?.marketplaceSettings?.showLimitedStock === true;
                         const isLimited = showLimitedStock && p.quantity > 0 && p.quantity <= 5;
                         const isNew = p.status === 'new' || (p.cost_price === 0 && p.selling_price > 0);
