@@ -10,10 +10,7 @@ text = text.replace(
   "const STORE_PUBLIC_COLUMNS = 'id, store_id, business_name, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';",
   "const STORE_PUBLIC_COLUMNS = 'id, store_id, business_name, business_type, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';"
 );
-text = text.replace(
-  "const storeType = store?.category || 'Grocery Store';",
-  "const storeType = getStoreBusinessTypeLabel(store);"
-);
+text = text.replace("const storeType = store?.category || 'Grocery Store';", "const storeType = getStoreBusinessTypeLabel(store);");
 text = text.replace(
   '<p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Catalog</p>',
   '<p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">{isServiceStore(store) ? \'Services\' : \'Catalog\'}</p>'
@@ -53,7 +50,7 @@ function getStoreLogoUrl(s: any): string | null {
   const values = [s?.logo, s?.data?.profile?.logo, s?.data?.logo, s?.data?.marketplaceSettings?.logo];
   return values.find((v: any) => isLogoImageUrl(v)) || null;
 }
-function escapeStoreLogoXml(v: string): string { return v.replace(/[&<>\"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;', "'":'&apos;' } as any)[c]); }
+function escapeStoreLogoXml(v: string): string { return v.replace(/[&<>\"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;', "'":'&apos;' })[c]); }
 function getStoreLogoMarkup(name: string, style: string): string {
   const n = escapeStoreLogoXml(name || 'Store');
   const i = escapeStoreLogoXml((name || 'S').charAt(0).toUpperCase());
