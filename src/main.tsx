@@ -6,6 +6,7 @@ import App from './App.tsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
 import ServiceBusinessExperience from './components/ServiceBusinessExperience'
 import { subscribeUserToPush } from './utils/pushNotifications'
+import { installEmailProviderSuggestions } from './utils/emailProviderSuggestions'
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -24,6 +25,10 @@ if ('serviceWorker' in navigator) {
     refreshing = true
     window.location.reload()
   })
+}
+
+if (typeof window !== 'undefined') {
+  installEmailProviderSuggestions()
 }
 
 const root = document.getElementById('root')
