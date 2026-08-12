@@ -2,10 +2,8 @@ name: Apply service customer experience patch
 on:
   push:
     branches: [feat/service-business-customer-experience]
-
 permissions:
   contents: write
-
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -15,37 +13,23 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('src/App.tsx')
-          s=p.read_text()
+          import re
+          p=Path('src/App.tsx'); s=p.read_text()
           anchor="const STORE_PUBLIC_COLUMNS = 'id, store_id, business_name, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';"
           insert="""
 
           const SERVICE_BUSINESS_TYPES = new Set(['laundry','barber','salon','tailoring','repair','printing','cyber_cafe','car_wash','photography','cleaning','spa','games','gaming','restaurant']);
-          function getStoreBusinessType(storeData: any): string {
-            return String(storeData?.data?.businessTemplate?.type || storeData?.data?.storeType || storeData?.storeType || storeData?.business_type || '').toLowerCase();
-          }
-          function isServiceStore(storeData: any): boolean {
-            const type = getStoreBusinessType(storeData);
-            const modes = storeData?.data?.businessTemplate?.modes;
-            return SERVICE_BUSINESS_TYPES.has(type) || (Array.isArray(modes) && modes.includes('services'));
-          }
+          function getStoreBusinessType(storeData: any): string { return String(storeData?.data?.businessTemplate?.type || storeData?.data?.storeType || storeData?.storeType || storeData?.business_type || '').toLowerCase(); }
+          function isServiceStore(storeData: any): boolean { const type=getStoreBusinessType(storeData); const modes=storeData?.data?.businessTemplate?.modes; return SERVICE_BUSINESS_TYPES.has(type) || (Array.isArray(modes) && modes.includes('services')); }
           """
           if 'const SERVICE_BUSINESS_TYPES = new Set' not in s:
               if anchor not in s: raise SystemExit('store public columns anchor missing')
               s=s.replace(anchor,anchor+insert,1)
           needle="  if (prods.length === 0) {\n    const { data: prodData, error: prodErr } = await supabase"
-          replacement="""  // Service businesses can have configured offerings even when no relational products rows exist.
-          const template = storeData?.data?.businessTemplate;
+          replacement="""  const template = storeData?.data?.businessTemplate;
           if (prods.length === 0 && Array.isArray(template?.offerings) && template.offerings.length > 0) {
-            prods = template.offerings.map((o: any, index: number) => ({
-              id: String(o.id || `service-${index}`), store_id: storeUuid, name: o.name || 'Service',
-              description: o.description || '', selling_price: Number(o.price ?? o.sellingPrice ?? 0),
-              wholesale_price: Number(o.price ?? o.sellingPrice ?? 0), retail_price: Number(o.price ?? o.sellingPrice ?? 0),
-              quantity: 999999, unit: o.pricing === 'time' ? 'session' : 'service', isService: true,
-              turnaround: o.turnaround || '', category: 'Services', image: o.image || '', status: 'active'
-            }));
+            prods = template.offerings.map((o: any, index: number) => ({ id: String(o.id || `service-${index}`), store_id: storeUuid, name: o.name || 'Service', description: o.description || '', selling_price: Number(o.price ?? o.sellingPrice ?? 0), wholesale_price: Number(o.price ?? o.sellingPrice ?? 0), retail_price: Number(o.price ?? o.sellingPrice ?? 0), quantity: 999999, unit: o.pricing === 'time' ? 'session' : 'service', isService: true, turnaround: o.turnaround || '', category: 'Services', image: o.image || '', status: 'active' }));
           }
-
           if (prods.length === 0) {
             const { data: prodData, error: prodErr } = await supabase"""
           if needle not in s: raise SystemExit('resolver anchor missing')
@@ -54,15 +38,9 @@ jobs:
           new=".select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at, is_service')"
           if old not in s: raise SystemExit('product select anchor missing')
           s=s.replace(old,new,1)
-          oldmap="""      ...p,
-          wholesale_price: p.wholesale_price ?? p.selling_price ?? 0,
-          retail_price: p.retail_price ?? p.selling_price ?? 0"""
-          newmap="""      ...p,
-          isService: Boolean(p.isService ?? p.is_service),
-          wholesale_price: p.wholesale_price ?? p.selling_price ?? 0,
-          retail_price: p.retail_price ?? p.selling_price ?? 0"""
-          if oldmap not in s: raise SystemExit('product map anchor missing')
-          s=s.replace(oldmap,newmap,1)
+          pat=r"(prods = \(prodData \|\| \[\]\)\.map\(\(p: any\) => \(\{\n\s*\.\.\.p,)"
+          if not re.search(pat,s): raise SystemExit('product map anchor missing')
+          s=re.sub(pat,r"\1\n      isService: Boolean(p.isService ?? p.is_service),",s,count=1)
           marker='  const filteredProducts = useMemo(() => {'
           addition="""  const currentBusinessType = getStoreBusinessType(store);
           const serviceBusiness = isServiceStore(store);
@@ -72,27 +50,17 @@ jobs:
           if 'const storefrontNoun = serviceBusiness' not in s:
               if marker not in s: raise SystemExit('filtered products marker missing')
               s=s.replace(marker,addition+marker,1)
-          old="const matchStock = !showInStockOnly || p.quantity > 0;"
-          new="const matchStock = p.isService ? true : (!showInStockOnly || p.quantity > 0);"
-          if old not in s: raise SystemExit('stock filter anchor missing')
-          s=s.replace(old,new,1)
-          old="const isOutOfStock = p.quantity <= 0;"
-          new="const isOutOfStock = !p.isService && p.quantity <= 0;"
-          if old not in s: raise SystemExit('out of stock anchor missing')
-          s=s.replace(old,new,1)
+          s=s.replace('const matchStock = !showInStockOnly || p.quantity > 0;','const matchStock = p.isService ? true : (!showInStockOnly || p.quantity > 0);',1)
+          s=s.replace('const isOutOfStock = p.quantity <= 0;','const isOutOfStock = !p.isService && p.quantity <= 0;',1)
           s=s.replace("store?.data?.storeType === 'laundry' ? 'Search laundry items...'\n                            : store?.data?.storeType === 'gas_filling' ? 'Search gas & fuel...'\n                            : 'Search products...'", "serviceBusiness ? 'Search services...'\n                            : store?.data?.storeType === 'gas_filling' ? 'Search gas & fuel...'\n                            : 'Search products...'",1)
-          s=s.replace('<span className="material-symbols-outlined">filter_list</span>', "<span className=\"material-symbols-outlined\">{serviceBusiness ? 'tune' : 'filter_list'}</span>",1)
-          s=s.replace('<span className="material-symbols-outlined text-4xl">shopping_basket</span>', "<span className=\"material-symbols-outlined text-4xl\">{serviceBusiness ? 'design_services' : 'shopping_basket'}</span>",1)
-          s=s.replace('<p className="font-extrabold text-[#1A1C1E] text-base">No Products Found</p>', '<p className="font-extrabold text-[#1A1C1E] text-base">No {storefrontNoun} Found</p>',1)
-          s=s.replace("<p className=\"text-xs text-gray-400 font-medium\">This store hasn't added products yet or matches your query.</p>", "<p className=\"text-xs text-gray-400 font-medium\">This business hasn't added any {storefrontNoun.toLowerCase()} yet or nothing matches your search.</p>",1)
-          old="""₦{getPrice(p).toLocaleString()}
-                                  {p.unit && p.unit !== 'pcs' && <span className="text-[9px] font-semibold text-gray-400">/{p.unit}</span>}"""
-          new="""{p.isService && getPrice(p) <= 0 ? 'Price on request' : `₦${getPrice(p).toLocaleString()}`}
-                                  {p.isService && getPrice(p) > 0 && p.unit && p.unit !== 'pcs' && <span className="text-[9px] font-semibold text-gray-400">/{p.unit}</span>}"""
-          if old not in s: raise SystemExit('price anchor missing')
-          s=s.replace(old,new,1)
+          s=s.replace('<span className="material-symbols-outlined">filter_list</span>',"<span className=\"material-symbols-outlined\">{serviceBusiness ? 'tune' : 'filter_list'}</span>",1)
+          s=s.replace('<span className="material-symbols-outlined text-4xl">shopping_basket</span>',"<span className=\"material-symbols-outlined text-4xl\">{serviceBusiness ? 'design_services' : 'shopping_basket'}</span>",1)
+          s=s.replace('<p className="font-extrabold text-[#1A1C1E] text-base">No Products Found</p>','<p className="font-extrabold text-[#1A1C1E] text-base">No {storefrontNoun} Found</p>',1)
+          s=s.replace("<p className=\"text-xs text-gray-400 font-medium\">This store hasn't added products yet or matches your query.</p>","<p className=\"text-xs text-gray-400 font-medium\">This business hasn't added any {storefrontNoun.toLowerCase()} yet or nothing matches your search.</p>",1)
+          oldprice="₦{getPrice(p).toLocaleString()}"
+          if oldprice not in s: raise SystemExit('price anchor missing')
+          s=s.replace(oldprice,"{p.isService && getPrice(p) <= 0 ? 'Price on request' : `₦${getPrice(p).toLocaleString()}`}",1)
           p.write_text(s)
-          print('customer App.tsx patched')
           PY
       - name: Build customer app
         run: npm ci && npm run build
@@ -101,7 +69,7 @@ jobs:
           git config user.name 'StoreFlow Bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/App.tsx .github/workflows/patch-service-customer.yml
-          git commit -m 'feat: make customer storefront service-aware' || exit 0
+          git commit -m 'feat: make customer storefront service-aware'
           git rm .github/workflows/patch-service-customer.yml
           git commit -m 'chore: remove one-time patch workflow'
           git push
