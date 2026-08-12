@@ -1,0 +1,161 @@
+name: Patch customer storefront branding
+
+on:
+  push:
+    branches: [main11]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch storefront branding
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          app = Path('src/App.tsx')
+          text = app.read_text()
+          marker = "// STOREFLOW_BRANDING_PATCH_V1"
+          if marker not in text:
+              text = text.replace(
+                  "import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';",
+                  "import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';\nimport { getStoreBusinessTypeLabel, StoreBrandMark } from './utils/storeBranding';\n"
+              )
+              text = text.replace(
+                  "const STORE_PUBLIC_COLUMNS = 'id, store_id, business_name, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';",
+                  "const STORE_PUBLIC_COLUMNS = 'id, store_id, business_name, business_type, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';"
+              )
+              text = text.replace(
+                  "const storeType = store?.category || 'Grocery Store';",
+                  "const storeType = getStoreBusinessTypeLabel(store);"
+              )
+              text = text.replace(
+                  '<p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Catalog</p>',
+                  '<p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">{isServiceStore(store) ? \'Services\' : \'Catalog\'}</p>'
+              )
+              text = text.replace(
+                  '<p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{numProducts} items</p>',
+                  '<p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{numProducts} {isServiceStore(store) ? \'services\' : \'items\'}</p>'
+              )
+              pattern = r'(<div className="absolute -top-16 w-32 h-32[^>]*>).*?(\n\s*</div>\n\n\s*<div className="space-y-2">)'
+              replacement = r'\1\n            <StoreBrandMark store={store} />\2'
+              text, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit('Could not locate storefront logo block')
+              text = marker + "\n" + text
+              app.write_text(text)
+
+          branding = Path('src/utils/storeBranding.ts')
+          branding.parent.mkdir(parents=True, exist_ok=True)
+          branding.write_text(r'''import React from 'react';
+
+type StoreLike = any;
+
+const TYPE_LABELS: Record<string, string> = {
+  provision: 'Provision / Supermarket',
+  pharmacy: 'Pharmacy / Chemist',
+  clothing: 'Clothing / Fashion',
+  electronics: 'Electronics',
+  food: 'Food Business',
+  laundry: 'Laundry / Dry Cleaning',
+  barber: 'Barber Shop',
+  salon: 'Salon / Beauty',
+  tailoring: 'Tailoring / Fashion Design',
+  repair: 'Repair Shop',
+  printing: 'Printing / Cyber Cafe',
+  cyber_cafe: 'Cyber Cafe',
+  car_wash: 'Car Wash',
+  photography: 'Photography',
+  cleaning: 'Cleaning Service',
+  spa: 'Spa / Wellness',
+  gas_filling: 'Gas Filling',
+  games: 'Gaming Centre',
+  gaming: 'Gaming Centre',
+  restaurant: 'Restaurant / Food',
+  retail: 'Retail Store',
+};
+
+export function getStoreBusinessType(store: StoreLike): string {
+  return String(
+    store?.data?.businessTemplate?.type ||
+    store?.data?.storeType ||
+    store?.business_type ||
+    store?.storeType ||
+    store?.category ||
+    ''
+  ).trim().toLowerCase();
+}
+
+export function getStoreBusinessTypeLabel(store: StoreLike): string {
+  const templateLabel = store?.data?.businessTemplate?.label || store?.data?.businessTemplate?.name;
+  if (typeof templateLabel === 'string' && templateLabel.trim()) return templateLabel.trim();
+  const type = getStoreBusinessType(store);
+  return TYPE_LABELS[type] || (type ? type.replace(/_/g, ' ').replace(/\b\w/g, (m: string) => m.toUpperCase()) : 'Business');
+}
+
+function isUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^(https?:\/\/|data:image\/)/i.test(value);
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]!));
+}
+
+function getLogoStyle(store: StoreLike): string {
+  const value = store?.logo || store?.data?.profile?.logoStyle || store?.data?.logoStyle || store?.data?.businessTemplate?.logoStyle || 'minimalist';
+  return String(value).toLowerCase();
+}
+
+function getLogoUrl(store: StoreLike): string | null {
+  const candidates = [
+    store?.logo,
+    store?.data?.profile?.logo,
+    store?.data?.logo,
+    store?.data?.marketplaceSettings?.logo,
+  ];
+  return candidates.find(isUrl) || null;
+}
+
+export function getLogoSvgMarkup(storeName: string, style: string): string {
+  const name = escapeXml(storeName || 'Store');
+  const initial = escapeXml((storeName || 'S').charAt(0).toUpperCase());
+  const safeStyle = style || 'minimalist';
+  const commonText = `<text x="120" y="132" fill="#0F172A" font-family="Arial,sans-serif" font-weight="800" font-size="16" text-anchor="middle">${name}</text>`;
+  switch (safeStyle) {
+    case 'modern':
+      return `<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="60" r="40" fill="none" stroke="#10B981" stroke-width="4"/><path d="M98 50h44l-5 30h-34z" fill="none" stroke="#10B981" stroke-width="4"/><circle cx="110" cy="84" r="4" fill="#F59E0B"/><circle cx="130" cy="84" r="4" fill="#F59E0B"/>${commonText}</svg>`;
+    case 'premium':
+      return `<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="62" r="42" fill="none" stroke="#D97706" stroke-width="3"/><circle cx="120" cy="62" r="35" fill="none" stroke="#D97706" stroke-width="1" stroke-dasharray="3 3"/><text x="120" y="77" fill="#D97706" font-family="Georgia,serif" font-weight="700" font-size="42" text-anchor="middle">${initial}</text>${commonText.replace('#0F172A','#D97706')}</svg>`;
+    case 'bold':
+      return `<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="62" r="42" fill="#DC2626"/><path d="M96 48h48l-6 32h-36z" fill="none" stroke="#fff" stroke-width="4"/><circle cx="111" cy="85" r="4" fill="#fff"/><circle cx="129" cy="85" r="4" fill="#fff"/><text x="120" y="132" fill="#1E3A8A" font-family="Arial,sans-serif" font-weight="900" font-size="16" text-anchor="middle">${name}</text></svg>`;
+    case 'professional':
+      return `<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="62" r="40" fill="none" stroke="#064E3B" stroke-width="4"/><path d="M100 48h40v34h-40zM110 48c0-12 20-12 20 0" fill="none" stroke="#064E3B" stroke-width="4"/>${commonText.replace('#0F172A','#064E3B')}</svg>`;
+    case 'creative':
+      return `<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F97316"/><stop offset="1" stop-color="#EC4899"/></linearGradient></defs><path d="M92 48h56l-6 38c0 7-44 7-44 0z" fill="url(#cg)"/><circle cx="110" cy="66" r="3" fill="#fff"/><circle cx="130" cy="66" r="3" fill="#fff"/><path d="M108 75q12 10 24 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>${commonText.replace('#0F172A','#5B21B6')}</svg>`;
+    default:
+      return `<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><path d="M96 54h48l-5 30h-38zM96 54l24-25 24 25" fill="none" stroke="#0F172A" stroke-width="4" stroke-linejoin="round"/><path d="M120 29q-7-10-13-3 6 6 13 3 7 3 13-3-6-7-13 3" fill="#10B981"/>${commonText}</svg>`;
+  }
+}
+
+export function StoreBrandMark({ store, sizeClass = 'w-full h-full' }: { store: StoreLike; sizeClass?: string }) {
+  const url = getLogoUrl(store);
+  if (url) return <img src={url} className={`${sizeClass} object-cover`} alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />;
+  const markup = getLogoSvgMarkup(store?.business_name || 'Store', getLogoStyle(store));
+  return <div className={`${sizeClass} bg-white flex items-center justify-center`} dangerouslySetInnerHTML={{ __html: markup }} />;
+}
+''')
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/utils/storeBranding.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "fix: display store logos and correct business types"
+          git push
