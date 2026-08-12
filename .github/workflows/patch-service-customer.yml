@@ -42,8 +42,7 @@ jobs:
           if not re.search(pat,s): raise SystemExit('product map anchor missing')
           s=re.sub(pat,r"\1\n      isService: Boolean(p.isService ?? p.is_service),",s,count=1)
           marker='  const filteredProducts = useMemo(() => {'
-          addition="""  const currentBusinessType = getStoreBusinessType(store);
-          const serviceBusiness = isServiceStore(store);
+          addition="""  const serviceBusiness = isServiceStore(store);
           const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
           """
