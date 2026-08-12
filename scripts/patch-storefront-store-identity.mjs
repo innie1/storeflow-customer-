@@ -8,6 +8,7 @@ let changed = false;
 const oldLoad = `    setProductsLoading(!hasInstantData);\n    setErrorText(null);`;
 const newLoad = `    // A new QR/deep-link must start with an empty catalog. Never show products\n    // cached for another store while the scanned store is being resolved.\n    setProducts([]);\n    setCategories(['All']);\n    setSelectedCategory('All');\n    setProductsLoading(true);\n    try { localStorage.removeItem('storeflow_cached_products'); } catch {}\n    setErrorText(null);`;
 if (text.includes(oldLoad)) { text = text.replace(oldLoad, newLoad); changed = true; }
+text = text.replace(`    const hasInstantData = !!cachedMatch;\n`, '');
 
 // The public store record is authoritative. Only use per-store cache for the exact store.
 const oldCache = `      const cachedProducts = localStorage.getItem('storeflow_cached_products_' + cachedMatch.id);\n      if (cachedProducts) {\n        try { setProducts(JSON.parse(cachedProducts)); } catch {}\n      }`;
