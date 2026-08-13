@@ -161,24 +161,22 @@ html, body, #root { max-width: 100%; overflow-x: hidden; }
   background-color: #121315 !important;
 }
 
-.dark input,
-.dark textarea,
-.dark select {
+.dark input:not(.bg-transparent),
+.dark textarea:not(.bg-transparent),
+.dark select:not(.bg-transparent) {
   background-color: #1f2023 !important;
   color: #ffffff !important;
   border-color: #2d3034 !important;
 }
 
-.dark .text-\[\#1A1C1E\],
-.dark .text-slate-900,
-.dark .text-gray-900,
+.dark .text-\[\#1A1C1E\]:not([class*="text-"]),
+.dark .text-slate-900:not([class*="text-"]),
+.dark .text-gray-900:not([class*="text-"]),
 .dark .text-on-surface,
 .dark .text-on-background,
 .dark h1,
 .dark h2,
-.dark h3,
-.dark p,
-.dark span:not(.material-symbols-outlined) {
+.dark h3 {
   color: #f3f4f6;
 }
 
@@ -201,11 +199,13 @@ html, body, #root { max-width: 100%; overflow-x: hidden; }
 }
 
 .dark .bg-\[\#1A1C1E\] {
-  background-color: #1f2023 !important;
-  border: 1px solid rgba(255, 210, 63, 0.3) !important;
+  background-color: #1a1c1e !important;
+  border-color: rgba(255, 210, 63, 0.3) !important;
 }
 
 .dark .text-\[\#FFD23F\] {
   color: #FFD23F !important;
 }
+
+
 

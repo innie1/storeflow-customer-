@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const file = 'src/App.tsx';
-let text = fs.readFileSync(file, 'utf8');
+let text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 const marker = '// STOREFLOW_BRANDING_PATCH_V2';
 if (text.includes(marker)) process.exit(0);
 

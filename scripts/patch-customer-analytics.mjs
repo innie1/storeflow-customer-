@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const file = path.resolve('src/App.tsx');
-let text = fs.readFileSync(file, 'utf8');
+let text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 
 // Keep customer analytics inside the existing JSON notes payload. This keeps
 // checkout compatible with the current place_order_atomic RPC instead of

@@ -306,6 +306,41 @@ function isLogoImageUrl(logo?: string | null): boolean {
   return logo.startsWith('http://') || logo.startsWith('https://') || logo.startsWith('data:');
 }
 
+// STOREFLOW_BRANDING_PATCH_V2
+const STORE_TYPE_LABELS: Record<string, string> = {
+  provision: 'Provision / Supermarket', pharmacy: 'Pharmacy / Chemist', clothing: 'Clothing / Fashion', electronics: 'Electronics', food: 'Food Business', laundry: 'Laundry / Dry Cleaning', barber: 'Barber Shop', salon: 'Salon / Beauty', tailoring: 'Tailoring / Fashion Design', repair: 'Repair Shop', printing: 'Printing / Cyber Cafe', cyber_cafe: 'Cyber Cafe', car_wash: 'Car Wash', photography: 'Photography', cleaning: 'Cleaning Service', spa: 'Spa / Wellness', gas_filling: 'Gas Filling', games: 'Gaming Centre', gaming: 'Gaming Centre', restaurant: 'Restaurant / Food', retail: 'Retail Store'
+};
+function getStoreBusinessTypeLabel(s: any): string {
+  const t = s?.data?.businessTemplate;
+  const label = t?.label || t?.name;
+  if (typeof label === 'string' && label.trim()) return label.trim();
+  const type = String(t?.type || s?.data?.storeType || s?.business_type || s?.storeType || s?.category || '').trim().toLowerCase();
+  return STORE_TYPE_LABELS[type] || (type ? type.replace(/_/g, ' ').replace(/\b\w/g, (m: string) => m.toUpperCase()) : 'Business');
+}
+function getStoreLogoStyle(s: any): string {
+  const value = s?.data?.profile?.logoStyle || s?.data?.logoStyle || s?.data?.businessTemplate?.logoStyle || (!isLogoImageUrl(s?.logo) ? s?.logo : null) || 'minimalist';
+  return String(value).toLowerCase();
+}
+function getStoreLogoUrl(s: any): string | null {
+  const values = [s?.logo, s?.data?.profile?.logo, s?.data?.logo, s?.data?.marketplaceSettings?.logo];
+  return values.find((v: any) => isLogoImageUrl(v)) || null;
+}
+function getStoreBrandSvg(name: string, style: string): string {
+  const safe = name.replace(/[&<>"']/g, '');
+  const initial = safe.charAt(0).toUpperCase() || 'S';
+  if (style === 'premium') return '<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="65" r="42" fill="none" stroke="#D97706" stroke-width="3"/><text x="120" y="80" text-anchor="middle" fill="#D97706" font-family="Arial" font-size="42" font-weight="700">' + initial + '</text><text x="120" y="135" text-anchor="middle" fill="#D97706" font-family="Arial" font-size="16" font-weight="800">' + safe + '</text></svg>';
+  if (style === 'modern') return '<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="60" r="40" fill="none" stroke="#10B981" stroke-width="4"/><path d="M98 50h44l-5 30h-34z" fill="none" stroke="#10B981" stroke-width="4"/><text x="120" y="135" text-anchor="middle" fill="#0F172A" font-family="Arial" font-size="16" font-weight="800">' + safe + '</text></svg>';
+  if (style === 'bold') return '<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="62" r="42" fill="#DC2626"/><text x="120" y="78" text-anchor="middle" fill="#fff" font-family="Arial" font-size="40" font-weight="900">' + initial + '</text><text x="120" y="135" text-anchor="middle" fill="#1E3A8A" font-family="Arial" font-size="16" font-weight="900">' + safe + '</text></svg>';
+  if (style === 'professional') return '<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="62" r="40" fill="none" stroke="#064E3B" stroke-width="4"/><path d="M100 48h40v34h-40z" fill="none" stroke="#064E3B" stroke-width="4"/><text x="120" y="135" text-anchor="middle" fill="#064E3B" font-family="Arial" font-size="16" font-weight="800">' + safe + '</text></svg>';
+  if (style === 'creative') return '<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="62" r="42" fill="#EC4899"/><text x="120" y="78" text-anchor="middle" fill="#fff" font-family="Arial" font-size="40" font-weight="900">' + initial + '</text><text x="120" y="135" text-anchor="middle" fill="#5B21B6" font-family="Arial" font-size="16" font-weight="800">' + safe + '</text></svg>';
+  return '<svg viewBox="0 0 240 180" xmlns="http://www.w3.org/2000/svg"><path d="M96 54h48l-5 30h-38zM96 54l24-25 24 25" fill="none" stroke="#0F172A" stroke-width="4"/><text x="120" y="135" text-anchor="middle" fill="#0F172A" font-family="Arial" font-size="16" font-weight="800">' + safe + '</text></svg>';
+}
+function StoreBrandMark({ store }: { store: any }) {
+  const url = getStoreLogoUrl(store);
+  if (url) return <img src={url} className="w-full h-full object-cover" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />;
+  return <div className="w-full h-full bg-white flex items-center justify-center" dangerouslySetInnerHTML={{ __html: getStoreBrandSvg(store?.business_name || 'Store', getStoreLogoStyle(store)) }} />;
+}
+
 function computeStoreOpen(s: any): boolean {
   // NOTE: the stores table has no "status" column — it's "subscription_status".
   // Using store?.status here always evaluated to undefined, which made every
@@ -376,7 +411,7 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
   if (prods.length === 0) {
   const { data: prodData, error: prodErr } = await supabase
       .from('products')
-      .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at, is_service')
+      .select('id, store_id, category_id, barcode, name, description, brand, selling_price, wholesale_price, retail_price, quantity, unit, image, status, is_service')
       .eq('store_id', storeUuid)
       .eq('status', 'active');
     if (prodErr) throw prodErr;
@@ -889,13 +924,9 @@ function App() {
 
   useEffect(() => {
     const cachedStores = localStorage.getItem('storeflow_cached_all_stores');
-    const cachedProducts = localStorage.getItem('storeflow_cached_products');
-    const cachedCategories = localStorage.getItem('storeflow_cached_categories');
     const cachedHistory = localStorage.getItem('storeflow_cached_orders_history');
     
     if (cachedStores) setAllStores(JSON.parse(cachedStores));
-    if (cachedProducts) setProducts(JSON.parse(cachedProducts));
-    if (cachedCategories) setCategories(JSON.parse(cachedCategories));
     if (cachedHistory) {
       try {
         const parsed = JSON.parse(cachedHistory);
@@ -937,6 +968,13 @@ function App() {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Also try to sync any stuck offline orders on mount — not just when
+    // transitioning from offline → online.  Previously, orders that failed
+    // for transient server errors while the device was already online would
+    // be queued but never retried until a full offline→online cycle happened.
+    if (navigator.onLine) syncOfflineOrders();
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -1291,34 +1329,28 @@ function App() {
 
       let storeData = null;
       let storeErr = null;
-      let queryUsed = '';
-
       const cleanSid = sid.trim();
+      const normalizedCode = cleanSid.toUpperCase();
 
-      // 5. If the URL contains SF-TTEC9S (or starts with SF-), the query must search the stores.store_id column first
-      if (cleanSid.toUpperCase().startsWith('SF-')) {
-        queryUsed = `supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).ilike('store_id', '${cleanSid}')`;
-        console.log(`[StoreFlow QR] Prioritizing query on stores.store_id column first: ${queryUsed}`);
-        const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).ilike('store_id', cleanSid).maybeSingle();
-        storeData = res.data;
-        storeErr = res.error;
-      }
+      const lookupStore = async (column: string, value: string) => {
+        const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).eq(column, value).maybeSingle();
+        if (res.error) throw res.error;
+        return res.data;
+      };
 
-      // If not found or not prioritized, use fallback/full query searching store_id, id, access_code, and qr_code
-      if (!storeData && !storeErr) {
-        let orFilter = '';
-        if (isUuid) {
-          orFilter = `id.eq.${cleanSid},store_id.ilike.${cleanSid},store_id.ilike.SF-${cleanSid},access_code.ilike.${cleanSid},qr_code.ilike.%/store/${cleanSid},qr_code.ilike.%/s/${cleanSid}`;
-        } else {
-          orFilter = `store_id.ilike.${cleanSid},store_id.ilike.SF-${cleanSid},access_code.ilike.${cleanSid},qr_code.ilike.%/store/${cleanSid},qr_code.ilike.%/s/${cleanSid}`;
+      try {
+        if (isUuid) storeData = await lookupStore('id', cleanSid);
+        if (!storeData) storeData = await lookupStore('store_id', normalizedCode);
+        if (!storeData && !normalizedCode.startsWith('SF-')) storeData = await lookupStore('store_id', 'SF-' + normalizedCode);
+        if (!storeData) storeData = await lookupStore('access_code', normalizedCode.replace(/^SF-/, ''));
+        if (!storeData) {
+          const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).ilike('qr_code', '%' + cleanSid + '%').limit(1);
+          if (res.error) throw res.error;
+          storeData = res.data?.[0] || null;
         }
-        queryUsed = `supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).or('${orFilter}')`;
-        console.log(`[StoreFlow QR] Running fallback OR query: ${queryUsed}`);
-        const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).or(orFilter).maybeSingle();
-        storeData = res.data;
-        storeErr = res.error;
+      } catch (lookupError) {
+        storeErr = lookupError;
       }
-
       // 4. Return and log the full Supabase response and any errors.
       console.log(`[StoreFlow QR] Full Supabase response - Data:`, storeData);
       console.log(`[StoreFlow QR] Full Supabase response - Error:`, storeErr);
@@ -1421,7 +1453,10 @@ function App() {
       const matched = allStores.find(s => s.id === sid);
       if (matched) {
         setStore(matched);
-        setProducts([]);
+        const cached = localStorage.getItem('storeflow_cached_products_' + matched.id);
+        if (cached) {
+          try { setProducts(JSON.parse(cached)); } catch { /* keep current catalog */ }
+        }
         setLoading(false);
       } else {
         navigateToScreen('store_not_found');
@@ -2437,6 +2472,8 @@ function App() {
 
     const genOrderNo = `SF-${Math.floor(100000 + Math.random() * 900000)}`;
     const notes = JSON.stringify({
+      customer_uuid: itsMeProfile?.customerId || null,
+      is_guest: !currentUser,
       delivery_type: finalDeliveryType,
       address: finalDeliveryType === 'delivery' ? finalDeliveryAddress : '',
       payment_method: finalPaymentMethod,
@@ -2456,8 +2493,10 @@ function App() {
       }))
     });
 
+    const targetStoreId = store?.id || allStores?.[0]?.id || '';
+
     const orderPayload = {
-      store_id: store?.id || '',
+      store_id: targetStoreId,
       customer_name: finalCustomerName,
       customer_phone: finalCustomerPhone,
       order_number: genOrderNo,
@@ -2512,7 +2551,30 @@ function App() {
       setTimeout(() => setShowItsMeUpdatePrompt(true), 800);
     }
 
-    // Now do the actual network save, in the background
+    // Save order snapshot locally immediately so it's always accessible in customer order history
+    try {
+      const localHistory = JSON.parse(localStorage.getItem('storeflow_orders_history') || '[]');
+      if (Array.isArray(localHistory)) {
+        const localOrderRecord = {
+          id: 'local-' + genOrderNo,
+          order_number: genOrderNo,
+          created_at: new Date().toISOString(),
+          status: 'Pending',
+          subtotal: orderPayload.subtotal,
+          total: orderPayload.total,
+          notes: orderPayload.notes,
+          store_id: orderPayload.store_id,
+          customer_phone: orderPayload.customer_phone,
+          customer_name: orderPayload.customer_name
+        };
+        const updatedHistory = [localOrderRecord, ...localHistory.filter(o => o.order_number !== genOrderNo)];
+        localStorage.setItem('storeflow_orders_history', JSON.stringify(updatedHistory));
+      }
+    } catch (e) {
+      console.warn('Failed to cache local order history record:', e);
+    }
+
+    // Now do the actual network save in the background
     if (!isOnline) {
       queueOrderForOfflineSync(orderPayload, itemsPayload);
       setOrderSubmitting(false);
@@ -2527,16 +2589,16 @@ function App() {
 
       // Fire-and-forget: cache this order's access token locally so later
       // cancel/approve actions can prove ownership without relying on the
-      // phone number alone. Non-critical if it fails — see helper comment.
+      // phone number alone. Non-critical if it fails.
       Promise.resolve(supabase.rpc('get_order_access_token', { p_order_id: orderUuid, p_customer_phone: orderPayload.customer_phone }))
         .then(({ data: token }: any) => {
           if (token) saveOrderAccessToken(orderUuid, token);
         })
         .catch(() => {});
 
-      if (willRedeemLoyalty && store?.id) {
+      if (willRedeemLoyalty && orderPayload.store_id) {
         const normalized = finalCustomerPhone.replace(/\D/g, '');
-        supabase.rpc('redeem_customer_loyalty', { p_store_id: store.id, p_customer_phone: normalized, p_order_id: orderUuid })
+        supabase.rpc('redeem_customer_loyalty', { p_store_id: orderPayload.store_id, p_customer_phone: normalized, p_order_id: orderUuid })
           .then(({ data }) => {
             if (data?.success) {
               setLoyaltyBalance(prev => prev ? { ...prev, points: data.remainingPoints } : prev);
@@ -2545,42 +2607,71 @@ function App() {
         setRedeemLoyalty(false);
       }
 
-      // Register background Web Push subscription (works even when app/tab is closed!)
+      // Register background Web Push subscription
       subscribeUserToPush(customerPhone || customerName).catch(() => {});
 
-      // Fire-and-forget — the merchant notification doesn't need to block
-      // anything on the customer's side, and previously it did.
-      supabase.from('notifications').insert({
-        store_id: store?.id || '',
-        title: 'New Order',
-        message: `${finalCustomerName} placed Order #${genOrderNo} containing ${totalItemsCount} items.`,
-        type: 'new_order',
-        is_read: false
-      }).then(({ error }) => {
-        if (error) console.warn('Failed to create order notification in db:', error);
-      });
+      // Merchant notification insert
+      if (orderPayload.store_id) {
+        supabase.from('notifications').insert({
+          store_id: orderPayload.store_id,
+          title: 'New Order',
+          message: `${finalCustomerName} placed Order #${genOrderNo} containing ${totalItemsCount} items.`,
+          type: 'new_order',
+          is_read: false
+        }).then(({ error }) => {
+          if (error) console.warn('Failed to create order notification in db:', error);
+        });
+      }
 
       knownOrderStatusesRef.current.set(orderUuid, 'Pending');
       loadOrdersHistory();
     } catch (e: any) {
-      // Genuine failure after retries — don't lose the order. Queue it for
-      // background sync instead of just showing an error and giving up.
-      console.error('Order placement failed after retries, queueing for background sync:', e);
-      queueOrderForOfflineSync(orderPayload, itemsPayload);
+      console.error('Order placement failed:', e);
       setOrderSubmitting(false);
-      setOrderSubmitError("We're having trouble reaching the store right now — your order has been saved and will send automatically once your connection improves.");
+
+      // Distinguish genuine network failures (queue for retry) from
+      // business-logic / database errors (tell the user immediately).
+      const msg = `${e?.name || ''} ${e?.message || ''}`.toLowerCase();
+      const isNetwork = !navigator.onLine || msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch') || msg.includes('timeout') || msg.includes('offline');
+
+      if (isNetwork) {
+        queueOrderForOfflineSync(orderPayload, itemsPayload);
+        setOrderSubmitError('You appear to be offline — your order has been saved and will be sent automatically when connectivity returns.');
+      } else {
+        // Server rejected the order (e.g. product out of stock, price
+        // changed, validation error). Don't silently queue — the same
+        // error will repeat on retry. Tell the customer what happened.
+        const friendlyMsg = (e?.message || 'Something went wrong placing your order.')
+          .replace(/^(Error|Exception):\s*/i, '');
+        setOrderSubmitError(`⚠️ ${friendlyMsg} — please go back to your cart and try again.`);
+      }
+      loadOrdersHistory();
     }
   };
 
-  // Retries transient network failures a couple times with short backoff
-  // before giving up — a dropped connection mid-checkout shouldn't force
-  // the customer to redo the whole order.
+  // Retries transient network failures a couple times before giving up.
+  // Previously had a "Strategy 2" direct-insert fallback that could never
+  // actually work: RLS blocks the post-INSERT SELECT for anonymous users,
+  // so the .select('id').single() always returned an error, causing every
+  // order to silently fall into the offline queue (which itself was never
+  // drained while online). Now we rely solely on the atomic RPC, which is
+  // SECURITY DEFINER and bypasses RLS properly.
   const placeOrderWithRetry = async (
     genOrderNo: string,
     orderPayload: { store_id: string; customer_name: string; customer_phone: string; order_number: string; status: string; subtotal: number; total: number; notes: string },
     itemsPayload: { product_id: string; quantity: number; price: number; subtotal: number }[],
     retriesLeft: number
   ): Promise<string> => {
+    // 1. Resolve store ID fallback if missing
+    const resolvedStoreId = orderPayload.store_id || store?.id || allStores?.[0]?.id;
+    if (resolvedStoreId) {
+      orderPayload.store_id = resolvedStoreId;
+    }
+
+    if (!orderPayload.store_id) {
+      throw new Error('No store selected — please scan the store QR code and try again.');
+    }
+
     try {
       const { data: orderUuid, error: orderErr } = await supabase.rpc('place_order_atomic', {
         p_store_id: orderPayload.store_id,
@@ -2593,9 +2684,18 @@ function App() {
         p_notes: orderPayload.notes,
         p_items: itemsPayload
       });
-      if (orderErr) throw orderErr;
-      if (!orderUuid) throw new Error('Database failed to return Order ID.');
-      return orderUuid;
+
+      if (!orderErr && orderUuid) {
+        return orderUuid;
+      }
+
+      if (orderErr) {
+        throw orderErr;
+      }
+
+      // RPC returned neither an error nor a UUID — should not happen, but
+      // treat it as a failure so the caller can surface it to the customer.
+      throw new Error('Order submission returned an unexpected empty response. Please try again.');
     } catch (e) {
       if (retriesLeft > 0) {
         await new Promise(res => setTimeout(res, 800));
@@ -3329,19 +3429,12 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
         {/* Center the store branding */}
         <div className="relative bg-white rounded-t-[28px] -mt-8 pt-20 pb-4 px-4 md:px-6 text-center flex flex-col items-center max-w-5xl lg:max-w-6xl mx-auto">
           <div className="absolute -top-16 w-32 h-32 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden flex items-center justify-center shrink-0 animate-fade-in">
-            {isLogoImageUrl(store?.logo) ? (
-              <img src={store!.logo} className="w-full h-full object-cover" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-            ) : (
-              <div className="w-full h-full bg-[#1A1C1E] flex flex-col items-center justify-center text-white">
-                <span className="material-symbols-outlined text-[#FFD23F] text-3xl font-bold">shopping_cart</span>
-                <span className="text-xs font-black tracking-wider uppercase mt-1">{store?.business_name?.slice(0, 3)}</span>
-              </div>
-            )}
+            <StoreBrandMark store={store} />
           </div>
 
           <div className="space-y-2">
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#1A1C1E] flex items-center justify-center gap-1.5 font-headline-xl">
-              {store?.business_name || 'StoreFlow Store'}
+              {store?.business_name || store?.data?.storeName || store?.data?.businessName || 'Store'}
               {showVerified && (
                 <span className="material-symbols-outlined text-[#FFD23F] text-xl font-bold font-variation-fill" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
               )}
@@ -3400,7 +3493,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
     const deliveryTime = ms?.deliveryTime || '15-25 min';
     const deliveryFee = ms?.deliveryFee !== undefined ? ms.deliveryFee : 1500;
     const minimumOrder = ms?.minimumOrder || 0;
-    const storeType = store?.category || 'Grocery Store';
+    const storeType = getStoreBusinessTypeLabel(store);
     const numProducts = products.length;
     const distance = ms?.distance || '0.8 km';
 
@@ -3475,8 +3568,8 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                 <span className="material-symbols-outlined text-base font-bold">inventory_2</span>
               </div>
               <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Catalog</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{numProducts} items</p>
+                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">{isServiceStore(store) ? 'Services' : 'Catalog'}</p>
+                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{numProducts} {isServiceStore(store) ? 'services' : 'items'}</p>
               </div>
             </div>
           )}
@@ -3606,11 +3699,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
   const renderStoreStatus = () => {
     const status = storeStatusText; // 'Open' | 'Closed' | 'Closing Soon'
-    const colorClass = status === 'Open' 
-      ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-      : status === 'Closing Soon' 
-        ? 'bg-amber-50 text-amber-800 border-amber-100' 
-        : 'bg-rose-50 text-rose-700 border-rose-100';
+    const statusTextColor = status === 'Open'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : status === 'Closing Soon'
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-rose-600 dark:text-rose-400';
 
     const dotColor = status === 'Open' 
       ? 'bg-emerald-500' 
@@ -3620,13 +3713,13 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
     return (
       <div className="space-y-3">
-        {/* Status Badge */}
-        <div className={`border px-4 py-2.5 rounded-[20px] flex items-center justify-between shadow-sm text-xs font-bold ${colorClass}`}>
+        {/* Status indicator without inverse background box */}
+        <div className="flex items-center justify-between py-1.5 px-1 text-xs font-bold">
           <div className="flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${dotColor} animate-pulse`} />
-            <span className="uppercase tracking-wider font-extrabold text-[10px]">{status === 'Closed' ? 'Closed' : status === 'Closing Soon' ? 'Closing Soon' : 'Open'}</span>
+            <span className={`uppercase tracking-wider font-extrabold text-[10px] ${statusTextColor}`}>{status === 'Closed' ? 'Closed' : status === 'Closing Soon' ? 'Closing Soon' : 'Open'}</span>
           </div>
-          <span className="text-[10px] text-gray-500 font-semibold">
+          <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-semibold">
             {status === 'Closed' ? 'Accepting orders when open' : status === 'Closing Soon' ? 'Closing shortly' : 'Accepting orders now'}
           </span>
         </div>
@@ -4323,17 +4416,22 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
       {/* ─── 5. Home / Discover Screen ─── */}
       {screen === 'home' && (
-        <div className="bg-[#F8F9FA] min-h-screen text-[#1A1C1E] pb-24">
-          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md h-16 flex justify-between items-center border-b border-gray-100 px-4 md:px-gutter text-[#1A1C1E]">
+        <div className="bg-[#F8F9FA] dark:bg-zinc-950 min-h-screen text-[#1A1C1E] dark:text-zinc-100 pb-24">
+          <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md h-16 flex justify-between items-center border-b border-gray-100 dark:border-zinc-800 px-4 md:px-gutter text-[#1A1C1E] dark:text-zinc-100">
             <div className="flex items-center gap-3">
-              <button onClick={() => navigateToScreen('profile')} className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 transition-colors rounded-full cursor-pointer text-[#1A1C1E]">
+              <button 
+                onClick={() => navigateToScreen('profile')} 
+                className="w-10 h-10 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-zinc-900 transition-colors rounded-full cursor-pointer text-[#1A1C1E] dark:text-zinc-100"
+                aria-label="Open Profile Menu"
+                title="Profile Menu"
+              >
                 <span className="material-symbols-outlined text-xl">menu</span>
               </button>
               <div onClick={() => navigateToScreen('location')} className="flex flex-col cursor-pointer hover:opacity-85 select-none">
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Deliver to</span>
+                <span className="text-[9px] font-bold text-gray-400 dark:text-zinc-400 uppercase tracking-wider">Deliver to</span>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-black text-[#1A1C1E]">{selectedAddress}</span>
-                  <span className="material-symbols-outlined text-gray-400 text-base">expand_more</span>
+                  <span className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100">{selectedAddress}</span>
+                  <span className="material-symbols-outlined text-gray-400 dark:text-zinc-400 text-base">expand_more</span>
                 </div>
               </div>
             </div>
@@ -4344,23 +4442,23 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
           <main className="px-4 md:px-8 max-w-5xl lg:max-w-6xl mx-auto mt-4 space-y-8">
             {/* Search Bar */}
-            <div className="relative w-full h-14 bg-white rounded-full flex items-center px-4 border border-gray-200 focus-within:border-gray-400 focus-within:ring-2 focus-within:ring-gray-100 transition-all shadow-sm">
-              <span className="material-symbols-outlined text-gray-400 mr-3">search</span>
+            <div className="relative w-full h-14 bg-white dark:bg-zinc-900 rounded-full flex items-center px-4 border border-gray-200 dark:border-zinc-800 focus-within:border-gray-400 dark:focus-within:border-zinc-600 focus-within:ring-2 focus-within:ring-gray-100 dark:focus-within:ring-zinc-800 transition-all shadow-sm">
+              <span className="material-symbols-outlined text-gray-400 dark:text-zinc-400 mr-3">search</span>
               <input
-                className="bg-transparent border-none focus:ring-0 focus:outline-none w-full text-sm outline-none text-[#1A1C1E] placeholder:text-gray-400"
+                className="bg-transparent border-none focus:ring-0 focus:outline-none w-full text-sm outline-none text-[#1A1C1E] dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                 placeholder={searchPlaceholder}
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="mr-2 cursor-pointer text-gray-400 hover:text-black">
+                <button onClick={() => setSearchQuery('')} className="mr-2 cursor-pointer text-gray-400 hover:text-black dark:hover:text-white">
                   <span className="material-symbols-outlined text-base">close</span>
                 </button>
               )}
               <button 
                 onClick={startScanner} 
-                className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-[#1A1C1E] active:scale-95 transition-all shrink-0 cursor-pointer"
+                className="w-8 h-8 rounded-full bg-gray-50 dark:bg-zinc-800 flex items-center justify-center text-gray-400 dark:text-zinc-300 hover:text-[#1A1C1E] dark:hover:text-white active:scale-95 transition-all shrink-0 cursor-pointer"
                 title="Scan Barcode"
               >
                 <span className="material-symbols-outlined text-lg">qr_code_scanner</span>
@@ -4473,8 +4571,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                         <h4 className="font-extrabold text-base text-[#1A1C1E] truncate">{s.business_name}</h4>
                         <p className="text-xs text-gray-400 mt-0.5 truncate font-semibold">{s.address || 'Partner Store'}</p>
                         <div className="flex items-center gap-2 mt-2">
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${computeStoreOpen(s) ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
-                            {computeStoreOpen(s) ? 'Open' : 'Closed'}
+                          <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider">
+                            <span className={`w-1.5 h-1.5 rounded-full ${computeStoreOpen(s) ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                            <span className={computeStoreOpen(s) ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                              {computeStoreOpen(s) ? 'Open' : 'Closed'}
+                            </span>
                           </span>
                           <span className="text-[10px] font-semibold text-gray-400">• Scanned store</span>
                         </div>
@@ -4612,8 +4713,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                           <p className="text-xs text-gray-400 truncate font-semibold">{s.address || 'Partner Store'}</p>
                         </div>
                         <div className="flex items-center gap-2 mt-2">
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${computeStoreOpen(s) ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
-                            {computeStoreOpen(s) ? 'Open' : 'Closed'}
+                          <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider">
+                            <span className={`w-1.5 h-1.5 rounded-full ${computeStoreOpen(s) ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                            <span className={computeStoreOpen(s) ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                              {computeStoreOpen(s) ? 'Open' : 'Closed'}
+                            </span>
                           </span>
                           <span className="text-[10px] font-semibold text-gray-400">• Tap to browse</span>
                         </div>
@@ -5172,12 +5276,14 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
             {/* Background sync error — order is safe, just delayed */}
             {orderSubmitError && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-[20px] text-xs space-y-1.5 shadow-sm">
-                <h4 className="font-extrabold text-sm flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm font-bold">wifi_off</span>
+              <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 p-4 rounded-2xl text-xs space-y-1.5 shadow-sm animate-fade-in backdrop-blur-sm text-left">
+                <h4 className="font-extrabold text-sm flex items-center gap-2 text-amber-900 dark:text-amber-100">
+                  <span className="w-7 h-7 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-base font-bold">wifi_off</span>
+                  </span>
                   <span>Order queued</span>
                 </h4>
-                <p className="leading-relaxed">{orderSubmitError}</p>
+                <p className="leading-relaxed text-amber-700 dark:text-amber-300 font-medium">{orderSubmitError}</p>
               </div>
             )}
 
@@ -5294,16 +5400,18 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
             {/* Rejection Notice Banner */}
             {orderStatus === 'Rejected' && (
-              <div className="bg-rose-50 border border-rose-150 text-rose-800 p-4 rounded-[20px] text-xs space-y-1.5 shadow-sm">
-                <h4 className="font-extrabold text-sm flex items-center gap-1.5 text-rose-900">
-                  <span className="material-symbols-outlined text-sm font-bold">warning</span>
+              <div className="bg-rose-50/90 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-800/60 text-rose-900 dark:text-rose-200 p-4 rounded-2xl text-xs space-y-2 shadow-sm animate-fade-in backdrop-blur-sm text-left">
+                <h4 className="font-extrabold text-sm flex items-center gap-2 text-rose-900 dark:text-rose-100">
+                  <span className="w-7 h-7 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-base font-bold">warning</span>
+                  </span>
                   <span>Cancellation details</span>
                 </h4>
-                <p className="text-rose-700 font-semibold leading-relaxed">
+                <p className="text-rose-700 dark:text-rose-300 font-semibold leading-relaxed">
                   The merchant rejected your order.
                 </p>
                 {rejectionReason && (
-                  <p className="mt-2 bg-white p-3 rounded-xl border border-rose-100 text-rose-800 font-bold font-mono">
+                  <p className="mt-2 bg-white dark:bg-zinc-900 p-3 rounded-xl border border-rose-200/60 dark:border-rose-800/60 text-rose-900 dark:text-rose-200 font-bold font-mono">
                     Reason: {rejectionReason}
                   </p>
                 )}
@@ -5524,11 +5632,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                 <h4 className="font-extrabold text-base text-[#1A1C1E] dark:text-zinc-100">{profileName || 'Guest Shopper'}</h4>
                 <p className="text-xs text-gray-400 dark:text-zinc-500 font-semibold">{profileEmail || 'Shopping anonymously'}</p>
                 {currentUser ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 mt-1">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20 mt-1">
                     Registered Member
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-105 mt-1">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 mt-1">
                     Guest Account
                   </span>
                 )}
@@ -5546,7 +5654,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               }}
               className="w-full text-left"
             >
-              <div className="relative overflow-hidden bg-[#1A1C1E] border border-white/10 rounded-2xl p-3.5 shadow-md group cursor-pointer">
+              <div className="relative overflow-hidden bg-[#1A1C1E] border border-[#FFD23F]/20 rounded-2xl p-3.5 shadow-md group cursor-pointer">
                 {/* Decorative glow */}
                 <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-[#FFD23F]/10 blur-2xl pointer-events-none" />
 
@@ -5613,10 +5721,10 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                   <button
                     type="button"
                     onClick={() => handleSaveDisplayName(profileName)}
-                    className="px-4 h-12 bg-[#1A1C1E] dark:bg-[#FFD23F] text-[#FFD23F] dark:text-[#1A1C1E] font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active-scale hover:bg-black dark:hover:bg-[#f5c62e] transition-colors shrink-0 shadow-sm flex items-center gap-1.5"
+                    className="px-4 h-12 bg-[#1A1C1E] dark:bg-zinc-900 border border-[#FFD23F]/30 hover:border-[#FFD23F]/60 text-[#FFD23F] font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer active-scale hover:bg-black transition-colors shrink-0 shadow-sm flex items-center gap-1.5"
                   >
-                    <span className="material-symbols-outlined text-base font-bold">check</span>
-                    <span>Save Name</span>
+                    <span className="material-symbols-outlined text-base font-bold text-[#FFD23F]">check</span>
+                    <span className="text-[#FFD23F]">Save Name</span>
                   </button>
                 </div>
 
@@ -5629,7 +5737,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               <div className="flex items-center justify-between p-4 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl shadow-sm">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">{darkMode ? 'dark_mode' : 'light_mode'}</span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{darkMode ? 'Dark Mode' : 'Light Mode'}</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">{darkMode ? 'Dark Mode' : 'Light Mode'}</span>
                 </div>
                 <button
                   onClick={() => {
@@ -5661,7 +5769,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               {deferredPrompt && (
                 <button 
                   onClick={triggerInstall} 
-                  className="w-full p-4 bg-[#FFD23F]/10 border border-[#FFD23F]/20 rounded-2xl text-left font-extrabold text-xs uppercase tracking-wider flex items-center justify-between cursor-pointer hover:bg-[#FFD23F]/15 active:scale-98 transition text-[#1A1C1E]"
+                  className="w-full p-4 bg-[#FFD23F]/10 border border-[#FFD23F]/20 rounded-2xl text-left font-extrabold text-xs uppercase tracking-wider flex items-center justify-between cursor-pointer hover:bg-[#FFD23F]/15 active:scale-98 transition text-[#1A1C1E] dark:text-zinc-100"
                 >
                   <span className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">download</span>
@@ -5679,7 +5787,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                 Log Out Account
               </button>
             ) : (
-              <button onClick={() => navigateToScreen('login')} className="w-full h-14 bg-[#1A1C1E] dark:bg-[#FFD23F] text-[#FFD23F] dark:text-[#1A1C1E] font-black rounded-2xl active-scale transition cursor-pointer uppercase tracking-wider text-xs hover:bg-black dark:hover:bg-[#f5c62e]">
+              <button onClick={() => navigateToScreen('login')} className="w-full h-14 bg-[#1A1C1E] dark:bg-zinc-900 border border-[#FFD23F]/30 hover:border-[#FFD23F]/60 text-[#FFD23F] font-black rounded-2xl active-scale transition cursor-pointer uppercase tracking-wider text-xs hover:bg-black flex items-center justify-center shadow-md">
                 Sign In / Register
               </button>
             )}
@@ -6967,26 +7075,26 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
       {/* ─── Global Bottom Navigation ─── */}
       {['home', 'explore', 'store', 'tracking', 'profile', 'history'].includes(screen) && !isCartOpen && (
         <nav className="fixed bottom-0 left-0 right-0 w-full z-40 flex justify-around items-center px-4 py-3 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800 shadow-[0px_-4px_20px_rgba(0,0,0,0.05)] text-[#1A1C1E] dark:text-zinc-100">
-          <button onClick={() => navigateToScreen('home')} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'home' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
+          <button onClick={() => navigateToScreen('home')} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'home' ? 'text-[#FFD23F] font-bold relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 dark:text-zinc-400 font-semibold hover:text-[#1A1C1E] dark:hover:text-zinc-100'}`}>
             <span className="material-symbols-outlined text-xl">home</span>
-            <span className={`text-[10px] mt-1 ${screen === 'home' ? 'font-bold' : 'font-semibold'}`}>Home</span>
+            <span className="text-[10px] mt-1">Home</span>
           </button>
-          <button onClick={() => { setSearchQuery(''); navigateToScreen('explore'); }} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'explore' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
+          <button onClick={() => { setSearchQuery(''); navigateToScreen('explore'); }} className={`flex flex-col items-center justify-center cursor-pointer ${screen === 'explore' ? 'text-[#FFD23F] font-bold relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 dark:text-zinc-400 font-semibold hover:text-[#1A1C1E] dark:hover:text-zinc-100'}`}>
             <span className="material-symbols-outlined text-xl">grid_view</span>
-            <span className={`text-[10px] mt-1 ${screen === 'explore' ? 'font-bold' : 'font-semibold'}`}>Explore</span>
+            <span className="text-[10px] mt-1">Explore</span>
           </button>
-          <button onClick={() => { navigateToScreen('history'); loadOrdersHistory(); }} className={`flex flex-col items-center justify-center cursor-pointer relative ${screen === 'history' ? 'text-[#1A1C1E] relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 font-semibold hover:text-[#1A1C1E]'}`}>
+          <button onClick={() => { navigateToScreen('history'); loadOrdersHistory(); }} className={`flex flex-col items-center justify-center cursor-pointer relative ${screen === 'history' ? 'text-[#FFD23F] font-bold relative after:content-[\'\'] after:absolute after:-bottom-1 after:w-1 after:h-1 after:bg-[#FFD23F] after:rounded-full' : 'text-gray-400 dark:text-zinc-400 font-semibold hover:text-[#1A1C1E] dark:hover:text-zinc-100'}`}>
             <span className="material-symbols-outlined text-xl">receipt_long</span>
-            <span className={`text-[10px] mt-1 ${screen === 'history' ? 'font-bold' : 'font-semibold'}`}>Orders</span>
+            <span className="text-[10px] mt-1">Orders</span>
             {activeOrdersCount > 0 && (
-              <span className="absolute -top-1 -right-2 bg-[#1A1C1E] text-[#FFD23F] text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black shadow-sm">{activeOrdersCount}</span>
+              <span className="absolute -top-1 -right-2 bg-[#FFD23F] text-slate-950 text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black shadow-sm">{activeOrdersCount}</span>
             )}
           </button>
-          <button onClick={() => setIsCartOpen(true)} className="flex flex-col items-center justify-center text-gray-400 font-semibold hover:text-[#1A1C1E] relative cursor-pointer">
-            <span className="material-symbols-outlined text-xl text-gray-400">shopping_cart</span>
+          <button onClick={() => setIsCartOpen(true)} className="flex flex-col items-center justify-center text-gray-400 dark:text-zinc-400 font-semibold hover:text-[#1A1C1E] dark:hover:text-zinc-100 relative cursor-pointer">
+            <span className="material-symbols-outlined text-xl">shopping_cart</span>
             <span className="text-[10px] font-semibold mt-1">Cart</span>
             {totalItemsCount > 0 && (
-              <span className="absolute -top-1 -right-2 bg-[#1A1C1E] text-[#FFD23F] text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black shadow-sm">{totalItemsCount}</span>
+              <span className="absolute -top-1 -right-2 bg-[#FFD23F] text-slate-950 text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black shadow-sm">{totalItemsCount}</span>
             )}
           </button>
         </nav>

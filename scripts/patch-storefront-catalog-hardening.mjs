@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const file = 'src/App.tsx';
-let text = fs.readFileSync(file, 'utf8');
+let text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 let changed = false;
 
 // Remove the unsafe global product/category cache restore completely.

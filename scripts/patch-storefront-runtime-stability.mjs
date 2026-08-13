@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 const file = 'src/App.tsx';
-let source = fs.readFileSync(file, 'utf8');
+let source = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 let changed = false;
 
 const globalCacheBlock = `    const cachedProducts = localStorage.getItem('storeflow_cached_products');\n    const cachedCategories = localStorage.getItem('storeflow_cached_categories');\n`;

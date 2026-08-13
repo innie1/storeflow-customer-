@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const file = path.resolve('src/components/ServiceBusinessExperience.tsx');
-let text = fs.readFileSync(file, 'utf8');
+let text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 const marker = '// STOREFLOW_SERVICE_FLOW_V2';
 // The customer component now contains the complete service flow itself. Keep this
 // legacy compatibility patch harmless when the modern implementation is present.
