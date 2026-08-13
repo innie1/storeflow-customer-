@@ -41,21 +41,42 @@ export const supabase = new Proxy(baseSupabase, {
 
     return ((...args: RpcArgs) => {
       const fn = args[0];
-      const request = originalRpc(...args);
+      let rpcArgs = args;
+
+      // There are two overloaded place_order_atomic functions in the database:
+      // the original 9-argument version and the newer 11-argument version with
+      // defaults. Supabase/PostgREST cannot choose between them when only the
+      // first 9 named parameters are supplied, so an otherwise valid online
+      // order fails with "function ... is not unique". Always select the
+      // explicit 11-argument overload. Null customer_uuid is valid for guests.
+      if (fn === 'place_order_atomic' && args[1] && typeof args[1] === 'object' && !Array.isArray(args[1])) {
+        const params = args[1] as Record<string, unknown>;
+        rpcArgs = [fn, {
+          ...params,
+          p_customer_uuid: params.p_customer_uuid ?? null,
+          p_is_guest: params.p_is_guest ?? true,
+        }] as unknown as RpcArgs;
+      }
+
+      const request = originalRpc(...rpcArgs);
 
       return request.then(
         async (result) => {
           if (fn !== 'place_order_atomic') return result;
           if (!result.error && result.data) {
-            void notifyMerchantOfNewOrder(target, String(result.data));
+            // The data is a real UUID for a successful online order. Offline
+            // queuing is handled only for genuine network failures below.
+            if (typeof result.data === 'string' && !result.data.startsWith('offline-')) {
+              void notifyMerchantOfNewOrder(target, String(result.data));
+            }
           } else if (looksLikeNetworkFailure(result.error)) {
-            return queueOfflineOrder(args);
+            return queueOfflineOrder(rpcArgs);
           }
           return result;
         },
         async (error: unknown) => {
           if (fn !== 'place_order_atomic' || !looksLikeNetworkFailure(error)) throw error;
-          return queueOfflineOrder(args);
+          return queueOfflineOrder(rpcArgs);
         },
       );
     }) as typeof target.rpc;
@@ -73,6 +94,9 @@ if (typeof window !== 'undefined') {
       try {
         const result = await originalRpc(...item.args);
         if (result.error) {
+          // Keep database/business-rule failures visible in the queue rather
+          // than deleting the order. A later retry can succeed after a
+          // transient catalog/price update, and the customer does not lose it.
           remaining.push(item);
         } else if (result.data) {
           void notifyMerchantOfNewOrder(baseSupabase, String(result.data));
