@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { notifyMerchantOfNewOrder } from './utils/orderPushBridge';
 
 const SUPABASE_URL = "https://jawfalghkftldvkopuaw.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cbI7g6UDfa9kVg9iRxBHyQ_kqks36Ooj";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_cbI7g6UDfa9kVg9iRxBHyQ_qks36Ooj";
 
 const baseSupabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
