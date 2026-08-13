@@ -207,5 +207,9 @@ html, body, #root { max-width: 100%; overflow-x: hidden; }
   color: #FFD23F !important;
 }
 
-
-
+/* Store cards: some screens use a fixed light text utility that the older
+   dark-mode selector above intentionally excluded. Make merchant names
+   readable in dark mode without changing their light-mode appearance. */
+.dark .text-\[\#1A1C1E\] {
+  color: #f3f4f6 !important;
+}
