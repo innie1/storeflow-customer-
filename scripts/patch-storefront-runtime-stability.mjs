@@ -4,51 +4,26 @@ const file = 'src/App.tsx';
 let source = fs.readFileSync(file, 'utf8');
 let changed = false;
 
-// Never hydrate the active catalog from the old global cache. It can belong to
-// a different store and is only useful as legacy data for migration/debugging.
 const globalCacheBlock = `    const cachedProducts = localStorage.getItem('storeflow_cached_products');\n    const cachedCategories = localStorage.getItem('storeflow_cached_categories');\n`;
 const globalCacheUse = `    if (cachedProducts) setProducts(JSON.parse(cachedProducts));\n    if (cachedCategories) setCategories(JSON.parse(cachedCategories));\n`;
-if (source.includes(globalCacheBlock)) {
-  source = source.replace(globalCacheBlock, '');
-  changed = true;
-}
-if (source.includes(globalCacheUse)) {
-  source = source.replace(globalCacheUse, '');
-  changed = true;
-}
+if (source.includes(globalCacheBlock)) { source = source.replace(globalCacheBlock, ''); changed = true; }
+if (source.includes(globalCacheUse)) { source = source.replace(globalCacheUse, ''); changed = true; }
 
-// The customer app only needs these stable product columns. Requesting merchant
-// analytics/restock columns made the entire catalog fail when one optional
-// column was absent from a deployment schema.
 const oldSelect = "'id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at, is_service'";
 const newSelect = "'id, store_id, category_id, barcode, name, description, brand, selling_price, wholesale_price, retail_price, quantity, unit, image, status, is_service'";
-if (source.includes(oldSelect)) {
-  source = source.replace(oldSelect, newSelect);
-  changed = true;
-}
+if (source.includes(oldSelect)) { source = source.replace(oldSelect, newSelect); changed = true; }
 
-// Do not wipe a valid catalog when a refresh/query fails. Keep the store-specific
-// cache already rendered, and only show the offline message when there is no data.
 const oldCatch = `      if (matched) {\n        setStore(matched);\n        setProducts([]);\n        setLoading(false);\n      } else {`;
 const newCatch = `      if (matched) {\n        setStore(matched);\n        const cached = localStorage.getItem('storeflow_cached_products_' + matched.id);\n        if (cached) {\n          try { setProducts(JSON.parse(cached)); } catch { /* keep current catalog */ }\n        }\n        setLoading(false);\n      } else {`;
-if (source.includes(oldCatch)) {
-  source = source.replace(oldCatch, newCatch);
-  changed = true;
-}
+if (source.includes(oldCatch)) { source = source.replace(oldCatch, newCatch); changed = true; }
 
-// Online database failures must not be mislabeled as offline. Queue only when
-// the browser is actually offline; otherwise show the real RPC error so a
-// broken order cannot disappear into an endless background queue.
 const oldOrderCatch = `    } catch (e: any) {\n      // Genuine failure after retries — don't lose the order. Queue it for\n      // background sync instead of just showing an error and giving up.\n      console.error('Order placement failed after retries, queueing for background sync:', e);\n      queueOrderForOfflineSync(orderPayload, itemsPayload);\n      setOrderSubmitting(false);\n      setOrderSubmitError("We're having trouble reaching the store right now — your order has been saved and will send automatically once your connection improves.");\n    }`;
 const newOrderCatch = `    } catch (e: any) {\n      console.error('Order placement failed:', e);\n      setOrderSubmitting(false);\n      if (!navigator.onLine) {\n        queueOrderForOfflineSync(orderPayload, itemsPayload);\n        setOrderSubmitError("You're offline. Your order is saved and will send automatically when your connection returns.");\n      } else {\n        const message = e?.message || e?.details || e?.hint || 'The store could not accept the order right now.';\n        setOrderSubmitError(message);\n        setOrderStatus('Order Failed');\n        setOrderId(null);\n      }\n    }`;
-if (source.includes(oldOrderCatch)) {
-  source = source.replace(oldOrderCatch, newOrderCatch);
-  changed = true;
-}
+if (source.includes(oldOrderCatch)) { source = source.replace(oldOrderCatch, newOrderCatch); changed = true; }
 
 // Fresh devices cannot rely on allStores/localStorage. Resolve a scanned store
 // using one identifier at a time instead of a large PostgREST OR expression.
-// The latter can fail the entire request when an id branch is not type-compatible.
+// The existing isUuid declaration above this block is intentionally reused.
 const resolverStartMarker = "      let storeData = null;\n      let storeErr = null;\n      let queryUsed = '';";
 const resolverEndMarker = '      // 4. Return and log the full Supabase response and any errors.\n';
 const resolverStart = source.indexOf(resolverStartMarker, source.indexOf('const loadStoreDetails = async'));
@@ -57,10 +32,7 @@ if (resolverStart !== -1 && resolverEnd !== -1) {
   const resolverReplacement = [
     "      let storeData = null;",
     "      let storeErr = null;",
-    "      let queryUsed = '';",
-    "",
     "      const cleanSid = sid.trim();",
-    "      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanSid);",
     "      const normalizedCode = cleanSid.toUpperCase();",
     "",
     "      const lookupStore = async (column: string, value: string) => {",
@@ -70,24 +42,11 @@ if (resolverStart !== -1 && resolverEnd !== -1) {
     "      };",
     "",
     "      try {",
-    "        if (isUuid) {",
-    "          queryUsed = 'stores_public.id';",
-    "          storeData = await lookupStore('id', cleanSid);",
-    "        }",
+    "        if (isUuid) storeData = await lookupStore('id', cleanSid);",
+    "        if (!storeData) storeData = await lookupStore('store_id', normalizedCode);",
+    "        if (!storeData && !normalizedCode.startsWith('SF-')) storeData = await lookupStore('store_id', 'SF-' + normalizedCode);",
+    "        if (!storeData) storeData = await lookupStore('access_code', normalizedCode.replace(/^SF-/, ''));",
     "        if (!storeData) {",
-    "          queryUsed = 'stores_public.store_id';",
-    "          storeData = await lookupStore('store_id', normalizedCode);",
-    "        }",
-    "        if (!storeData && !normalizedCode.startsWith('SF-')) {",
-    "          queryUsed = 'stores_public.store_id SF fallback';",
-    "          storeData = await lookupStore('store_id', 'SF-' + normalizedCode);",
-    "        }",
-    "        if (!storeData) {",
-    "          queryUsed = 'stores_public.access_code';",
-    "          storeData = await lookupStore('access_code', normalizedCode.replace(/^SF-/, ''));",
-    "        }",
-    "        if (!storeData) {",
-    "          queryUsed = 'stores_public.qr_code';",
     "          const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).ilike('qr_code', '%' + cleanSid + '%').limit(1);",
     "          if (res.error) throw res.error;",
     "          storeData = res.data?.[0] || null;",
