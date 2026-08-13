@@ -4,12 +4,13 @@ const file = 'src/App.tsx';
 let text = fs.readFileSync(file, 'utf8');
 let changed = false;
 
-// Never hydrate a store page from the old global catalog. That catalog can belong
-// to another store and is especially dangerous after QR/deep-link navigation.
-const globalCacheLoad = `    const cachedProducts = localStorage.getItem('storeflow_cached_products');\n    const cachedCategories = localStorage.getItem('storeflow_cached_categories');\n`;
-const globalCacheLoadReplacement = `    // Product/catalog state is store-scoped. Do not restore a global catalog here.\n`;
-if (text.includes(globalCacheLoad)) {
-  text = text.replace(globalCacheLoad, globalCacheLoadReplacement);
+// Never hydrate a store page from the old global catalog. Keep the declarations
+// out of the transformed source AND remove their global restore calls. The
+// previous patch removed only the declarations, leaving references behind and
+// causing the production TypeScript build to fail.
+const globalCacheBlock = /\s*const cachedProducts = localStorage\.getItem\('storeflow_cached_products'\);\s*const cachedCategories = localStorage\.getItem\('storeflow_cached_categories'\);\s*\n\s*if \(cachedProducts\) setProducts\(JSON\.parse\(cachedProducts\)\);\s*if \(cachedCategories\) setCategories\(JSON\.parse\(cachedCategories\)\);/;
+if (globalCacheBlock.test(text)) {
+  text = text.replace(globalCacheBlock, '\n    // Product/category state is restored only by the active store-scoped catalog loader.');
   changed = true;
 }
 
@@ -24,8 +25,6 @@ if (text.includes(oldSelect)) {
   changed = true;
 }
 
-// JSONB catalogs are supported, but normalize service/product price fields
-// consistently so both kinds of business can render and be ordered.
 const oldJsonPrice = `const whPrice = p.sellingPrice ?? p.selling_price ?? 0;`;
 const newJsonPrice = `const whPrice = Number(p.sellingPrice ?? p.selling_price ?? p.price ?? 0);`;
 if (text.includes(oldJsonPrice)) {
@@ -33,8 +32,6 @@ if (text.includes(oldJsonPrice)) {
   changed = true;
 }
 
-// A service may be represented as an offering instead of a relational product.
-// Preserve its explicit unit/pricing mode for the customer UI.
 const oldServiceUnit = `unit: o.pricing === 'time' ? 'session' : 'service',`;
 const newServiceUnit = `unit: o.pricing === 'time' ? 'session' : (o.unit || o.pricing || 'service'),`;
 if (text.includes(oldServiceUnit)) {
@@ -42,17 +39,16 @@ if (text.includes(oldServiceUnit)) {
   changed = true;
 }
 
-// Never write the unsafe global product/category caches. Keep only the exact
-// store-scoped cache so offline reopening still works without cross-store data.
-const globalProductWrite = `        localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));\n`;
-if (text.includes(globalProductWrite)) {
-  text = text.replace(globalProductWrite, '');
-  changed = true;
-}
-const globalCategoryWrite = `        localStorage.setItem('storeflow_cached_categories', JSON.stringify(cats));\n`;
-if (text.includes(globalCategoryWrite)) {
-  text = text.replace(globalCategoryWrite, '');
-  changed = true;
+// Never write unsafe global product/category caches. Store-scoped caches remain
+// the offline fallback and are written by the active store loader.
+for (const statement of [
+  `        localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));\n`,
+  `        localStorage.setItem('storeflow_cached_categories', JSON.stringify(cats));\n`,
+]) {
+  if (text.includes(statement)) {
+    text = text.replace(statement, '');
+    changed = true;
+  }
 }
 
 if (changed) fs.writeFileSync(file, text);
