@@ -103,11 +103,8 @@ button,
 a { touch-action: manipulation; }
 img { max-width: 100%; }
 
-/* Prevent broken remote images from creating awkward empty layout areas. */
 img:not([src]), img[src=""] { visibility: hidden; }
 
-/* Legacy utility aliases: preserve existing visual states while screens are
-   refactored incrementally. */
 .bg-emerald-55 { background-color: #ecfdf5; }
 .border-amber-105 { border-color: #fef3c7; }
 
@@ -138,7 +135,6 @@ html, body, #root { max-width: 100%; overflow-x: hidden; }
   input, select, textarea { font-size: 16px; }
 }
 
-/* Global Dark Mode Overrides */
 .dark {
   background-color: #121315 !important;
   color: #f3f4f6 !important;
@@ -207,9 +203,92 @@ html, body, #root { max-width: 100%; overflow-x: hidden; }
   color: #FFD23F !important;
 }
 
-/* Store cards: some screens use a fixed light text utility that the older
-   dark-mode selector above intentionally excluded. Make merchant names
-   readable in dark mode without changing their light-mode appearance. */
 .dark .text-\[\#1A1C1E\] {
   color: #f3f4f6 !important;
+}
+
+/* Empty-store scanner square.
+   The existing JSX already provides the square, scan-beam and QR placeholder.
+   We deliberately keep that structure and style it here so the animation is
+   stable and does not require a DOM observer or JavaScript animation loop. */
+@keyframes storeflow-empty-scan {
+  0%, 100% { top: 12%; opacity: 0; }
+  8% { opacity: 1; }
+  48% { opacity: 1; }
+  55% { top: 88%; opacity: 1; }
+  92% { opacity: 1; }
+}
+
+@keyframes storeflow-empty-spread {
+  0% { transform: scaleX(0); opacity: 0.05; transform-origin: left center; }
+  8% { opacity: 1; }
+  42% { transform: scaleX(1); opacity: 1; transform-origin: left center; }
+  50% { transform: scaleX(1); opacity: 1; }
+  92% { transform: scaleX(0); opacity: 1; transform-origin: right center; }
+  100% { transform: scaleX(0); opacity: 0.05; transform-origin: right center; }
+}
+
+/* Make the empty-state square larger while keeping it perfectly square. */
+.group:has(.animate-qr-gray-black) {
+  width: 220px !important;
+  height: 220px !important;
+  min-width: 220px !important;
+  min-height: 220px !important;
+  border-radius: 36px !important;
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+/* Remove the actual QR glyph. This span becomes the animated white square. */
+.animate-qr-gray-black {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+  background: #ffffff !important;
+  border-radius: 36px !important;
+  overflow: hidden !important;
+  z-index: 4 !important;
+  transform: none !important;
+}
+
+.animate-qr-gray-black::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #08090a;
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: storeflow-empty-spread 3.2s ease-in-out infinite;
+  border-radius: inherit;
+}
+
+/* Yellow scanner line moving vertically over the square. */
+.animate-scan-beam {
+  left: 10% !important;
+  right: 10% !important;
+  height: 3px !important;
+  top: 12% !important;
+  background: linear-gradient(90deg, transparent, #FFD23F 20%, #FFD23F 80%, transparent) !important;
+  box-shadow: 0 0 10px rgba(255, 210, 63, 0.85) !important;
+  opacity: 1 !important;
+  animation: storeflow-empty-scan 3.2s ease-in-out infinite !important;
+  z-index: 12 !important;
+}
+
+/* Keep the ambient layer out of the way of the monochrome animation. */
+.animate-qr-gray-black ~ * { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scan-beam,
+  .animate-qr-gray-black::after {
+    animation: none !important;
+  }
+  .animate-qr-gray-black::after {
+    transform: scaleX(0) !important;
+  }
 }
