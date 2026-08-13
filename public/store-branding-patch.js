@@ -33,12 +33,48 @@
   const findStore = (visibleName) => {
     const name = String(visibleName || '').trim();
     if (!name) return null;
+    const normalized = name.toLowerCase();
     return getStores().find(s => {
-      const names = [storeName(s), s?.business_name, s?.data?.storeName, s?.data?.businessName]
+      const names = [
+        storeName(s),
+        s?.business_name,
+        s?.data?.storeName,
+        s?.data?.businessName,
+        s?.data?.profile?.businessName,
+      ]
         .filter(Boolean)
-        .map(String);
-      return names.includes(name);
+        .map(v => String(v).trim().toLowerCase());
+      return names.includes(normalized);
     }) || null;
+  };
+
+  const replacePartnerStoreLabel = (card, canonicalName) => {
+    if (!canonicalName) return;
+
+    // The card currently renders the real name in a dark/invisible heading and
+    // then incorrectly renders "Partner Store" as the visible merchant label.
+    // Keep the card layout, but make the merchant's real business name the
+    // visible label instead of the generic partner label.
+    const candidates = [...card.querySelectorAll('*')];
+    candidates.forEach(el => {
+      if (el.children.length === 0 && el.textContent?.trim() === 'Partner Store') {
+        el.textContent = canonicalName;
+        el.classList.add('dark:text-zinc-100');
+        el.style.color = '';
+        el.style.opacity = '1';
+      }
+    });
+
+    // Make any existing canonical-name heading visible as well. This handles
+    // the current dark-mode styling where the real name is present but nearly
+    // black on the dark card.
+    candidates.forEach(el => {
+      if (el.children.length === 0 && el.textContent?.trim() === canonicalName) {
+        el.classList.add('dark:text-zinc-100');
+        el.style.color = '';
+        el.style.opacity = '1';
+      }
+    });
   };
 
   const applyHomeCards = () => {
@@ -55,19 +91,28 @@
       if (!store) return;
 
       const canonicalName = storeName(store);
-      if (canonicalName) title.textContent = canonicalName;
-      title.classList.add('dark:text-zinc-100');
-      title.style.color = '';
+      if (canonicalName) {
+        title.textContent = canonicalName;
+        title.classList.add('dark:text-zinc-100');
+        title.style.color = '';
+        title.style.opacity = '1';
+      }
 
-      const imgBox = card.querySelector('div.w-16.h-16');
+      replacePartnerStoreLabel(card, canonicalName);
+
+      // Do not replace Manchant's built-in six logo styles with a generic
+      // placeholder. If the merchant uploaded a real image URL, show that
+      // image in the card; otherwise let the existing Manchant logo renderer
+      // remain in place.
       const url = logoUrl(store);
+      const imgBox = card.querySelector('div.w-16.h-16');
       if (!imgBox || !url) return;
 
       let img = imgBox.querySelector('img[data-storeflow-brand-logo]');
       if (!img) {
         img = document.createElement('img');
         img.setAttribute('data-storeflow-brand-logo', 'true');
-        img.className = 'w-full h-full object-cover';
+        img.className = 'w-full h-full object-cover rounded-2xl';
         img.alt = canonicalName;
         imgBox.replaceChildren(img);
       }
@@ -86,6 +131,13 @@
     const store = findStore(title.textContent);
     if (!store) return;
 
+    const canonicalName = storeName(store);
+    if (canonicalName) {
+      title.textContent = canonicalName;
+      title.style.opacity = '1';
+      title.style.color = '';
+    }
+
     const url = logoUrl(store);
     if (!url) return;
 
@@ -96,8 +148,8 @@
     if (!img) {
       img = document.createElement('img');
       img.setAttribute('data-storeflow-profile-logo', 'true');
-      img.className = 'w-full h-full object-cover';
-      img.alt = storeName(store);
+      img.className = 'w-full h-full object-cover rounded-full';
+      img.alt = canonicalName;
       mark.replaceChildren(img);
     }
     if (img.src !== url) img.src = url;
