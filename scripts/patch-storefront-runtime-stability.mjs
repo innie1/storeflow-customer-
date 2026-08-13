@@ -46,5 +46,60 @@ if (source.includes(oldOrderCatch)) {
   changed = true;
 }
 
+// Fresh devices cannot rely on allStores/localStorage. Resolve a scanned store
+// using one identifier at a time instead of a large PostgREST OR expression.
+// The latter can fail the entire request when an id branch is not type-compatible.
+const resolverStartMarker = "      let storeData = null;\n      let storeErr = null;\n      let queryUsed = '';";
+const resolverEndMarker = '      // 4. Return and log the full Supabase response and any errors.\n';
+const resolverStart = source.indexOf(resolverStartMarker, source.indexOf('const loadStoreDetails = async'));
+const resolverEnd = source.indexOf(resolverEndMarker, resolverStart);
+if (resolverStart !== -1 && resolverEnd !== -1) {
+  const resolverReplacement = [
+    "      let storeData = null;",
+    "      let storeErr = null;",
+    "      let queryUsed = '';",
+    "",
+    "      const cleanSid = sid.trim();",
+    "      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanSid);",
+    "      const normalizedCode = cleanSid.toUpperCase();",
+    "",
+    "      const lookupStore = async (column: string, value: string) => {",
+    "        const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).eq(column, value).maybeSingle();",
+    "        if (res.error) throw res.error;",
+    "        return res.data;",
+    "      };",
+    "",
+    "      try {",
+    "        if (isUuid) {",
+    "          queryUsed = 'stores_public.id';",
+    "          storeData = await lookupStore('id', cleanSid);",
+    "        }",
+    "        if (!storeData) {",
+    "          queryUsed = 'stores_public.store_id';",
+    "          storeData = await lookupStore('store_id', normalizedCode);",
+    "        }",
+    "        if (!storeData && !normalizedCode.startsWith('SF-')) {",
+    "          queryUsed = 'stores_public.store_id SF fallback';",
+    "          storeData = await lookupStore('store_id', 'SF-' + normalizedCode);",
+    "        }",
+    "        if (!storeData) {",
+    "          queryUsed = 'stores_public.access_code';",
+    "          storeData = await lookupStore('access_code', normalizedCode.replace(/^SF-/, ''));",
+    "        }",
+    "        if (!storeData) {",
+    "          queryUsed = 'stores_public.qr_code';",
+    "          const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).ilike('qr_code', '%' + cleanSid + '%').limit(1);",
+    "          if (res.error) throw res.error;",
+    "          storeData = res.data?.[0] || null;",
+    "        }",
+    "      } catch (lookupError) {",
+    "        storeErr = lookupError;",
+    "      }",
+    ""
+  ].join('\n');
+  source = source.slice(0, resolverStart) + resolverReplacement + source.slice(resolverEnd);
+  changed = true;
+}
+
 if (changed) fs.writeFileSync(file, source);
 console.log(`[StoreFlow] runtime stability patch ${changed ? 'applied' : 'already present'}.`);
