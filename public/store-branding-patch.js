@@ -3,6 +3,7 @@
   // Intentionally does NOT use MutationObserver or rewrite the whole DOM.
   // It only touches the Your Stores cards and the store-profile identity.
   const CACHE_KEY = 'storeflow_cached_all_stores';
+  const VISIT_KEY = 'storeflow_scanned_stores_meta';
 
   const getStores = () => {
     try {
@@ -10,6 +11,15 @@
       return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
+    }
+  };
+
+  const getVisitMeta = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(VISIT_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
     }
   };
 
@@ -79,6 +89,30 @@
     }
   };
 
+  const sortYourStores = (section, stores) => {
+    const visitMeta = getVisitMeta();
+    const byName = new Map(stores.map(store => [getName(store).trim().toLowerCase(), store]));
+    const titles = [...section.querySelectorAll('h4')];
+    const cards = titles.map(title => ({
+      title,
+      card: title.closest('.relative'),
+      store: byName.get((title.textContent || '').trim().toLowerCase())
+    })).filter(item => item.card && item.store);
+
+    if (cards.length < 2) return;
+
+    cards.sort((a, b) => {
+      const aTime = Date.parse(visitMeta[a.store.id] || '') || 0;
+      const bTime = Date.parse(visitMeta[b.store.id] || '') || 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return 0;
+    });
+
+    const grid = cards[0].card.parentElement;
+    if (!grid) return;
+    cards.forEach(({ card }) => grid.appendChild(card));
+  };
+
   const patch = () => {
     const stores = getStores();
     if (!stores.length) return;
@@ -103,6 +137,11 @@
           box.dataset.storeflowBrandingApplied = 'true';
         }
       });
+
+      // Recently used store first. Removed stores are already absent from
+      // React's list; a store returns only when loadStoreDetails records a
+      // new scan/visit in localStorage.
+      sortYourStores(section, stores);
     }
 
     // Store profile: real merchant name + the same merchant logo.
@@ -128,5 +167,19 @@
 
   // Run only a few times around normal React route/render timing.
   [250, 700, 1500, 3000].forEach(delay => setTimeout(patch, delay));
+
+  // Re-run after SPA navigation without observing/mutating the entire DOM.
+  const originalPushState = history.pushState;
+  history.pushState = function(...args) {
+    const result = originalPushState.apply(this, args);
+    setTimeout(patch, 150);
+    return result;
+  };
+  const originalReplaceState = history.replaceState;
+  history.replaceState = function(...args) {
+    const result = originalReplaceState.apply(this, args);
+    setTimeout(patch, 150);
+    return result;
+  };
   window.addEventListener('popstate', () => setTimeout(patch, 150));
 })();
