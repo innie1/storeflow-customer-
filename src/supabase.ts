@@ -35,16 +35,14 @@ async function queueOfflineOrder(args: RpcArgs): Promise<any> {
   return { data: id, error: null, count: null, status: 200, statusText: 'offline-queued' };
 }
 
-// The customer UI reads service businesses through stores_public. Normalize the
-// merchant-side service configuration here as a final client-side guard so the
-// UI does not depend on one particular database-view version. This is read-only:
-// it never writes to Manchant or changes the merchant's stored configuration.
-const SERVICE_TYPES = new Set([
-  'laundry', 'barber', 'salon', 'tailoring', 'repair', 'printing',
-  'cyber_cafe', 'car_wash', 'photography', 'cleaning', 'spa',
-  'games', 'gaming', 'restaurant'
-]);
-
+/**
+ * Customer-service contract.
+ * Manchant publishes the current service catalogue under
+ * data.businessTemplate.offerings. The customer app deliberately does not
+ * maintain a list of business types or service names here. Any future
+ * template that publishes offerings + modes:['services'] is automatically
+ * consumable without another customer-app patch.
+ */
 function normalizeStoreServices(store: any): any {
   if (!store || typeof store !== 'object' || !store.data || typeof store.data !== 'object') return store;
 
@@ -52,68 +50,72 @@ function normalizeStoreServices(store: any): any {
   const template = data.businessTemplate && typeof data.businessTemplate === 'object'
     ? data.businessTemplate
     : {};
-  const type = String(template.type || data.storeType || store.storeType || store.business_type || '').toLowerCase();
-  const modes = Array.isArray(template.modes) ? template.modes : [];
-  const serviceBusiness = SERVICE_TYPES.has(type) || modes.includes('services');
-  if (!serviceBusiness) return store;
-
-  const existing = Array.isArray(template.offerings) ? [...template.offerings] : [];
-  const seen = new Set(existing.map((o: any) => String(o?.id || o?.name || '').trim().toLowerCase()).filter(Boolean));
-
-  // Gaming is stored by Manchant in data.games. Only enabled games are customer-visible.
+  const offerings = Array.isArray(template.offerings) ? template.offerings : [];
   const games = Array.isArray(data.games) ? data.games : [];
+  const services = Array.isArray(data.services) ? data.services : [];
+
+  // These legacy sources are only adapters. Once Manchant publishes a
+  // canonical offering, it wins. No business-type allow-list is used.
+  const canonical = [...offerings];
+  const seen = new Set(canonical.map((o: any) => String(o?.id || o?.name || '').trim().toLowerCase()).filter(Boolean));
+
   for (const game of games) {
     if (!game || game.enabled === false) continue;
     const id = String(game.id || game.name || '').trim();
     const name = String(game.name || 'Service').trim();
     const key = (id || name).toLowerCase();
-    if (seen.has(key) || existing.some((o: any) => String(o?.name || '').trim().toLowerCase() === name.toLowerCase())) continue;
-    existing.push({
-      id: id || `game-${existing.length}`,
+    if (seen.has(key) || canonical.some((o: any) => String(o?.name || '').trim().toLowerCase() === name.toLowerCase())) continue;
+    canonical.push({
+      id: id || `legacy-game-${canonical.length}`,
       name,
+      description: game.description || '',
       icon: game.icon || '🎮',
       price: Number(game.price ?? game.sellingPrice ?? game.selling_price ?? 0),
+      sellingPrice: Number(game.price ?? game.sellingPrice ?? game.selling_price ?? 0),
       enabled: true,
       active: true,
-      pricing: 'time',
-      mode: 'sessions',
+      pricing: game.pricing || 'time',
+      unit: game.unit || 'session',
+      unitLabel: game.unitLabel || 'per session',
+      source: 'legacy-games',
     });
     seen.add(key);
     seen.add(name.toLowerCase());
   }
 
-  // Some service configurations use a direct data.services array. Normalize it
-  // too, while preserving the merchant's enabled/active flags.
-  const services = Array.isArray(data.services) ? data.services : [];
   for (const service of services) {
     if (!service || service.enabled === false || service.active === false || service.discontinued === true) continue;
     const id = String(service.id || service.serviceId || service.name || '').trim();
     const name = String(service.name || service.serviceName || 'Service').trim();
     const key = (id || name).toLowerCase();
-    if (seen.has(key) || existing.some((o: any) => String(o?.name || '').trim().toLowerCase() === name.toLowerCase())) continue;
-    existing.push({
-      id: id || `service-${existing.length}`,
+    if (seen.has(key) || canonical.some((o: any) => String(o?.name || '').trim().toLowerCase() === name.toLowerCase())) continue;
+    canonical.push({
+      ...service,
+      id: id || `legacy-service-${canonical.length}`,
       name,
-      description: service.description || '',
-      icon: service.icon || 'design_services',
       price: Number(service.price ?? service.sellingPrice ?? service.selling_price ?? 0),
+      sellingPrice: Number(service.price ?? service.sellingPrice ?? service.selling_price ?? 0),
       enabled: true,
       active: true,
-      pricing: service.pricing || 'fixed',
-      mode: service.mode || 'services',
-      turnaround: service.turnaround || '',
     });
     seen.add(key);
     seen.add(name.toLowerCase());
   }
 
+  if (canonical.length === 0) return store;
+
+  // Keep the merchant's template untouched except for the canonical
+  // normalized offering list. This is client-side read normalization only.
   return {
     ...store,
     data: {
       ...data,
       businessTemplate: {
         ...template,
-        offerings: existing,
+        offerings: canonical,
+        // This is the only capability flag the customer renderer needs.
+        // Manchant service templates can evolve without a customer-side type list.
+        modes: Array.from(new Set([...(Array.isArray(template.modes) ? template.modes : []), 'services'])),
       },
     },
   };
@@ -129,9 +131,12 @@ function normalizeStoresResult(result: any, table: string): any {
   };
 }
 
-// Wrap only stores_public query builders. This preserves the existing Supabase
-// API while normalizing the final response after maybeSingle(), single(), or a
-// normal array query resolves. No DOM patching or global observers are involved.
+function normalizeRealtimePayload(payload: any): any {
+  if (!payload?.new || typeof payload.new !== 'object') return payload;
+  const normalized = normalizeStoreServices(payload.new);
+  return { ...payload, new: normalized };
+}
+
 function wrapQueryBuilder(builder: any, table: string): any {
   if (!builder || typeof builder !== 'object') return builder;
   return new Proxy(builder, {
@@ -152,24 +157,35 @@ function wrapQueryBuilder(builder: any, table: string): any {
   });
 }
 
+function wrapChannel(channel: any): any {
+  if (!channel || typeof channel !== 'object') return channel;
+  return new Proxy(channel, {
+    get(target, property, receiver) {
+      if (property !== 'on') return Reflect.get(target, property, receiver);
+      const originalOn = Reflect.get(target, property, target);
+      return (event: any, filter: any, callback: any) => {
+        if (typeof callback !== 'function') return originalOn.call(target, event, filter, callback);
+        return wrapChannel(originalOn.call(target, event, filter, (payload: any) => callback(normalizeRealtimePayload(payload))));
+      };
+    },
+  });
+}
+
 export const supabase = new Proxy(baseSupabase, {
   get(target, property, receiver) {
     if (property === 'from') {
       const originalFrom = Reflect.get(target, property, target) as (table: string) => any;
       return (table: string) => wrapQueryBuilder(originalFrom.call(target, table), table);
     }
+    if (property === 'channel') {
+      const originalChannel = Reflect.get(target, property, target) as (name: string) => any;
+      return (name: string) => wrapChannel(originalChannel.call(target, name));
+    }
     if (property !== 'rpc') return Reflect.get(target, property, receiver);
 
     return ((...args: RpcArgs) => {
       const fn = args[0];
       let rpcArgs = args;
-
-      // There are two overloaded place_order_atomic functions in the database:
-      // the original 9-argument version and the newer 11-argument version with
-      // defaults. Supabase/PostgREST cannot choose between them when only the
-      // first 9 named parameters are supplied, so an otherwise valid online
-      // order fails with "function ... is not unique". Always select the
-      // explicit 11-argument overload. Null customer_uuid is valid for guests.
       if (fn === 'place_order_atomic' && args[1] && typeof args[1] === 'object' && !Array.isArray(args[1])) {
         const params = args[1] as Record<string, unknown>;
         rpcArgs = [fn, {
@@ -180,7 +196,6 @@ export const supabase = new Proxy(baseSupabase, {
       }
 
       const request = originalRpc(...rpcArgs);
-
       return request.then(
         async (result) => {
           if (fn !== 'place_order_atomic') return result;
@@ -202,8 +217,6 @@ export const supabase = new Proxy(baseSupabase, {
   },
 });
 
-// Retry queued orders whenever connectivity returns. Each item is removed only
-// after the atomic RPC succeeds, so a temporary outage cannot lose an order.
 if (typeof window !== 'undefined') {
   window.addEventListener('online', async () => {
     const queue = readQueue();
