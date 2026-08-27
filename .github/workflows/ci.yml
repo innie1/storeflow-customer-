@@ -35,6 +35,9 @@ jobs:
       - name: Check whitespace errors
         run: git diff --check
 
+      - name: Store-specific service regressions
+        run: npm test
+
       - name: Lint
         run: npm run lint
 
