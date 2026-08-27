@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node scripts/test-store-specific-service-flow.mjs",
     "prebuild": "node scripts/patch-storefront-branding.mjs && node scripts/patch-service-customer-flow.mjs && node scripts/fix-store-public-columns.mjs && node scripts/patch-storefront-store-identity.mjs && node scripts/patch-customer-analytics.mjs && node scripts/patch-storefront-runtime-stability.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
