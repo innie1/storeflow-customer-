@@ -6,32 +6,26 @@ export function patchCustomerStoreDiscovery(source: string): string {
   let code = source;
 
   const routerImport = "import { parseRoute, parseQRCode } from './router';";
-  const resolverImport = "import { resolvePublicStore } from './storeResolver';";
+  const resolverImport = "import { resolvePublicStore } from './utils/storeResolver';";
   if (!code.includes(resolverImport)) {
     if (!code.includes(routerImport)) throw new Error('[store-discovery] router import anchor missing');
     code = code.replace(routerImport, `${routerImport}\n${resolverImport}`);
   }
 
-  // One resolver for typed codes, access codes, SF IDs, UUIDs and QR URLs.
   if (!code.includes('const openStoreFromSearch = async')) {
     const processAnchor = '  const processScannedCode = async (codeValue: string) => {';
     if (!code.includes(processAnchor)) throw new Error('[store-discovery] scanner anchor missing');
-    const helper = `  const openStoreFromSearch = async (raw: string) => {\n    const query = raw.trim();\n    if (!query) return false;\n    setLoading(true);\n    setErrorText(null);\n    try {\n      const resolved = await resolvePublicStore(query);\n      if (!resolved.data) {\n        setScanError('Store not found. Check the Store ID or access code and try again.');\n        return false;\n      }\n      setStoreId(resolved.data.id);\n      await loadStoreDetails(resolved.data.id);\n      setSearchQuery('');\n      setShowManualInput(false);\n      navigateToScreen('store');\n      return true;\n    } catch (error) {\n      console.error('Store lookup failed', error);\n      setScanError('Could not search for that store right now. Check your connection and try again.');\n      return false;\n    } finally {\n      setLoading(false);\n    }\n  };\n\n`;
+    const helper = `  const openStoreFromSearch = async (raw: string) => {\n    const query = raw.trim();\n    if (!query) return false;\n    setLoading(true);\n    setErrorText(null);\n    try {\n      const resolved = await resolvePublicStore(query);\n      if (!resolved.store) {\n        setScanError('Store not found. Check the Store ID or access code and try again.');\n        return false;\n      }\n      setStoreId(resolved.store.id);\n      await loadStoreDetails(resolved.store.id);\n      setSearchQuery('');\n      setShowManualInput(false);\n      navigateToScreen('store');\n      return true;\n    } catch (error) {\n      console.error('Store lookup failed', error);\n      setScanError('Could not search for that store right now. Check your connection and try again.');\n      return false;\n    } finally {\n      setLoading(false);\n    }\n  };\n\n`;
     code = code.replace(processAnchor, helper + processAnchor);
   }
 
-  // Remove the old unsafe combined OR query. A 6-character access code must
-  // never be compared against the UUID id column because PostgREST rejects
-  // the whole OR expression before checking access_code/store_id.
   const unsafeScanner = /          let storeData = null;\n          let storeErr = null;\n\n          if \(parsedStoreId\.toUpperCase\(\)\.startsWith\('SF-'\)\) \{[\s\S]*?          if \(!storeData && !storeErr\) \{[\s\S]*?            storeErr = res\.error;\n          \}\n\n          if \(storeData\) \{/;
   if (unsafeScanner.test(code)) {
-    code = code.replace(unsafeScanner, `          const { data: storeData, error: storeErr } = await resolvePublicStore(parsedStoreId);\n          if (storeErr) console.warn('[StoreFlow] store scan resolver warning', storeErr);\n\n          if (storeData) {`);
-  } else if (!code.includes('await resolvePublicStore(parsedStoreId)')) {
-    throw new Error('[store-discovery] unsafe scanner lookup block missing');
+    code = code.replace(unsafeScanner, `          const { store: storeData, error: storeErr } = await resolvePublicStore(parsedStoreId);\n          if (storeErr && !storeData) console.warn('[StoreFlow] store scan resolver warning', storeErr);\n\n          if (storeData) {`);
+  } else if (!code.includes('resolvePublicStore(parsedStoreId)')) {
+    throw new Error('[store-discovery] scanner resolver wiring missing');
   }
 
-  // Home search now supports store IDs/codes as an actual action instead of
-  // only filtering stores the customer has already scanned.
   const homeInput = `                value={searchQuery}\n                onChange={e => setSearchQuery(e.target.value)}\n              />`;
   const homeInputPatched = `                value={searchQuery}\n                onChange={e => setSearchQuery(e.target.value)}\n                onKeyDown={e => { if (e.key === 'Enter' && searchQuery.trim()) { e.preventDefault(); void openStoreFromSearch(searchQuery); } }}\n              />`;
   if (code.includes(homeInput)) code = code.replace(homeInput, homeInputPatched);
@@ -42,8 +36,6 @@ export function patchCustomerStoreDiscovery(source: string): string {
     code = code.replace(scannerButton, findButton + scannerButton.replace('title="Scan Barcode"', 'title="Scan Store QR Code"'));
   }
 
-  // The scanner's manual fallback should use the same resolver immediately,
-  // rather than feeding the value back through the old scanner pipeline.
   const manualAction = `                      setShowManualInput(false);\n                      processScannedCode(manualInputVal.trim());\n                      setManualInputVal('');`;
   if (code.includes(manualAction)) {
     code = code.replace(manualAction, `                      const value = manualInputVal.trim();\n                      setManualInputVal('');\n                      void openStoreFromSearch(value);`);
