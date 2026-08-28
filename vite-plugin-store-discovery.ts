@@ -7,7 +7,8 @@ export function patchCustomerStoreDiscovery(source: string): string {
 
   const routerImport = "import { parseRoute, parseQRCode } from './router';";
   const resolverImport = "import { resolvePublicStore } from './utils/storeResolver';";
-  if (!code.includes(resolverImport)) {
+  const alreadyImportsResolver = code.includes("from './utils/storeResolver'") && code.includes('resolvePublicStore');
+  if (!alreadyImportsResolver) {
     if (!code.includes(routerImport)) throw new Error('[store-discovery] router import anchor missing');
     code = code.replace(routerImport, `${routerImport}\n${resolverImport}`);
   }
