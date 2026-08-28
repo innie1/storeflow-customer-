@@ -2,10 +2,12 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import tailwindcss from '@tailwindcss/vite'
+import customerStoreDiscoveryPlugin from './vite-plugin-store-discovery'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    customerStoreDiscoveryPlugin(),
     react(),
     tailwindcss(),
     VitePWA({
@@ -27,18 +29,8 @@ export default defineConfig({
         start_url: '/?utm_source=pwa',
         categories: ['shopping'],
         icons: [
-          {
-            src: 'logo.jpg',
-            sizes: '512x512',
-            type: 'image/jpeg',
-            purpose: 'any'
-          },
-          {
-            src: 'logo.jpg',
-            sizes: '512x512',
-            type: 'image/jpeg',
-            purpose: 'maskable'
-          }
+          { src: 'logo.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'any' },
+          { src: 'logo.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'maskable' }
         ],
         shortcuts: [
           {
@@ -51,31 +43,27 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Cache pages / navigation with NetworkFirst (fresh data, offline fallback)
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/.well-known\//],
         runtimeCaching: [
           {
-            // Supabase REST API — NetworkFirst for live inventory
             urlPattern: /^https:\/\/[a-z]+\.supabase\.co\/rest\/.*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'supabase-api',
               networkTimeoutSeconds: 3,
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 5 } // 5 min
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 5 }
             }
           },
           {
-            // Product images — CacheFirst (images rarely change)
             urlPattern: /\.(png|jpg|jpeg|webp|svg|gif)$/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'images',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 } // 7 days
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }
             }
           },
           {
-            // Google Fonts — CacheFirst
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
