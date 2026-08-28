@@ -4,7 +4,7 @@
  */
 
 import { supabase } from './supabase';
-import { resolvePublicStore } from './storeResolver';
+import { resolvePublicStore } from './utils/storeResolver';
 
 export interface RouteResult { storeId: string | null; productId: string | null; }
 export interface QRData { version: number; uuid: string; token: string; storeId: string; timestamp: number; type: string; payload: any; }
@@ -37,7 +37,7 @@ async function logStoreAnalytics(storeId: string, eventType: 'qr_scan' | 'store_
       try { customerUuid = localStorage.getItem(VISITOR_KEY); } catch {}
     }
     const resolved = await resolvePublicStore(storeId);
-    const storeUuid = resolved.data?.id || storeId;
+    const storeUuid = resolved.store?.id || storeId;
     await supabase.rpc('record_store_analytics_event', {
       p_store_id: storeUuid,
       p_event_type: eventType,
@@ -52,7 +52,6 @@ async function logStoreAnalytics(storeId: string, eventType: 'qr_scan' | 'store_
   }
 }
 
-/** Decode the StoreFlow QR payload without throwing on malformed input. */
 export function decodeQRData(encoded: string): QRData | null {
   try {
     if (!encoded || encoded.length > 8192) return null;
