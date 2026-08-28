@@ -10,8 +10,10 @@ function expectContains(text, needle, label) {
 
 const resolver = read('src/utils/storeResolver.ts');
 const patch = read('scripts/patch-store-routing-scanner.mjs');
+const plugin = read('vite-plugin-store-discovery.ts');
 const pkg = JSON.parse(read('package.json'));
 const router = read('src/router.ts');
+const vite = read('vite.config.ts');
 
 expectContains(resolver, "supabase.rpc('get_public_storefront'", 'shared resolver uses public RPC');
 expectContains(resolver, "if (isUuid(key)) candidates.push(['id', key]);", 'UUID lookup is type-safe');
@@ -27,12 +29,16 @@ expectContains(patch, 'Find Store', 'manual store entry has a visible Find Store
 
 expectContains(router, "root === 's' || root === 'store'", 'router accepts store deep-link paths');
 expectContains(router, 'decodeQRData(s)', 'router accepts encoded StoreFlow QR tokens');
+expectContains(router, "url.searchParams.get('storeId') || url.searchParams.get('store') || url.searchParams.get('code')", 'scanner accepts QR URLs with query store codes');
+expectContains(router, "from './utils/storeResolver'", 'router uses the canonical shared resolver');
 
-if (!String(pkg.scripts?.prebuild || '').includes('patch-store-routing-scanner.mjs')) {
-  throw new Error('prebuild must run the scanner/store-routing patch');
-}
-if (!String(pkg.scripts?.test || '').includes('test-store-routing-scanner.mjs')) {
-  throw new Error('npm test must include scanner/store-routing regressions');
-}
+expectContains(plugin, 'openStoreFromSearch', 'home/manual store search has a real resolver action');
+expectContains(plugin, 'Search Store</span>', 'home search exposes a visible Search Store action');
+expectContains(plugin, "resolvePublicStore(parsedStoreId)", 'runtime scanner transform uses canonical resolver');
+expectContains(plugin, "void openStoreFromSearch(value)", 'manual scanner entry resolves directly');
+expectContains(vite, 'customerStoreDiscoveryPlugin()', 'store discovery transform is enabled before React');
+
+if (!String(pkg.scripts?.prebuild || '').includes('patch-store-routing-scanner.mjs')) throw new Error('prebuild must run the scanner/store-routing patch');
+if (!String(pkg.scripts?.test || '').includes('test-store-routing-scanner.mjs')) throw new Error('npm test must include scanner/store-routing regressions');
 
 console.log('Store routing/scanner regressions passed.');
