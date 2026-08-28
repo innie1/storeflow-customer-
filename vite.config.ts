@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import tailwindcss from '@tailwindcss/vite'
-import customerStoreDiscoveryPlugin from './vite-plugin-store-discovery'
+import customerStoreDiscoveryPlugin from './vite-plugin-store-discovery.js'
 
 // https://vite.dev/config/
 export default defineConfig({
