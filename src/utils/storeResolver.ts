@@ -52,6 +52,24 @@ export function normalizeStoreReference(value: string): string {
   return raw;
 }
 
+export function matchesPublicStoreReference(store: PublicStoreRecord | any, value: string): boolean {
+  if (!store) return false;
+  const key = normalizeStoreReference(value);
+  const upper = key.toUpperCase();
+  const noSf = upper.replace(/^SF-/, '');
+  const candidates = [
+    store.id,
+    store.store_id,
+    store.access_code,
+    store.data?.storeId,
+    store.data?.accessCode,
+    store.data?.profile?.uniqueCode,
+  ].filter(Boolean).map((candidate: any) => String(candidate).trim().toUpperCase());
+
+  if (candidates.includes(upper) || candidates.includes(noSf) || candidates.includes(`SF-${noSf}`)) return true;
+  return typeof store.qr_code === 'string' && store.qr_code.toUpperCase().includes(upper);
+}
+
 async function selectOne(column: string, value: string): Promise<{ data: PublicStoreRecord | null; error: any }> {
   const result = await supabase
     .from('stores_public')
