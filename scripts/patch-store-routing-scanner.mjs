@@ -61,3 +61,26 @@ text = text.replace('Type the Store ID/slug name or a product barcode to open it
 text = text.replace('Enter Barcode or ID Manually</span>', 'Enter Store Code Manually</span>');
 
 fs.writeFileSync(file, text);
+
+// The service/laundry overlay used to have its own store lookup, which could
+// disagree with App.tsx. Make it use the same public resolver as every other
+// entry path.
+const serviceFile = path.resolve('src/components/ServiceBusinessExperience.tsx');
+let serviceText = fs.readFileSync(serviceFile, 'utf8').replace(/\r\n/g, '\n');
+const serviceImportAnchor = "import { parseRoute } from '../router';";
+const serviceResolverImport = "import { resolvePublicStore } from '../utils/storeResolver';";
+if (!serviceText.includes(serviceResolverImport)) {
+  if (!serviceText.includes(serviceImportAnchor)) throw new Error('service storefront import anchor not found');
+  serviceText = serviceText.replace(serviceImportAnchor, `${serviceImportAnchor}\n${serviceResolverImport}`);
+}
+
+const serviceLookupStart = serviceText.indexOf('async function findPublicStore(identifier: string): Promise<StoreRecord | null> {');
+const serviceLookupEnd = serviceText.indexOf('\nexport default function ServiceBusinessExperience()', serviceLookupStart);
+if (serviceLookupStart >= 0 && serviceLookupEnd > serviceLookupStart) {
+  const replacement = `async function findPublicStore(identifier: string): Promise<StoreRecord | null> {\n  const { store, error } = await resolvePublicStore(identifier);\n  if (error && !store) console.debug('[ServiceBusinessExperience] shared store lookup failed', error);\n  return store as StoreRecord | null;\n}\n`;
+  serviceText = serviceText.slice(0, serviceLookupStart) + replacement + serviceText.slice(serviceLookupEnd);
+} else if (!serviceText.includes('await resolvePublicStore(identifier)')) {
+  throw new Error('service storefront public-store lookup block not found');
+}
+
+fs.writeFileSync(serviceFile, serviceText);
