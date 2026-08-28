@@ -3,10 +3,8 @@ import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('../src/components/ServiceBusinessExperience.tsx', import.meta.url), 'utf8');
 
-assert.match(source, /id,store_id,access_code,business_name,currency,country,state,city,address,phone,email,logo,data/,
-  'public storefront must request store-specific public branding and contact fields');
-assert.match(source, /candidates = uuidLike \? \['id', 'store_id', 'access_code'\] : \['store_id', 'access_code'\]/,
-  'store lookup must support UUID, legacy store ID, and access code routes');
+assert.match(source, /await resolvePublicStore\(identifier\)/,
+  'service storefront must use the shared store-specific public resolver');
 assert.match(source, /template\.laundryPricing \|\| data\.laundryPricing \|\| data\.laundry_pricing/,
   'laundry storefront must consume the merchant-published laundry pricing configuration');
 assert.match(source, /garmentUnitPrice\(selected, pricingConfig, name\)/,

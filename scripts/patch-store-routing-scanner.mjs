@@ -25,7 +25,7 @@ const lookupEndIndex = text.indexOf(lookupEnd, lookupStartIndex);
 if (lookupStartIndex >= 0 && lookupEndIndex > lookupStartIndex) {
   const replacement = `      let storeData = null;\n      let storeErr = null;\n      try {\n        const resolved = await resolvePublicStore(sid);\n        storeData = resolved.store;\n        storeErr = resolved.error;\n      } catch (lookupError) {\n        storeErr = lookupError;\n      }\n`;
   text = text.slice(0, lookupStartIndex) + replacement + text.slice(lookupEndIndex);
-} else if (!text.includes('const resolved = await resolvePublicStore(sid);')) {
+} else if (!text.includes('resolvePublicStore(sid)')) {
   throw new Error('loadStoreDetails lookup block not found');
 }
 

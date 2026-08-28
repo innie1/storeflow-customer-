@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { parseRoute } from '../router';
+import { resolvePublicStore } from '../utils/storeResolver';
 
 type Offering = {
   id: string;
@@ -298,18 +299,9 @@ function formatLocation(store: StoreRecord | null): string {
 }
 
 async function findPublicStore(identifier: string): Promise<StoreRecord | null> {
-  const value = identifier.trim();
-  if (!value) return null;
-  const columns = 'id,store_id,access_code,business_name,currency,country,state,city,address,phone,email,logo,data';
-  const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-  const candidates = uuidLike ? ['id', 'store_id', 'access_code'] : ['store_id', 'access_code'];
-
-  for (const column of candidates) {
-    const { data, error } = await supabase.from('stores_public').select(columns).eq(column, value).maybeSingle();
-    if (!error && data) return data as StoreRecord;
-    if (error && error.code !== 'PGRST116') console.debug(`[ServiceBusinessExperience] ${column} lookup failed`, error.message);
-  }
-  return null;
+  const { store, error } = await resolvePublicStore(identifier);
+  if (error && !store) console.debug('[ServiceBusinessExperience] shared store lookup failed', error);
+  return store as StoreRecord | null;
 }
 
 export default function ServiceBusinessExperience() {

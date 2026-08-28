@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import { parseRoute, parseQRCode } from './router';
+import { matchesPublicStoreReference, resolvePublicStore } from './utils/storeResolver';
 import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotifications } from './utils/pushNotifications';
 import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
 
@@ -378,6 +379,11 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
   const storeUuid = storeData.id;
   let prods: any[] = [];
 
+  const template = storeData?.data?.businessTemplate;
+  const serviceTypes = new Set(['laundry','barber','salon','tailoring','repair','printing','cyber_cafe','car_wash','photography','cleaning','spa','games','gaming','restaurant']);
+  const templateType = String(template?.type || storeData?.data?.storeType || storeData?.storeType || '').toLowerCase();
+  const serviceBusiness = serviceTypes.has(templateType) || (Array.isArray(template?.modes) && template.modes.includes('services'));
+
   if (storeData.data && Array.isArray((storeData.data as any).products)) {
     prods = (storeData.data as any).products.map((p: any) => {
       const whPrice = p.sellingPrice ?? p.selling_price ?? 0;
@@ -400,13 +406,8 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
         image: p.image || '',
         status: p.discontinued ? 'inactive' : 'active'
       };
-    }).filter((p: any) => p.status === 'active');
+    }).filter((p: any) => p.status === 'active' && (!serviceBusiness || p.isService === true));
   }
-
-  const template = storeData?.data?.businessTemplate;
-  const serviceTypes = new Set(['laundry','barber','salon','tailoring','repair','printing','cyber_cafe','car_wash','photography','cleaning','spa','games','gaming','restaurant']);
-  const templateType = String(template?.type || storeData?.data?.storeType || storeData?.storeType || '').toLowerCase();
-  const serviceBusiness = serviceTypes.has(templateType) || (Array.isArray(template?.modes) && template.modes.includes('services'));
 
   if (prods.length === 0) {
   const { data: prodData, error: prodErr } = await supabase
@@ -420,7 +421,7 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
       isService: Boolean(p.isService ?? p.is_service),
       wholesale_price: p.wholesale_price ?? p.selling_price ?? 0,
       retail_price: p.retail_price ?? p.selling_price ?? 0
-    }));
+    })).filter((p: any) => !serviceBusiness || p.isService === true);
   }
 
   // businessTemplate.offerings is the merchant's source of truth for services.
@@ -452,7 +453,13 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
     prods = [...prods, ...enabledServices];
   }
 
-  return prods;
+  // A storefront must never inherit another store's cached or stale rows.
+  // Service businesses are restricted to explicit service records so retail
+  // inventory can never leak into a laundry page.
+  return prods.filter((product: any) =>
+    String(product.store_id || '') === String(storeUuid) &&
+    (!serviceBusiness || product.isService === true)
+  );
 }
 
 // Columns the customer app actually needs from `stores`. Deliberately
@@ -490,6 +497,7 @@ function App() {
   const [categories, setCategories] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
+  const storeLoadRequestRef = useRef(0);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [deepLinkedProductId, setDeepLinkedProductId] = useState<string | null>(null);
 
@@ -1283,8 +1291,13 @@ function App() {
   };
 
   const loadStoreDetails = async (sid: string) => {
+    const requestId = ++storeLoadRequestRef.current;
     // Reset user rating state for new store
     setUserRating(null);
+    // Never leave another merchant's catalog underneath a newly scanned name.
+    setProducts([]);
+    setCategories(['All']);
+    setSelectedCategory('All');
     // 1. Log the exact Store ID extracted from the URL.
     console.log(`[StoreFlow QR] Exact Store ID extracted from URL: "${sid}"`);
 
@@ -1292,22 +1305,21 @@ function App() {
     // cached version immediately (no spinner) while we quietly refresh in
     // the background. This is what makes "already scanned" stores open
     // instantly instead of waiting on the network every time.
-    const cleanSidForCache = sid.replace(/^SF-/i, '').trim();
-    const cachedMatch = allStores.find((s: any) =>
-      s.id === sid ||
-      s.store_id === sid ||
-      s.access_code === sid ||
-      s.store_id === cleanSidForCache ||
-      s.access_code === cleanSidForCache ||
-      (s.qr_code && typeof s.qr_code === 'string' && s.qr_code.includes(sid))
-    );
-    const hasInstantData = !!cachedMatch;
+    const cachedMatch = allStores.find((s: any) => matchesPublicStoreReference(s, sid));
+    let hasInstantData = false;
     if (cachedMatch) {
       setStore(cachedMatch);
       setLoading(false); // don't block the UI — page renders immediately
       const cachedProducts = localStorage.getItem('storeflow_cached_products_' + cachedMatch.id);
       if (cachedProducts) {
-        try { setProducts(JSON.parse(cachedProducts)); } catch {}
+        try {
+          const cachedCatalog = JSON.parse(cachedProducts).filter((product: any) =>
+            String(product?.store_id || '') === String(cachedMatch.id) &&
+            (!isServiceStore(cachedMatch) || product?.isService === true)
+          );
+          setProducts(cachedCatalog);
+          hasInstantData = cachedCatalog.length > 0;
+        } catch { /* malformed cache is ignored */ }
       }
     } else {
       setLoading(true);
@@ -1327,30 +1339,8 @@ function App() {
       console.log(` - Searching stores.qr_code for matches containing "${sid}"`);
       console.log(` - Searching stores.access_code for "${sid}"`);
 
-      let storeData = null;
-      let storeErr = null;
-      const cleanSid = sid.trim();
-      const normalizedCode = cleanSid.toUpperCase();
-
-      const lookupStore = async (column: string, value: string) => {
-        const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).eq(column, value).maybeSingle();
-        if (res.error) throw res.error;
-        return res.data;
-      };
-
-      try {
-        if (isUuid) storeData = await lookupStore('id', cleanSid);
-        if (!storeData) storeData = await lookupStore('store_id', normalizedCode);
-        if (!storeData && !normalizedCode.startsWith('SF-')) storeData = await lookupStore('store_id', 'SF-' + normalizedCode);
-        if (!storeData) storeData = await lookupStore('access_code', normalizedCode.replace(/^SF-/, ''));
-        if (!storeData) {
-          const res = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS).ilike('qr_code', '%' + cleanSid + '%').limit(1);
-          if (res.error) throw res.error;
-          storeData = res.data?.[0] || null;
-        }
-      } catch (lookupError) {
-        storeErr = lookupError;
-      }
+      const { store: storeData, error: storeErr } = await resolvePublicStore(sid);
+      if (requestId !== storeLoadRequestRef.current) return;
       // 4. Return and log the full Supabase response and any errors.
       console.log(`[StoreFlow QR] Full Supabase response - Data:`, storeData);
       console.log(`[StoreFlow QR] Full Supabase response - Error:`, storeErr);
@@ -1394,9 +1384,9 @@ function App() {
         console.log(`[StoreFlow QR] Store data loaded:`, storeData);
 
         const prods = await resolveStoreProducts(storeData);
+        if (requestId !== storeLoadRequestRef.current) return;
         console.log(`[StoreFlow QR] Final products loaded successfully. Count: ${prods.length}`);
         setProducts(prods);
-        localStorage.setItem('storeflow_cached_products', JSON.stringify(prods));
         localStorage.setItem('storeflow_cached_products_' + resolvedStoreUuid, JSON.stringify(prods));
 
         // Dynamically compute categories list
@@ -1404,7 +1394,6 @@ function App() {
         const uniq = Array.from(new Set(prods.map(p => p.category).filter((c): c is string => !!c)));
         cats = ['All', ...uniq];
         setCategories(cats);
-        localStorage.setItem('storeflow_cached_categories', JSON.stringify(cats));
       } else {
         console.warn(`[StoreFlow QR] Store ID: "${sid}" not found in database.`);
         navigateToScreen('store_not_found');
@@ -1450,7 +1439,8 @@ function App() {
       console.error(`[StoreFlow QR] Critical error loading store detail for ID: "${sid}":`, err);
       setErrorText('Offline Mode: Displaying offline catalog.');
       // Attempt local storage fallback if we have a match
-      const matched = allStores.find(s => s.id === sid);
+      if (requestId !== storeLoadRequestRef.current) return;
+      const matched = allStores.find(s => matchesPublicStoreReference(s, sid));
       if (matched) {
         setStore(matched);
         const cached = localStorage.getItem('storeflow_cached_products_' + matched.id);
@@ -1462,9 +1452,11 @@ function App() {
         navigateToScreen('store_not_found');
       }
     } finally {
-      setLoading(false);
-      setProductsLoading(false);
-      setRefreshing(false);
+      if (requestId === storeLoadRequestRef.current) {
+        setLoading(false);
+        setProductsLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -1747,36 +1739,14 @@ function App() {
         table: 'stores'
       }, (payload: any) => {
         console.log('[StoreFlow Realtime] Store updated payload received:', payload);
-        if (payload.new) {
+        if (payload.new && payload.new.id === store.id) {
           setStore(payload.new);
-          
-          if (payload.new.data && Array.isArray(payload.new.data.products)) {
-            const prods = payload.new.data.products.map((p: any) => {
-              const whPrice = p.sellingPrice ?? p.selling_price ?? 0;
-              const isCartonSingle = p.isCartonSingleEnabled === true;
-              const rtPrice = isCartonSingle ? (p.singleSellingPrice ?? (p.singlesPerCarton ? Math.round(whPrice / p.singlesPerCarton) : whPrice)) : whPrice;
-              return {
-                id: p.id || p.productId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-                store_id: payload.new.id,
-                barcode: p.barcode || '',
-                name: p.name || p.productName || 'Product',
-                description: p.description || '',
-                selling_price: whPrice,
-                wholesale_price: whPrice,
-                retail_price: rtPrice,
-                quantity: p.quantity ?? 0,
-                category: p.category || 'General',
-                image: p.image || '',
-                status: p.discontinued ? 'inactive' : 'active'
-              };
-            }).filter((p: any) => p.status === 'active');
+          void resolveStoreProducts(payload.new).then((prods: Product[]) => {
             setProducts(prods);
-            
-            let cats = ['All'];
             const uniq = Array.from(new Set(prods.map((p: any) => p.category).filter((c: any) => !!c))) as string[];
-            cats = ['All', ...uniq];
-            setCategories(cats);
-          }
+            setCategories(['All', ...uniq]);
+            localStorage.setItem('storeflow_cached_products_' + payload.new.id, JSON.stringify(prods));
+          }).catch(error => console.warn('[StoreFlow Realtime] Catalog refresh failed:', error));
         }
       })
       .subscribe();
@@ -1914,28 +1884,9 @@ function App() {
       if (parsedStoreId) {
         try {
           setLoading(true);
-          let storeData = null;
-          let storeErr = null;
-
-          if (parsedStoreId.toUpperCase().startsWith('SF-')) {
-            console.log(`[StoreFlow QR] Scan/Manual: Prioritizing query on stores.store_id first for Store ID: "${parsedStoreId}"`);
-            const res = await supabase
-              .from('stores_public')
-              .select('id')
-              .eq('store_id', parsedStoreId)
-              .maybeSingle();
-            storeData = res.data;
-            storeErr = res.error;
-          }
-
-          if (!storeData && !storeErr) {
-            const res = await supabase
-              .from('stores_public')
-              .select('id')
-              .or(`id.eq.${parsedStoreId},store_id.eq.${parsedStoreId},store_id.eq.SF-${parsedStoreId.toUpperCase()},access_code.eq.${parsedStoreId}`)
-              .maybeSingle();
-            storeData = res.data;
-            storeErr = res.error;
+          const { store: storeData, error: storeErr } = await resolvePublicStore(parsedStoreId);
+          if (storeErr && !storeData) {
+            console.warn('[StoreFlow Scanner] Public store resolution failed:', storeErr);
           }
 
           if (storeData) {
@@ -1997,7 +1948,8 @@ function App() {
       }
 
       // 5. Unrecognized code fallback
-      setScanError(`Code "${codeValue}" not recognized in StoreFlow.`);
+      setShowScanner(true);
+      setScanError(`Code "${codeValue}" was detected, but no StoreFlow store or product matched it. You can enter the store code below.`);
       setShowManualInput(true);
     }, 700);
   };
@@ -3071,16 +3023,24 @@ function App() {
         {showManualInput && (
           <div className="absolute inset-0 z-[60] bg-black/90 flex items-center justify-center p-6 animate-fade-in" onClick={() => { setShowManualInput(false); setManualInputVal(''); }}>
             <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-left space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-              <h3 className="font-extrabold text-[#1A1C1E] text-base">Enter Store ID or Barcode</h3>
+              <h3 className="font-extrabold text-[#1A1C1E] text-base">Find a Store or Product</h3>
               <p className="text-xs text-gray-400 font-semibold leading-relaxed">
-                Type the Store ID/slug name or a product barcode to open it manually.
+                Enter the 6-character store code, SF store ID, StoreFlow link, or a product barcode.
               </p>
               <input
                 type="text"
                 value={manualInputVal}
                 onChange={e => setManualInputVal(e.target.value)}
-                className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-gray-400 text-xs font-bold text-[#1A1C1E]"
-                placeholder="e.g. freshmart or 5012345678"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && manualInputVal.trim()) {
+                    e.preventDefault();
+                    setShowManualInput(false);
+                    processScannedCode(manualInputVal.trim());
+                    setManualInputVal('');
+                  }
+                }}
+                className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-[#FFD23F] text-sm font-black tracking-wider text-[#1A1C1E]"
+                placeholder="Enter store code, e.g. AMZXWE"
                 autoFocus
               />
               <div className="flex gap-3 pt-2">
@@ -3103,7 +3063,7 @@ function App() {
                   }}
                   className="flex-1 h-12 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-xl text-xs cursor-pointer hover:bg-black transition-colors"
                 >
-                  Submit
+                  Find Store
                 </button>
               </div>
             </div>
@@ -3208,7 +3168,7 @@ function App() {
             className="mt-8 px-6 py-3.5 bg-white/10 hover:bg-white/15 active:scale-95 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-full flex items-center gap-2 transition-all cursor-pointer shadow-md"
           >
             <span className="material-symbols-outlined text-sm">keyboard</span>
-            <span>Enter Barcode or ID Manually</span>
+            <span>Enter Store Code Manually</span>
           </button>
         )}
       </div>
