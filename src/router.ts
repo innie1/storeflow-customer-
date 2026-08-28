@@ -1,11 +1,10 @@
 /**
  * StoreFlow Customer — URL Router
- *
- * Permanent URL architecture. These paths must NEVER change.
- * Future native app will intercept via Universal Links (iOS) / App Links (Android).
+ * Permanent public store routes and QR parsing.
  */
 
 import { supabase } from './supabase';
+import { resolvePublicStore } from './storeResolver';
 
 export interface RouteResult { storeId: string | null; productId: string | null; }
 export interface QRData { version: number; uuid: string; token: string; storeId: string; timestamp: number; type: string; payload: any; }
@@ -35,12 +34,10 @@ async function logStoreAnalytics(storeId: string, eventType: 'qr_scan' | 'store_
       customerUuid = profile?.customer_uuid || null;
       isGuest = false;
     } else {
-      try { customerUuid = localStorage.getItem(VISITOR_KEY); } catch { /* non-fatal */ }
+      try { customerUuid = localStorage.getItem(VISITOR_KEY); } catch {}
     }
-    let storeUuid = storeId;
-    const { data: store } = await supabase.from('stores_public').select('id').or(`store_id.eq.${storeId},access_code.eq.${storeId},id.eq.${storeId}`).maybeSingle();
-    if (store?.id) storeUuid = store.id;
-    // Analytics must never block routing. The RPC is fire-and-forget from the user's perspective.
+    const resolved = await resolvePublicStore(storeId);
+    const storeUuid = resolved.data?.id || storeId;
     await supabase.rpc('record_store_analytics_event', {
       p_store_id: storeUuid,
       p_event_type: eventType,
@@ -89,41 +86,49 @@ function parsePathSegments(pathname: string): RouteResult {
   return { storeId: null, productId: null };
 }
 
+function parseUrl(url: URL): RouteResult {
+  const pathResult = parsePathSegments(url.pathname);
+  if (pathResult.storeId) return pathResult;
+  const qsId = url.searchParams.get('storeId') || url.searchParams.get('store') || url.searchParams.get('code');
+  if (!qsId) return { storeId: null, productId: null };
+  const decodedStore = decodeQRData(qsId);
+  return { storeId: decodedStore?.storeId || qsId, productId: null };
+}
+
 export function parseRoute(): RouteResult {
-  const pathResult = parsePathSegments(window.location.pathname);
-  if (pathResult.storeId) {
-    void logStoreAnalytics(pathResult.storeId, 'qr_scan', 'store_url');
-    return pathResult;
-  }
-  const params = new URLSearchParams(window.location.search);
-  const qsId = params.get('storeId') || params.get('store');
-  if (qsId) {
-    const decodedStore = decodeQRData(qsId);
-    const storeId = decodedStore?.storeId || qsId;
-    void logStoreAnalytics(storeId, 'qr_scan', 'store_query');
-    return { storeId, productId: null };
-  }
-  return { storeId: null, productId: null };
+  const result = parseUrl(new URL(window.location.href));
+  if (result.storeId) void logStoreAnalytics(result.storeId, 'qr_scan', 'store_url');
+  return result;
 }
 
 export function parseQRCode(raw: string): RouteResult {
   const s = raw.trim();
   if (!s || s.length > 8192) return { storeId: null, productId: null };
-  if (s.toUpperCase().startsWith('SF-')) {
-    const storeId = s.toUpperCase();
-    void logStoreAnalytics(storeId, 'store_code_lookup', 'scanner');
-    return { storeId, productId: null };
-  }
+
   const decoded = decodeQRData(s);
   if (decoded?.storeId) {
     void logStoreAnalytics(decoded.storeId, 'qr_scan', 'scanner');
     return { storeId: decoded.storeId, productId: decoded.type === 'product' && decoded.payload?.id ? decoded.payload.id : null };
   }
+
   try {
-    const url = new URL(s.startsWith('http://') || s.startsWith('https://') ? s : `https://${s}`);
-    const result = parsePathSegments(url.pathname);
-    if (result.storeId) { void logStoreAnalytics(result.storeId, 'qr_scan', 'scanner'); return result; }
-  } catch { /* Not a URL. */ }
-  if (!/\s/.test(s)) { void logStoreAnalytics(s, 'store_code_lookup', 'manual'); return { storeId: s, productId: null }; }
+    const url = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`);
+    const result = parseUrl(url);
+    if (result.storeId) {
+      void logStoreAnalytics(result.storeId, 'qr_scan', 'scanner');
+      return result;
+    }
+  } catch {}
+
+  if (s.toUpperCase().startsWith('SF-')) {
+    const storeId = s.toUpperCase();
+    void logStoreAnalytics(storeId, 'store_code_lookup', 'scanner');
+    return { storeId, productId: null };
+  }
+
+  if (!/\s/.test(s)) {
+    void logStoreAnalytics(s, 'store_code_lookup', 'manual');
+    return { storeId: s, productId: null };
+  }
   return { storeId: null, productId: null };
 }
