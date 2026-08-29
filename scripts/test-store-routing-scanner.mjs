@@ -52,7 +52,7 @@ expectContains(app, "window.history.pushState(historyState, '', targetPath);", '
 expectContains(app, "stateScreen && stateScreen !== 'store'", 'store history entries are re-resolved on back/forward');
 expectContains(app, "event?.state?.storeId || event?.state?.storeRef || route.storeId", 'store history persists a canonical resolver key');
 expectContains(app, 'ms.enabled === false', 'empty marketplace settings do not incorrectly close a store');
-expectContains(app, 'ms.autoScheduleEnabled !== true', 'business hours only close stores when schedule automation is enabled');
+expectContains(app, 'ms.storeOpen === false', 'the merchant open/closed switch is honored');
 if (app.includes("selling_price, wholesale_price, retail_price")) throw new Error('product query must only request columns present in Supabase');
 if (app.includes("allStores?.[0]?.id")) throw new Error('orders must never fall back to a different discovered store');
 

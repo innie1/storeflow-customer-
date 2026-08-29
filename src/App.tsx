@@ -352,9 +352,7 @@ function computeStoreOpen(s: any): boolean {
   const ms = s?.data?.marketplaceSettings;
   if (ms && typeof ms === 'object') {
     if (ms.enabled === false || ms.storeOpen === false || ms.temporaryClosure === true || ms.temporarilyHidden === true) return false;
-    // The merchant's manual switch is authoritative. Scheduled hours are
-    // enforced only when schedule automation was explicitly enabled.
-    if (ms.autoScheduleEnabled !== true || !ms.openingTime || !ms.closingTime) return true;
+    if (!ms.openingTime || !ms.closingTime) return true;
     const now = new Date();
     if (Array.isArray(ms.businessDays) && !ms.businessDays.includes(now.getDay())) return false;
     const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
