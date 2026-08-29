@@ -18,9 +18,9 @@ const main = read('src/main.tsx');
 const app = read('src/App.tsx');
 
 expectContains(resolver, "supabase.rpc('get_public_storefront'", 'shared resolver uses public RPC');
-expectContains(resolver, "if (isUuid(key)) candidates.push(['id', key]);", 'UUID lookup is type-safe');
-expectContains(resolver, "candidates.push(['access_code', noSf]);", 'six-character access code fallback exists');
+expectContains(resolver, "supabase.rpc('list_public_storefronts'", 'store discovery uses the public listing RPC');
 expectContains(resolver, 'profile?.uniqueCode', 'cached legacy store alias is recognized');
+if (resolver.includes("from('stores_public')")) throw new Error('customer resolver must not bypass the safe public RPCs');
 if (resolver.includes('.or(`id.eq.${')) throw new Error('resolver must never mix a text store code into a UUID OR filter');
 
 expectContains(patch, 'resolvePublicStore(sid)', 'deep-link load uses shared resolver');
@@ -45,11 +45,16 @@ expectContains(main, 'await reg.update()', 'installed PWA explicitly checks for 
 expectContains(main, "document.visibilityState === 'visible'", 'installed PWA rechecks when resumed');
 expectContains(main, "window.addEventListener('online'", 'installed PWA rechecks after reconnecting');
 expectContains(main, "navigator.serviceWorker.addEventListener('controllerchange'", 'installed PWA reloads after worker takeover');
+if (main.includes('ServiceBusinessExperience')) throw new Error('legacy service overlay must not be mounted beside the unified app');
 
 expectContains(app, "if (newScreen === 'store') return;", 'store navigation waits for a resolved identity');
 expectContains(app, "window.history.pushState(historyState, '', targetPath);", 'opening a different store preserves the prior history entry');
 expectContains(app, "stateScreen && stateScreen !== 'store'", 'store history entries are re-resolved on back/forward');
 expectContains(app, "event?.state?.storeId || event?.state?.storeRef || route.storeId", 'store history persists a canonical resolver key');
+expectContains(app, 'ms.enabled === false', 'empty marketplace settings do not incorrectly close a store');
+expectContains(app, 'ms.autoScheduleEnabled !== true', 'business hours only close stores when schedule automation is enabled');
+if (app.includes("selling_price, wholesale_price, retail_price")) throw new Error('product query must only request columns present in Supabase');
+if (app.includes("allStores?.[0]?.id")) throw new Error('orders must never fall back to a different discovered store');
 
 if (!String(pkg.scripts?.prebuild || '').includes('patch-store-routing-scanner.mjs')) throw new Error('prebuild must run the scanner/store-routing patch');
 if (!String(pkg.scripts?.test || '').includes('test-store-routing-scanner.mjs')) throw new Error('npm test must include scanner/store-routing regressions');

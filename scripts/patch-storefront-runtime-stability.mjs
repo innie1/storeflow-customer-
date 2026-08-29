@@ -10,7 +10,7 @@ if (source.includes(globalCacheBlock)) { source = source.replace(globalCacheBloc
 if (source.includes(globalCacheUse)) { source = source.replace(globalCacheUse, ''); changed = true; }
 
 const oldSelect = "'id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at, is_service'";
-const newSelect = "'id, store_id, category_id, barcode, name, description, brand, selling_price, wholesale_price, retail_price, quantity, unit, image, status, is_service'";
+const newSelect = "'id, store_id, category_id, barcode, name, description, brand, selling_price, quantity, unit, image, status, is_service'";
 if (source.includes(oldSelect)) { source = source.replace(oldSelect, newSelect); changed = true; }
 
 const oldCatch = `      if (matched) {\n        setStore(matched);\n        setProducts([]);\n        setLoading(false);\n      } else {`;

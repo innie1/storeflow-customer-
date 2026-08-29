@@ -7,7 +7,7 @@ const marker = '// STOREFLOW_SHARED_STORE_RESOLVER_V1';
 
 const importAnchor = "import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';";
 const resolverImport = "import { matchesPublicStoreReference, resolvePublicStore } from './utils/storeResolver';";
-if (!text.includes(resolverImport)) {
+if (!text.includes("from './utils/storeResolver'")) {
   if (!text.includes(importAnchor)) throw new Error('safeStorage import anchor not found');
   text = text.replace(importAnchor, `${importAnchor}\n${resolverImport}\n${marker}`);
 }

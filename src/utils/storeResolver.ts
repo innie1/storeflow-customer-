@@ -20,10 +20,6 @@ export type PublicStoreRecord = {
   data?: any;
 };
 
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
 /**
  * Turn anything a customer can reasonably paste/scan into the store reference
  * understood by the public resolver. This deliberately does NOT assume every
@@ -70,16 +66,6 @@ export function matchesPublicStoreReference(store: PublicStoreRecord | any, valu
   return typeof store.qr_code === 'string' && store.qr_code.toUpperCase().includes(upper);
 }
 
-async function selectOne(column: string, value: string): Promise<{ data: PublicStoreRecord | null; error: any }> {
-  const result = await supabase
-    .from('stores_public')
-    .select(PUBLIC_STORE_COLUMNS)
-    .eq(column, value)
-    .limit(1)
-    .maybeSingle();
-  return { data: result.data as PublicStoreRecord | null, error: result.error };
-}
-
 /**
  * The one store resolver used by deep links, in-app scanning and manual entry.
  * The RPC is intentionally the primary path because it can safely resolve
@@ -90,47 +76,25 @@ export async function resolvePublicStore(value: string): Promise<{ store: Public
   const key = normalizeStoreReference(value);
   if (!key) return { store: null, error: null };
 
-  let lastError: any = null;
   try {
     const rpc = await supabase.rpc('get_public_storefront', { p_key: key });
     if (!rpc.error && rpc.data) return { store: rpc.data as PublicStoreRecord, error: null };
-    if (rpc.error) lastError = rpc.error;
+    return { store: null, error: rpc.error || null };
   } catch (error) {
-    lastError = error;
+    return { store: null, error };
   }
+}
 
-  // Compatibility fallback for older environments where the resolver RPC has
-  // not been deployed yet. Every lookup is type-safe and sequential.
-  const upper = key.toUpperCase();
-  const noSf = upper.replace(/^SF-/, '');
-  const candidates: Array<[string, string]> = [];
-  if (isUuid(key)) candidates.push(['id', key]);
-  candidates.push(['store_id', upper]);
-  if (!upper.startsWith('SF-')) candidates.push(['store_id', `SF-${upper}`]);
-  candidates.push(['access_code', noSf]);
-
-  for (const [column, candidate] of candidates) {
-    try {
-      const result = await selectOne(column, candidate);
-      if (result.data) return { store: result.data, error: null };
-      if (result.error) lastError = result.error;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
+export async function listPublicStorefronts(limit = 100, offset = 0, query = ''): Promise<{ stores: PublicStoreRecord[]; error: any }> {
   try {
-    const result = await supabase
-      .from('stores_public')
-      .select(PUBLIC_STORE_COLUMNS)
-      .ilike('qr_code', `%${key}%`)
-      .limit(1)
-      .maybeSingle();
-    if (result.data) return { store: result.data as PublicStoreRecord, error: null };
-    if (result.error) lastError = result.error;
+    const rpc = await supabase.rpc('list_public_storefronts', {
+      p_limit: Math.min(Math.max(Math.trunc(limit), 1), 100),
+      p_offset: Math.max(Math.trunc(offset), 0),
+      p_query: query.trim() || null,
+    });
+    if (rpc.error) return { stores: [], error: rpc.error };
+    return { stores: Array.isArray(rpc.data) ? rpc.data as PublicStoreRecord[] : [], error: null };
   } catch (error) {
-    lastError = error;
+    return { stores: [], error };
   }
-
-  return { store: null, error: lastError };
 }

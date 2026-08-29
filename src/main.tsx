@@ -4,7 +4,6 @@ import './index.css'
 import './design-system.css'
 import App from './App.tsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
-import ServiceBusinessExperience from './components/ServiceBusinessExperience'
 import { subscribeUserToPush } from './utils/pushNotifications'
 import { installEmailProviderSuggestions } from './utils/emailProviderSuggestions'
 
@@ -80,7 +79,6 @@ createRoot(root).render(
   <StrictMode>
     <AppErrorBoundary>
       <App />
-      <ServiceBusinessExperience />
     </AppErrorBoundary>
   </StrictMode>,
 )

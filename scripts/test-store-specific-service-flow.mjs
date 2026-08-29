@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('../src/components/ServiceBusinessExperience.tsx', import.meta.url), 'utf8');
+const main = fs.readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8');
+
+assert.doesNotMatch(main, /ServiceBusinessExperience/,
+  'the legacy laundry-only experience must never be mounted over the unified customer app');
 
 assert.match(source, /await resolvePublicStore\(identifier\)/,
   'service storefront must use the shared store-specific public resolver');

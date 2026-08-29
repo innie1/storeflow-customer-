@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import { parseRoute, parseQRCode } from './router';
-import { matchesPublicStoreReference, resolvePublicStore } from './utils/storeResolver';
+import { listPublicStorefronts, matchesPublicStoreReference, resolvePublicStore } from './utils/storeResolver';
 import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotifications } from './utils/pushNotifications';
 import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
+// STOREFLOW_SHARED_STORE_RESOLVER_V1
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -348,11 +349,14 @@ function computeStoreOpen(s: any): boolean {
   // store appear closed regardless of merchant settings.
   if (s?.subscription_status === 'inactive' || s?.subscription_status === 'cancelled') return false;
   
-  if (s?.data?.marketplaceSettings) {
-    const ms = s.data.marketplaceSettings;
-    if (!ms.enabled) return false;
-    if (!ms.openingTime || !ms.closingTime) return true;
+  const ms = s?.data?.marketplaceSettings;
+  if (ms && typeof ms === 'object') {
+    if (ms.enabled === false || ms.storeOpen === false || ms.temporaryClosure === true || ms.temporarilyHidden === true) return false;
+    // The merchant's manual switch is authoritative. Scheduled hours are
+    // enforced only when schedule automation was explicitly enabled.
+    if (ms.autoScheduleEnabled !== true || !ms.openingTime || !ms.closingTime) return true;
     const now = new Date();
+    if (Array.isArray(ms.businessDays) && !ms.businessDays.includes(now.getDay())) return false;
     const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
     if (timeStr < ms.openingTime || timeStr > ms.closingTime) return false;
   }
@@ -412,7 +416,7 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
   if (prods.length === 0) {
   const { data: prodData, error: prodErr } = await supabase
       .from('products')
-      .select('id, store_id, category_id, barcode, name, description, brand, selling_price, wholesale_price, retail_price, quantity, unit, image, status, is_service')
+      .select('id, store_id, category_id, barcode, name, description, brand, selling_price, quantity, unit, image, status, is_service')
       .eq('store_id', storeUuid)
       .eq('status', 'active');
     if (prodErr) throw prodErr;
@@ -461,15 +465,6 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
     (!serviceBusiness || product.isService === true)
   );
 }
-
-// Columns the customer app actually needs from `stores`. Deliberately
-// excludes owner_password and other merchant-only fields — `stores` has
-// a public SELECT policy (RLS is row-level, not column-level), so a
-// bare select('*') here sends the merchant's password to every client
-// that loads a store, and (via loadStoresData) that used to get written
-// straight into localStorage for every store, on every device. Column
-// list confirmed by checking what the app actually reads off `store`.
-const STORE_PUBLIC_COLUMNS = 'id, store_id, business_name, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';
 
 const SERVICE_BUSINESS_TYPES = new Set(['laundry','barber','salon','tailoring','repair','printing','cyber_cafe','car_wash','photography','cleaning','spa','games','gaming','restaurant']);
 function getStoreBusinessType(storeData: any): string { return String(storeData?.data?.businessTemplate?.type || storeData?.data?.storeType || storeData?.storeType || storeData?.business_type || '').toLowerCase(); }
@@ -582,38 +577,7 @@ function App() {
   const [priceMode, setPriceMode] = useState<'retail' | 'wholesale'>('retail');
 
   const isStoreOpenState = useMemo(() => {
-    // NOTE: the stores table has no "status" column — it's "subscription_status".
-    // Using store?.status here always evaluated to undefined, which made every
-    // store appear closed regardless of merchant settings.
-    if (store?.subscription_status === 'inactive' || store?.subscription_status === 'cancelled') return false;
-    if (!store?.data || !store.data.marketplaceSettings) {
-      // No marketplace hours/toggle configured yet by the merchant — default to open
-      // rather than defaulting to closed, since most merchants never touch this screen.
-      return true;
-    }
-    const ms = store.data.marketplaceSettings;
-    
-    // 1. Manual switches
-    if (ms.storeOpen === false || ms.temporaryClosure === true || ms.temporarilyHidden === true) {
-      return false;
-    }
-
-    // 2. Business Days check
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    if (Array.isArray(ms.businessDays) && !ms.businessDays.includes(dayOfWeek)) {
-      return false;
-    }
-
-    // 3. Opening/Closing hours check
-    if (ms.openingTime && ms.closingTime) {
-      const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-      if (timeStr < ms.openingTime || timeStr > ms.closingTime) {
-        return false;
-      }
-    }
-
-    return true;
+    return computeStoreOpen(store);
   }, [store]);
 
   const storeStatusText = useMemo(() => {
@@ -1283,10 +1247,10 @@ function App() {
 
   const loadStoresData = async () => {
     try {
-      const { data, error } = await supabase.from('stores_public').select(STORE_PUBLIC_COLUMNS);
+      const { stores: data, error } = await listPublicStorefronts();
       if (error) throw error;
       if (data) {
-        setAllStores(data);
+        setAllStores(data as unknown as Store[]);
         localStorage.setItem('storeflow_cached_all_stores', JSON.stringify(data));
       }
     } catch (e) {
@@ -1403,43 +1367,6 @@ function App() {
       } else {
         console.warn(`[StoreFlow QR] Store ID: "${sid}" not found in database.`);
         navigateToScreen('store_not_found');
-
-        // 7. If no row is returned, print exactly why (wrong column, RLS, missing row, or filter mismatch)
-        console.log(`[StoreFlow QR] Diagnostics - Why was no row returned?`);
-        try {
-          // A. Test connection & check if RLS or permissions blocked the request
-          const { count, error: countErr } = await supabase
-            .from('stores_public')
-            .select('id', { count: 'exact', head: true });
-
-          if (countErr) {
-            console.log(` - Reason: RLS (Row Level Security) or Database Permission error. Cannot count stores. Error detail:`, countErr);
-          } else {
-            console.log(` - Table accessibility: Verified. We have access to the stores table. Total rows count: ${count}`);
-            if (count === 0) {
-              console.log(` - Reason: Missing row. The stores table in the database is completely empty.`);
-            } else {
-              // B. Check if it's a filter mismatch or a truly missing row by searching loosely
-              const cleanSid = sid.replace(/^SF-/i, '');
-              const { data: looseData, error: looseErr } = await supabase
-                .from('stores_public')
-                .select('id, store_id, access_code, qr_code')
-                .or(`store_id.ilike.%${cleanSid}%,access_code.ilike.%${cleanSid}%,qr_code.ilike.%${cleanSid}%`);
-              
-              if (looseErr) {
-                console.log(` - Loose search error:`, looseErr);
-              }
-
-              if (looseData && looseData.length > 0) {
-                console.log(` - Reason: Filter mismatch. A similar row was found but did not match strict filters:`, looseData);
-              } else {
-                console.log(` - Reason: Missing row. No row exists in the database stores table matching the ID "${sid}" (searched store_id, access_code, qr_code).`);
-              }
-            }
-          }
-        } catch (diagErr) {
-          console.error(`[StoreFlow QR] Diagnostic routine failed:`, diagErr);
-        }
       }
     } catch (err: any) {
       console.error(`[StoreFlow QR] Critical error loading store detail for ID: "${sid}":`, err);
@@ -1935,11 +1862,7 @@ function App() {
           // direct SELECT on the raw stores table, which is now revoked
           // (cost_price/total_profit redaction fix). Fetch through the
           // redacted view instead.
-          const { data: storeObj } = await supabase
-            .from('stores_public')
-            .select(STORE_PUBLIC_COLUMNS)
-            .eq('id', prodDb.store_id)
-            .maybeSingle();
+          const { store: storeObj } = await resolvePublicStore(prodDb.store_id);
           if (storeObj) {
             setStore(storeObj);
             setStoreId(storeObj.id);
@@ -2453,7 +2376,9 @@ function App() {
       }))
     });
 
-    const targetStoreId = store?.id || allStores?.[0]?.id || '';
+    // Never let a stale discovery-list entry receive an order intended for
+    // the store currently on screen.
+    const targetStoreId = store?.id || '';
 
     const orderPayload = {
       store_id: targetStoreId,
@@ -2623,7 +2548,7 @@ function App() {
     retriesLeft: number
   ): Promise<string> => {
     // 1. Resolve store ID fallback if missing
-    const resolvedStoreId = orderPayload.store_id || store?.id || allStores?.[0]?.id;
+    const resolvedStoreId = orderPayload.store_id || store?.id;
     if (resolvedStoreId) {
       orderPayload.store_id = resolvedStoreId;
     }
@@ -2930,12 +2855,9 @@ function App() {
       let targetStore = store;
       let targetProducts = products;
       if (store?.id !== order.store_id) {
-        const { data: storeData, error: storeErr } = await supabase
-          .from('stores_public')
-          .select(STORE_PUBLIC_COLUMNS)
-          .eq('id', order.store_id)
-          .single();
+        const { store: storeData, error: storeErr } = await resolvePublicStore(order.store_id);
         if (storeErr) throw storeErr;
+        if (!storeData) throw new Error('The original store could not be found.');
 
         // Use the same JSONB-or-relational resolver store loading uses.
         // Querying the relational products table alone (as this used to)
