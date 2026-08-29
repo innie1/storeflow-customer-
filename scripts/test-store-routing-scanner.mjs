@@ -14,6 +14,7 @@ const plugin = read('vite-plugin-store-discovery.ts');
 const pkg = JSON.parse(read('package.json'));
 const router = read('src/router.ts');
 const vite = read('vite.config.ts');
+const main = read('src/main.tsx');
 
 expectContains(resolver, "supabase.rpc('get_public_storefront'", 'shared resolver uses public RPC');
 expectContains(resolver, "if (isUuid(key)) candidates.push(['id', key]);", 'UUID lookup is type-safe');
@@ -37,6 +38,12 @@ expectContains(plugin, 'Search Store</span>', 'home search exposes a visible Sea
 expectContains(plugin, "resolvePublicStore(parsedStoreId)", 'runtime scanner transform uses canonical resolver');
 expectContains(plugin, "void openStoreFromSearch(value)", 'manual scanner entry resolves directly');
 expectContains(vite, 'customerStoreDiscoveryPlugin()', 'store discovery transform is enabled before React');
+
+expectContains(main, "updateViaCache: 'none'", 'installed PWA bypasses stale HTTP cache when checking sw.js');
+expectContains(main, 'await reg.update()', 'installed PWA explicitly checks for a new worker');
+expectContains(main, "document.visibilityState === 'visible'", 'installed PWA rechecks when resumed');
+expectContains(main, "window.addEventListener('online'", 'installed PWA rechecks after reconnecting');
+expectContains(main, "navigator.serviceWorker.addEventListener('controllerchange'", 'installed PWA reloads after worker takeover');
 
 if (!String(pkg.scripts?.prebuild || '').includes('patch-store-routing-scanner.mjs')) throw new Error('prebuild must run the scanner/store-routing patch');
 if (!String(pkg.scripts?.test || '').includes('test-store-routing-scanner.mjs')) throw new Error('npm test must include scanner/store-routing regressions');
