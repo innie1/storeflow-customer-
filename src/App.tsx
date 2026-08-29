@@ -538,6 +538,10 @@ function App() {
 
   const navigateToScreen = useCallback((newScreen: typeof screen, opts?: { replace?: boolean }) => {
     setScreen(newScreen);
+    // A store route needs the resolved store identifier. loadStoreDetails owns
+    // that history entry so callers cannot push an incomplete `screen: store`
+    // entry at `/` while the resolver is still in flight.
+    if (newScreen === 'store') return;
     const path = SCREEN_PATHS[newScreen] ?? window.location.pathname;
     const state = { screen: newScreen };
     if (opts?.replace) {
@@ -1357,9 +1361,11 @@ function App() {
         // Sync browser URL to represent the active store (so refreshes work)
         const storeSlug = storeData.store_id || storeData.access_code || storeData.id;
         const targetPath = `/s/${storeSlug}`;
-        const currentState = window.history.state;
-        if (window.location.pathname !== targetPath || currentState?.screen !== 'store') {
-          window.history.replaceState({ screen: 'store' }, '', targetPath);
+        const historyState = { screen: 'store', storeId: storeData.id, storeRef: storeSlug };
+        if (window.location.pathname === targetPath) {
+          window.history.replaceState(historyState, '', targetPath);
+        } else {
+          window.history.pushState(historyState, '', targetPath);
         }
 
         try {
@@ -1764,13 +1770,15 @@ function App() {
       // restore it instantly — no network call, no reload. This is what makes
       // swipe-back feel instant instead of reloading the page.
       const stateScreen = event?.state?.screen;
-      if (stateScreen) {
+      if (stateScreen && stateScreen !== 'store') {
         setScreen(stateScreen);
         return;
       }
       // Otherwise this is a genuine store deep link (e.g. QR scan URL, or a
       // history entry from before this fix shipped) — resolve it the normal way.
-      const { storeId: sid, productId: pid } = parseRoute();
+      const route = parseRoute();
+      const sid = event?.state?.storeId || event?.state?.storeRef || route.storeId;
+      const pid = route.productId;
       if (sid) {
         setStoreId(sid);
         loadStoreDetails(sid);

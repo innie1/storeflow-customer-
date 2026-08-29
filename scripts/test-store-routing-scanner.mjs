@@ -15,6 +15,7 @@ const pkg = JSON.parse(read('package.json'));
 const router = read('src/router.ts');
 const vite = read('vite.config.ts');
 const main = read('src/main.tsx');
+const app = read('src/App.tsx');
 
 expectContains(resolver, "supabase.rpc('get_public_storefront'", 'shared resolver uses public RPC');
 expectContains(resolver, "if (isUuid(key)) candidates.push(['id', key]);", 'UUID lookup is type-safe');
@@ -44,6 +45,11 @@ expectContains(main, 'await reg.update()', 'installed PWA explicitly checks for 
 expectContains(main, "document.visibilityState === 'visible'", 'installed PWA rechecks when resumed');
 expectContains(main, "window.addEventListener('online'", 'installed PWA rechecks after reconnecting');
 expectContains(main, "navigator.serviceWorker.addEventListener('controllerchange'", 'installed PWA reloads after worker takeover');
+
+expectContains(app, "if (newScreen === 'store') return;", 'store navigation waits for a resolved identity');
+expectContains(app, "window.history.pushState(historyState, '', targetPath);", 'opening a different store preserves the prior history entry');
+expectContains(app, "stateScreen && stateScreen !== 'store'", 'store history entries are re-resolved on back/forward');
+expectContains(app, "event?.state?.storeId || event?.state?.storeRef || route.storeId", 'store history persists a canonical resolver key');
 
 if (!String(pkg.scripts?.prebuild || '').includes('patch-store-routing-scanner.mjs')) throw new Error('prebuild must run the scanner/store-routing patch');
 if (!String(pkg.scripts?.test || '').includes('test-store-routing-scanner.mjs')) throw new Error('npm test must include scanner/store-routing regressions');
