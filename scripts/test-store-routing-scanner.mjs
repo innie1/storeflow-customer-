@@ -51,6 +51,11 @@ expectContains(app, "if (newScreen === 'store') return;", 'store navigation wait
 expectContains(app, "window.history.pushState(historyState, '', targetPath);", 'opening a different store preserves the prior history entry');
 expectContains(app, "stateScreen && stateScreen !== 'store'", 'store history entries are re-resolved on back/forward');
 expectContains(app, "event?.state?.storeId || event?.state?.storeRef || route.storeId", 'store history persists a canonical resolver key');
+expectContains(app, 'useState<Store[]>(readCachedStores)', 'external deep links hydrate the verified store cache before routing');
+expectContains(app, 'if (!event && initialRouteHandledRef.current) return;', 'external camera routes are not replayed during startup');
+expectContains(app, 'matchesPublicStoreReference(activeStoreRef.current, sid)', 'a transient refresh cannot evict the verified active store');
+expectContains(app, "const matched = allStores.find(s => matchesPublicStoreReference(s, sid)) || (", 'a catalog-load error retains successfully resolved store metadata');
+expectContains(app, "setErrorText('Showing the saved store while the connection refreshes.')", 'retained deep links surface a non-destructive refresh notice');
 expectContains(app, 'ms.enabled === false', 'empty marketplace settings do not incorrectly close a store');
 expectContains(app, 'ms.storeOpen === false', 'the merchant open/closed switch is honored');
 if (app.includes("selling_price, wholesale_price, retail_price")) throw new Error('product query must only request columns present in Supabase');

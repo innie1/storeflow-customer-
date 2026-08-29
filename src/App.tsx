@@ -40,6 +40,15 @@ interface Store {
   data?: any;
 }
 
+function readCachedStores(): Store[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('storeflow_cached_all_stores') || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 interface CartItem {
   product: Product;
   quantity: number;
@@ -485,12 +494,18 @@ function App() {
   });
   const [_storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<any>(null);
-  const [allStores, setAllStores] = useState<Store[]>([]);
+  // Hydrate synchronously so an external camera deep link can use its exact
+  // cached store during the very first routing effect. Hydrating later in a
+  // separate effect left a startup window where a transient refresh could
+  // replace an already displayed store with Store Not Found.
+  const [allStores, setAllStores] = useState<Store[]>(readCachedStores);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const storeLoadRequestRef = useRef(0);
+  const activeStoreRef = useRef<any>(null);
+  const initialRouteHandledRef = useRef(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [deepLinkedProductId, setDeepLinkedProductId] = useState<string | null>(null);
 
@@ -517,6 +532,10 @@ function App() {
       setIsStoreFavorited(localStorage.getItem('storeflow_fav_store_' + store.id) === 'true');
     }
   }, [store?.id]);
+
+  useEffect(() => {
+    activeStoreRef.current = store;
+  }, [store]);
 
   // Proper SPA navigation history: every screen change gets its own browser
   // history entry with distinguishing state. Previously, screen changes
@@ -1275,6 +1294,7 @@ function App() {
     let hasInstantData = false;
     if (cachedMatch) {
       setStore(cachedMatch);
+      activeStoreRef.current = cachedMatch;
       setLoading(false); // don't block the UI — page renders immediately
       const cachedProducts = localStorage.getItem('storeflow_cached_products_' + cachedMatch.id);
       if (cachedProducts) {
@@ -1318,6 +1338,7 @@ function App() {
 
       if (storeData) {
         setStore(storeData);
+        activeStoreRef.current = storeData;
         // Clear cart items that belong to other stores
         setCart(prev => prev.filter(item => item.product.store_id === storeData.id));
         // Sync browser URL to represent the active store (so refreshes work)
@@ -1364,16 +1385,32 @@ function App() {
         setCategories(cats);
       } else {
         console.warn(`[StoreFlow QR] Store ID: "${sid}" not found in database.`);
-        navigateToScreen('store_not_found');
+        const retainedStore = cachedMatch || (
+          matchesPublicStoreReference(activeStoreRef.current, sid) ? activeStoreRef.current : null
+        );
+        if (retainedStore) {
+          // A verified/cached store must not disappear just because a later
+          // background lookup returned an empty response. Keep the deep link
+          // stable and let the next refresh repair the network state.
+          setStore(retainedStore);
+          activeStoreRef.current = retainedStore;
+          setScreen('store');
+          setErrorText('Showing the saved store while the connection refreshes.');
+        } else {
+          navigateToScreen('store_not_found');
+        }
       }
     } catch (err: any) {
       console.error(`[StoreFlow QR] Critical error loading store detail for ID: "${sid}":`, err);
       setErrorText('Offline Mode: Displaying offline catalog.');
       // Attempt local storage fallback if we have a match
       if (requestId !== storeLoadRequestRef.current) return;
-      const matched = allStores.find(s => matchesPublicStoreReference(s, sid));
+      const matched = allStores.find(s => matchesPublicStoreReference(s, sid)) || (
+        matchesPublicStoreReference(activeStoreRef.current, sid) ? activeStoreRef.current : null
+      );
       if (matched) {
         setStore(matched);
+        activeStoreRef.current = matched;
         const cached = localStorage.getItem('storeflow_cached_products_' + matched.id);
         if (cached) {
           try { setProducts(JSON.parse(cached)); } catch { /* keep current catalog */ }
@@ -1691,6 +1728,11 @@ function App() {
 
   useEffect(() => {
     const handleRouting = (event?: PopStateEvent) => {
+      // React StrictMode intentionally re-runs mount effects in development,
+      // and a PWA handoff can also replay page startup. Resolve an external
+      // camera route once; real back/forward events still run normally.
+      if (!event && initialRouteHandledRef.current) return;
+      if (!event) initialRouteHandledRef.current = true;
       // If this history entry carries screen state (pushed by navigateToScreen),
       // restore it instantly — no network call, no reload. This is what makes
       // swipe-back feel instant instead of reloading the page.
