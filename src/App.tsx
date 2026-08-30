@@ -4,6 +4,7 @@ import { parseRoute, parseQRCode } from './router';
 import { listPublicStorefronts, matchesPublicStoreReference, resolvePublicStore } from './utils/storeResolver';
 import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotifications } from './utils/pushNotifications';
 import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
+import LaundryStorefront from './components/LaundryStorefront';
 // STOREFLOW_SHARED_STORE_RESOLVER_V1
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
@@ -310,6 +311,22 @@ function getOrderAccessToken(orderId: string): string | null {
   } catch {
     return null;
   }
+}
+
+function getStoredOrderCredentials(): Array<{ order_id: string; access_token: string }> {
+  const credentials: Array<{ order_id: string; access_token: string }> = [];
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(ORDER_TOKEN_PREFIX)) continue;
+      const orderId = key.slice(ORDER_TOKEN_PREFIX.length);
+      const token = localStorage.getItem(key);
+      if (orderId && token) credentials.push({ order_id: orderId, access_token: token });
+    }
+  } catch {
+    return [];
+  }
+  return credentials.slice(0, 50);
 }
 
 function isLogoImageUrl(logo?: string | null): boolean {
@@ -1470,19 +1487,32 @@ function App() {
   }, [statusLabelMap]);
 
   const loadOrdersHistory = async () => {
-    const rawPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
-    if (!rawPhone) return;
-    const lookupPhone = normalizeNigerianPhone(rawPhone) || rawPhone;
-
     try {
-      // Guest customers have no Supabase Auth session, so they can't read
-      // the orders table directly under RLS anymore (it used to be fully
-      // public, which meant anyone could read every customer's orders
-      // platform-wide). This RPC verifies the phone number server-side and
-      // returns only that customer's own orders.
-      const { data, error } = await supabase.rpc('get_customer_orders', { p_customer_phone: lookupPhone });
-      if (error) throw error;
-      const next: any[] = data || [];
+      const credentials = getStoredOrderCredentials();
+      let remoteOrders: any[] = [];
+      if (credentials.length > 0) {
+        const { data, error } = await supabase.rpc('get_customer_orders_by_tokens', { p_credentials: credentials });
+        if (error) throw error;
+        remoteOrders = Array.isArray(data) ? data : [];
+      }
+
+      // Keep offline/local snapshots visible while the private-token RPC
+      // refreshes live statuses. The server response wins for matching rows.
+      const localSnapshots = [
+        ...safeGetJSON<any[]>('storeflow_orders_history', []),
+        ...safeGetJSON<any[]>('storeflow_cached_orders_history', []),
+      ];
+      const merged = new Map<string, any>();
+      for (const order of localSnapshots) {
+        const key = String(order?.id || order?.order_number || '');
+        if (key) merged.set(key, order);
+      }
+      for (const order of remoteOrders) {
+        const existingKey = [...merged.entries()].find(([, cached]) => cached?.order_number === order?.order_number)?.[0];
+        if (existingKey) merged.delete(existingKey);
+        if (order?.id) merged.set(String(order.id), order);
+      }
+      const next = [...merged.values()].sort((a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime());
 
       // Check for status changes on any order and trigger notifications,
       // and cache each order's access token locally (covers the case where
@@ -1490,9 +1520,6 @@ function App() {
       for (const o of next) {
         if (o.id && o.status) {
           checkAndNotifyOrderStatus(o.id, o.order_number || '', o.status);
-        }
-        if (o.id && o.access_token) {
-          saveOrderAccessToken(o.id, o.access_token);
         }
       }
 
@@ -1503,6 +1530,18 @@ function App() {
     }
   };
   loadOrdersHistoryRef.current = loadOrdersHistory;
+
+  const handleLaundryOrderPlaced = (placed: any) => {
+    if (!placed?.id || !placed?.access_token) return;
+    saveOrderAccessToken(String(placed.id), String(placed.access_token));
+    knownOrderStatusesRef.current.set(String(placed.id), String(placed.status || 'Pending'));
+    setOrdersHistory(previous => {
+      const next = [placed, ...previous.filter(order => order.id !== placed.id && order.order_number !== placed.order_number)];
+      safeSetJSON('storeflow_cached_orders_history', next);
+      safeSetJSON('storeflow_orders_history', next);
+      return next;
+    });
+  };
 
   // ─── Deep-link & Notification Click Handler ───────────────────────────────
   // Opens the exact order's tracking page when user clicks a notification
@@ -1524,11 +1563,14 @@ function App() {
       clearNotificationsForOrder(targetOrderId);
 
       // Instantly load order status
+      const accessToken = getOrderAccessToken(targetOrderId);
       const rawPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
-      if (rawPhone) {
+      if (accessToken || rawPhone) {
         const lookupPhone = normalizeNigerianPhone(rawPhone) || rawPhone;
-        supabase
-          .rpc('get_customer_order_status', { p_order_id: targetOrderId, p_customer_phone: lookupPhone })
+        const statusRequest = accessToken
+          ? supabase.rpc('get_customer_order_status_by_token', { p_order_id: targetOrderId, p_access_token: accessToken })
+          : supabase.rpc('get_customer_order_status', { p_order_id: targetOrderId, p_customer_phone: lookupPhone });
+        statusRequest
           .then(({ data }) => {
             if (data?.status) {
               setOrderStatus(data.status);
@@ -1579,13 +1621,16 @@ function App() {
   // Preparing, Ready, Completed, Rejected, Changes Requested).
   useEffect(() => {
     if (!orderId || screen !== 'tracking' || orderId.startsWith('pending-') || orderId.startsWith('offline-')) return;
+    const accessToken = getOrderAccessToken(orderId);
     const rawPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
-    if (!rawPhone) return;
+    if (!accessToken && !rawPhone) return;
     const lookupPhone = normalizeNigerianPhone(rawPhone) || rawPhone;
 
     const fetchStatus = () => {
-      supabase
-        .rpc('get_customer_order_status', { p_order_id: orderId, p_customer_phone: lookupPhone })
+      const statusRequest = accessToken
+        ? supabase.rpc('get_customer_order_status_by_token', { p_order_id: orderId, p_access_token: accessToken })
+        : supabase.rpc('get_customer_order_status', { p_order_id: orderId, p_customer_phone: lookupPhone });
+      statusRequest
         .then(({ data, error }) => {
           if (!error && data?.status) {
             const newStatus = data.status;
@@ -3617,11 +3662,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
         )}
 
         <button
-          onClick={() => { setShowTrackLookup(true); setTrackLookupMode('phone'); setTrackLookupValue(''); setTrackLookupError(''); setTrackLookupResults([]); }}
+          onClick={() => { navigateToScreen('history'); loadOrdersHistory(); }}
           className="w-full mt-3 py-3 rounded-2xl bg-[#1A1C1E] text-white font-black text-xs uppercase tracking-wide flex items-center justify-center gap-2 active-scale cursor-pointer"
         >
           <span className="material-symbols-outlined text-base">receipt_long</span>
-          Track an Order
+          My Order History
         </button>
       </div>
     );
@@ -4719,6 +4764,14 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                   {/* 4. Store Promotions */}
                   {renderStorePromotions()}
 
+                  {getStoreBusinessType(store) === 'laundry' ? (
+                    <LaundryStorefront
+                      store={store}
+                      onOrderPlaced={handleLaundryOrderPlaced}
+                      onOpenOrders={() => { navigateToScreen('history'); loadOrdersHistory(); }}
+                    />
+                  ) : (
+                  <>
                   {/* 5. Product Search & Sort / Filter */}
                   <div className="space-y-4">
                     <div className="flex gap-2">
@@ -4966,13 +5019,16 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                     </div>
                   )}
 
+                  </>
+                  )}
+
                 </div>
               </div>
             )}
           </div>
 
           {/* 10. Bottom Cart Bar */}
-          {totalItemsCount > 0 && (
+          {getStoreBusinessType(store) !== 'laundry' && totalItemsCount > 0 && (
             <div className="fixed bottom-20 left-0 right-0 z-40 w-full max-w-5xl lg:max-w-6xl mx-auto px-4">
               <button
                 onClick={() => setIsCartOpen(true)}
@@ -4990,7 +5046,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
             </div>
           )}
 
-          {showFilterModal && (
+          {getStoreBusinessType(store) !== 'laundry' && showFilterModal && (
             <div 
               className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center animate-fade-in"
               onClick={() => setShowFilterModal(false)}
@@ -5797,7 +5853,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                 // If itemsSummary is empty, fallback to order_items relation
                 if (itemsSummary.length === 0 && o.order_items) {
                   itemsSummary = o.order_items.map((oi: any) => ({
-                    name: oi.product?.name || 'Product',
+                    name: oi.item_name || oi.product?.name || 'Product',
                     quantity: oi.quantity,
                     price: oi.price
                   }));
