@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase';
 import { safeGetItem, safeSetItem } from '../utils/safeStorage';
 
@@ -93,6 +93,17 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [receipt, setReceipt] = useState<LaundryOrderResult | null>(null);
+
+  useEffect(() => {
+    if (!offerings.length) {
+      setSelectedServiceId('');
+      return;
+    }
+    if (!offerings.some((item: LaundryOffering) => item.id === selectedServiceId)) {
+      setSelectedServiceId(offerings[0].id);
+      setClothes({});
+    }
+  }, [offerings, selectedServiceId]);
 
   const matrixRow = selected && pricing.matrix && typeof pricing.matrix === 'object'
     ? pricing.matrix[String(selected.id)] as Record<string, unknown> | undefined
@@ -242,6 +253,24 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
               })}
             </div>
           </div>
+
+          {lines.length > 0 && (
+            <div className="overflow-hidden rounded-[24px] border border-gray-100 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                <div><h2 className="text-sm font-black">Your laundry basket</h2><p className="text-[10px] text-gray-500">Check your clothes before sending.</p></div>
+                <button type="button" onClick={() => setClothes({})} className="text-[10px] font-black text-red-600">Clear all</button>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {lines.map(line => (
+                  <div key={line.garment} className="flex items-center gap-3 px-4 py-3">
+                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-black">{line.garment}</span><span className="text-[10px] text-gray-500">{line.quantity} × {line.price > 0 ? `₦${line.price.toLocaleString()}` : 'price to be confirmed'}</span></span>
+                    <span className="text-xs font-black">{line.price > 0 ? `₦${(line.quantity * line.price).toLocaleString()}` : '—'}</span>
+                    <button type="button" onClick={() => setClothes(current => ({ ...current, [line.garment]: 0 }))} aria-label={`Delete ${line.garment} from basket`} className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600"><span className="material-symbols-outlined text-base">delete</span></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-3 rounded-[24px] border border-gray-100 bg-white p-4 shadow-sm">
             <h2 className="font-black">Your details</h2>

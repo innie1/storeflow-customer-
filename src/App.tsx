@@ -1083,8 +1083,9 @@ function App() {
   // Keep the full stores list fresh in the background (Home "Your Stores" / Explore)
   // without interrupting whatever the user is doing.
   useEffect(() => {
+    const channelInstance = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const storesChannel = supabase
-      .channel('stores-list-updates')
+      .channel(`stores-list-updates-${channelInstance}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'stores' }, () => {
         loadStoresData();
       })
@@ -1743,8 +1744,9 @@ function App() {
   useEffect(() => {
     if (!store?.id) return;
 
+    const channelInstance = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase
-      .channel(`store-updates-${store.id}`)
+      .channel(`store-updates-${store.id}-${channelInstance}`)
       .on('postgres_changes', {
         event: 'UPDATE',
         filter: `id=eq.${store.id}`,
