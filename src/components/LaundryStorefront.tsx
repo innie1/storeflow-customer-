@@ -93,6 +93,8 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [receipt, setReceipt] = useState<LaundryOrderResult | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<'cart' | 'checkout'>('cart');
 
   useEffect(() => {
     if (!offerings.length) {
@@ -157,6 +159,8 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
       safeSetItem('storeflow_saved_checkout_phone', phone.trim());
       safeSetItem('storeflow_pref_address', address.trim());
       onOrderPlaced(placed);
+      setCartOpen(false);
+      setCheckoutStep('cart');
       setReceipt(placed);
     } catch (error: any) {
       setMessage(error?.message || 'The laundry order could not be sent. Please try again.');
@@ -190,106 +194,95 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
     );
   }
 
+  const surface = 'border-gray-100 bg-white dark:border-zinc-800 dark:bg-zinc-900';
+  const field = 'w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-[#1A1C1E] outline-none placeholder:text-gray-400 focus:border-[#FFD23F] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500';
+
   return (
-    <section className="space-y-4">
-      <div className="grid grid-cols-2 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-gray-100">
-        <button type="button" onClick={() => setView('record')} className={`rounded-xl px-3 py-3 text-xs font-black ${view === 'record' ? 'bg-[#1A1C1E] text-[#FFD23F]' : 'text-gray-500'}`}>Record Laundry</button>
-        <button type="button" onClick={() => setView('prices')} className={`rounded-xl px-3 py-3 text-xs font-black ${view === 'prices' ? 'bg-[#1A1C1E] text-[#FFD23F]' : 'text-gray-500'}`}>Price List</button>
+    <section className="space-y-4 pb-24 text-[#1A1C1E] dark:text-zinc-100">
+      <div className={`grid grid-cols-2 rounded-2xl border p-1 ${surface}`}>
+        <button type="button" onClick={() => setView('record')} className={`rounded-xl px-3 py-3 text-xs font-black transition-colors ${view === 'record' ? 'bg-[#1A1C1E] text-[#FFD23F] dark:bg-[#FFD23F] dark:text-zinc-950' : 'text-gray-500 dark:text-zinc-400'}`}>Order Laundry</button>
+        <button type="button" onClick={() => setView('prices')} className={`rounded-xl px-3 py-3 text-xs font-black transition-colors ${view === 'prices' ? 'bg-[#1A1C1E] text-[#FFD23F] dark:bg-[#FFD23F] dark:text-zinc-950' : 'text-gray-500 dark:text-zinc-400'}`}>Price List</button>
       </div>
 
       {offerings.length > 0 && (
         <div className="space-y-2">
-          <p className="px-1 text-[10px] font-black uppercase tracking-wider text-gray-400">Laundry treatment</p>
+          <p className="px-1 text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">Choose treatment</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {offerings.map((offering: LaundryOffering) => (
-              <button type="button" key={offering.id} onClick={() => setSelectedServiceId(offering.id)} className={`shrink-0 rounded-2xl border px-4 py-3 text-left ${selected?.id === offering.id ? 'border-[#FFD23F] bg-[#FFF9DE]' : 'border-gray-200 bg-white'}`}>
+              <button type="button" key={offering.id} onClick={() => { setSelectedServiceId(offering.id); setClothes({}); }} className={`shrink-0 rounded-2xl border px-4 py-3 text-left transition-colors ${selected?.id === offering.id ? 'border-[#FFD23F] bg-[#FFF7CC] text-zinc-950 dark:bg-[#FFD23F]/15 dark:text-[#FFD23F]' : 'border-gray-200 bg-white text-[#1A1C1E] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100'}`}>
                 <span className="block text-xs font-black">{offering.name}</span>
-                {offering.turnaround && <span className="mt-0.5 block text-[10px] text-gray-500">{offering.turnaround}</span>}
+                {offering.turnaround && <span className={`mt-0.5 block text-[10px] ${selected?.id === offering.id ? 'text-zinc-600 dark:text-amber-200/70' : 'text-gray-500 dark:text-zinc-400'}`}>{offering.turnaround}</span>}
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {view === 'prices' ? (
-        <div className="overflow-hidden rounded-[24px] border border-gray-100 bg-white shadow-sm">
-          <div className="border-b border-gray-100 p-4">
-            <h2 className="font-black">{selected?.name || 'Laundry'} Price List</h2>
-            <p className="mt-1 text-xs text-gray-500">Prices published by {store?.business_name || 'this laundry'}.</p>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {garmentTypes.map(garment => {
-              const price = unitPrice(garment);
-              return <div key={garment} className="flex items-center justify-between px-4 py-3.5 text-sm"><span className="font-bold">{garment}</span><span className="font-black">{price > 0 ? `₦${price.toLocaleString()}` : 'Price to be confirmed'}</span></div>;
-            })}
+      <div className="flex items-end justify-between gap-3 px-1">
+        <div><h2 className="font-black">{view === 'prices' ? 'Laundry prices' : 'Choose your clothes'}</h2><p className="mt-0.5 text-[11px] text-gray-500 dark:text-zinc-400">{view === 'prices' ? `Prices from ${store?.business_name || 'this laundry'}` : 'Tap + to add an item to your cart.'}</p></div>
+        {view === 'record' && pieces > 0 && <span className="rounded-full bg-[#FFD23F] px-3 py-1 text-[10px] font-black text-zinc-950">{pieces} in cart</span>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {garmentTypes.map(garment => {
+          const quantity = Number(clothes[garment] || 0);
+          const price = unitPrice(garment);
+          return (
+            <article key={garment} className={`flex min-h-40 flex-col rounded-2xl border p-3.5 transition-colors ${quantity ? 'border-[#FFD23F] bg-[#FFFBEA] dark:bg-[#FFD23F]/10' : surface}`}>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-zinc-300"><span className="material-symbols-outlined text-xl">dry_cleaning</span></div>
+              <div className="mt-3 min-w-0 flex-1"><h3 className="truncate text-sm font-black text-[#1A1C1E] dark:text-zinc-100">{garment}</h3><p className="mt-0.5 text-[10px] font-semibold text-gray-500 dark:text-zinc-400">{price > 0 ? `₦${price.toLocaleString()} each` : 'Price to be confirmed'}</p></div>
+              {view === 'record' ? (
+                <div className="mt-3 flex items-center justify-between">
+                  {quantity > 0 ? <button type="button" onClick={() => adjust(garment, -1)} aria-label={`Remove one ${garment}`} className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"><span className="material-symbols-outlined text-sm">remove</span></button> : <span />}
+                  {quantity > 0 && <span className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100">{quantity}</span>}
+                  <button type="button" onClick={() => adjust(garment, 1)} aria-label={`Add one ${garment}`} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFD23F] text-zinc-950 shadow-sm"><span className="material-symbols-outlined text-sm font-black">add</span></button>
+                </div>
+              ) : <p className="mt-3 text-sm font-black text-[#1A1C1E] dark:text-[#FFD23F]">{price > 0 ? `₦${price.toLocaleString()}` : 'Ask store'}</p>}
+            </article>
+          );
+        })}
+      </div>
+
+      {view === 'record' && lines.length > 0 && (
+        <button type="button" onClick={() => { setCheckoutStep('cart'); setCartOpen(true); }} className="fixed bottom-20 left-4 right-4 z-40 mx-auto flex max-w-2xl items-center justify-between rounded-full bg-[#1A1C1E] px-5 py-3.5 text-white shadow-2xl ring-1 ring-white/10 dark:bg-[#FFD23F] dark:text-zinc-950">
+          <span className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FFD23F] text-[10px] font-black text-zinc-950 dark:bg-zinc-950 dark:text-[#FFD23F]">{pieces}</span><span className="text-xs font-black uppercase tracking-wide">View Cart</span></span>
+          <span className="text-sm font-black">{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'Review order'}</span>
+        </button>
+      )}
+
+      {cartOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/65 backdrop-blur-sm" onClick={() => setCartOpen(false)}>
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-t-3xl bg-white text-[#1A1C1E] shadow-2xl dark:bg-zinc-900 dark:text-zinc-100" onClick={event => event.stopPropagation()}>
+            <div className="mx-auto mt-3 h-1 w-11 rounded-full bg-gray-200 dark:bg-zinc-700" />
+            {checkoutStep === 'cart' ? (
+              <div className="flex max-h-[84vh] flex-col p-5">
+                <div className="flex items-center justify-between"><div><div className="flex items-center gap-2"><h2 className="text-lg font-black">My Cart ({pieces})</h2><button type="button" onClick={() => { setClothes({}); setCartOpen(false); }} className="text-[10px] font-black text-red-600 dark:text-red-400">Clear All</button></div><p className="text-[11px] text-gray-500 dark:text-zinc-400">{selected?.name || 'Laundry service'}</p></div><button type="button" onClick={() => setCartOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-800"><span className="material-symbols-outlined text-lg">close</span></button></div>
+                <div className="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
+                  {lines.map(line => (
+                    <div key={line.garment} className="flex items-center gap-3 rounded-2xl border border-gray-100 p-3 dark:border-zinc-800">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-50 text-gray-500 dark:bg-zinc-800 dark:text-zinc-300"><span className="material-symbols-outlined">dry_cleaning</span></div>
+                      <div className="min-w-0 flex-1"><h3 className="truncate text-sm font-black">{line.garment}</h3><p className="text-[10px] text-gray-500 dark:text-zinc-400">{line.price > 0 ? `₦${line.price.toLocaleString()} each` : 'Price to be confirmed'}</p></div>
+                      <div className="flex items-center gap-2 rounded-full bg-gray-50 p-1 dark:bg-zinc-800"><button type="button" onClick={() => adjust(line.garment, -1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm dark:bg-zinc-700"><span className="material-symbols-outlined text-sm">remove</span></button><span className="w-4 text-center text-xs font-black">{line.quantity}</span><button type="button" onClick={() => adjust(line.garment, 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1C1E] text-[#FFD23F] dark:bg-[#FFD23F] dark:text-zinc-950"><span className="material-symbols-outlined text-sm">add</span></button></div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 border-t border-gray-100 pt-4 dark:border-zinc-800"><div className="mb-4 flex items-center justify-between"><span className="text-sm font-bold">Estimated total</span><span className="text-lg font-black">{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'To be confirmed'}</span></div><button type="button" onClick={() => setCheckoutStep('checkout')} className="w-full rounded-full bg-[#1A1C1E] py-4 text-xs font-black uppercase tracking-wider text-[#FFD23F] dark:bg-[#FFD23F] dark:text-zinc-950">Continue to Checkout</button></div>
+              </div>
+            ) : (
+              <div className="max-h-[84vh] overflow-y-auto p-5">
+                <div className="flex items-center justify-between"><button type="button" onClick={() => setCheckoutStep('cart')} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-800"><span className="material-symbols-outlined text-lg">arrow_back</span></button><h2 className="font-black">Checkout Details</h2><button type="button" onClick={() => setCartOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-800"><span className="material-symbols-outlined text-lg">close</span></button></div>
+                <div className="mt-5 space-y-3">
+                  <input aria-label="Customer name" autoComplete="name" value={name} onChange={event => setName(event.target.value)} placeholder="Customer name" className={field} />
+                  <input aria-label="Phone number" autoComplete="tel" value={phone} onChange={event => setPhone(event.target.value.replace(/[^0-9+]/g, ''))} inputMode="tel" placeholder="Phone number" className={field} />
+                  <textarea aria-label="Address" autoComplete="street-address" value={address} onChange={event => setAddress(event.target.value)} placeholder="Address" rows={2} className={`${field} resize-none`} />
+                  <div className="grid grid-cols-2 gap-2">{(['pickup', 'delivery'] as const).map(option => <button type="button" key={option} onClick={() => setFulfillment(option)} className={`rounded-2xl border px-3 py-3 text-xs font-black capitalize ${fulfillment === option ? 'border-[#FFD23F] bg-[#FFF7CC] text-zinc-950 dark:bg-[#FFD23F] dark:text-zinc-950' : 'border-gray-200 dark:border-zinc-700 dark:text-zinc-200'}`}>{option}</button>)}</div>
+                  <textarea aria-label="Special instructions" value={notes} onChange={event => setNotes(event.target.value)} placeholder="Special instructions (optional)" rows={3} className={`${field} resize-none`} />
+                </div>
+                <div className="mt-5 rounded-2xl bg-gray-50 p-4 dark:bg-zinc-800"><div className="flex items-center justify-between"><span className="text-sm font-bold">Estimated total</span><span className="text-lg font-black text-[#1A1C1E] dark:text-[#FFD23F]">{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'To be confirmed'}</span></div>{message && <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300">{message}</p>}<button type="button" onClick={submit} disabled={submitting} className="mt-4 w-full rounded-full bg-[#FFD23F] py-4 text-sm font-black text-zinc-950 disabled:opacity-50">{submitting ? 'Sending order…' : 'Place Laundry Order'}</button></div>
+              </div>
+            )}
           </div>
         </div>
-      ) : (
-        <>
-          {!selected && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-900">
-              You can record your clothes now. {store?.business_name || 'The laundry'} will confirm the price because no treatment prices have been published yet.
-            </div>
-          )}
-          <div className="rounded-[24px] border border-gray-100 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div><h2 className="font-black">Your clothes</h2><p className="mt-1 text-xs text-gray-500">Tap + once for every item.</p></div>
-              <span className="rounded-full bg-[#FFD23F]/25 px-3 py-1 text-xs font-black">{pieces} items</span>
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {garmentTypes.map(garment => {
-                const quantity = Number(clothes[garment] || 0);
-                const price = unitPrice(garment);
-                return (
-                  <div key={garment} className={`rounded-2xl border p-3 ${quantity ? 'border-[#FFD23F] bg-[#FFF9DE]' : 'border-gray-100 bg-gray-50'}`}>
-                    <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-black">{garment}</p><p className="text-[10px] text-gray-500">{price > 0 ? `₦${price.toLocaleString()} each` : 'Price to be confirmed'}</p></div>{quantity > 0 && price > 0 && <span className="text-xs font-black">₦{(quantity * price).toLocaleString()}</span>}</div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <button type="button" onClick={() => adjust(garment, -1)} aria-label={`Remove one ${garment}`} className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white"><span className="material-symbols-outlined text-base">remove</span></button>
-                      <span className="font-black">{quantity}</span>
-                      <button type="button" onClick={() => adjust(garment, 1)} aria-label={`Add one ${garment}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1A1C1E] text-[#FFD23F]"><span className="material-symbols-outlined text-base">add</span></button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {lines.length > 0 && (
-            <div className="overflow-hidden rounded-[24px] border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <div><h2 className="text-sm font-black">Your laundry basket</h2><p className="text-[10px] text-gray-500">Check your clothes before sending.</p></div>
-                <button type="button" onClick={() => setClothes({})} className="text-[10px] font-black text-red-600">Clear all</button>
-              </div>
-              <div className="divide-y divide-gray-100">
-                {lines.map(line => (
-                  <div key={line.garment} className="flex items-center gap-3 px-4 py-3">
-                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-black">{line.garment}</span><span className="text-[10px] text-gray-500">{line.quantity} × {line.price > 0 ? `₦${line.price.toLocaleString()}` : 'price to be confirmed'}</span></span>
-                    <span className="text-xs font-black">{line.price > 0 ? `₦${(line.quantity * line.price).toLocaleString()}` : '—'}</span>
-                    <button type="button" onClick={() => setClothes(current => ({ ...current, [line.garment]: 0 }))} aria-label={`Delete ${line.garment} from basket`} className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-600"><span className="material-symbols-outlined text-base">delete</span></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-3 rounded-[24px] border border-gray-100 bg-white p-4 shadow-sm">
-            <h2 className="font-black">Your details</h2>
-            <input aria-label="Customer name" autoComplete="name" value={name} onChange={event => setName(event.target.value)} placeholder="Customer name" className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1A1C1E]" />
-            <input aria-label="Phone number" autoComplete="tel" value={phone} onChange={event => setPhone(event.target.value.replace(/[^0-9+]/g, ''))} inputMode="tel" placeholder="Phone number" className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1A1C1E]" />
-            <textarea aria-label="Address" autoComplete="street-address" value={address} onChange={event => setAddress(event.target.value)} placeholder="Address" rows={2} className="w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1A1C1E]" />
-            <div className="grid grid-cols-2 gap-2">
-              {(['pickup', 'delivery'] as const).map(option => <button type="button" key={option} onClick={() => setFulfillment(option)} className={`rounded-2xl border px-3 py-3 text-xs font-black capitalize ${fulfillment === option ? 'border-[#FFD23F] bg-[#FFF9DE]' : 'border-gray-200'}`}>{option}</button>)}
-            </div>
-            <textarea aria-label="Special instructions" value={notes} onChange={event => setNotes(event.target.value)} placeholder="Special instructions (optional)" rows={3} className="w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1A1C1E]" />
-          </div>
-
-          <div className="rounded-[24px] bg-[#1A1C1E] p-4 text-white shadow-sm">
-            <div className="flex items-center justify-between"><span className="text-sm font-bold">Estimated total</span><span className="text-lg font-black text-[#FFD23F]">{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'To be confirmed'}</span></div>
-            <p className="mt-1 text-[10px] text-gray-300">The merchant receives this as a real laundry order and can update its status.</p>
-            {message && <p className="mt-3 rounded-xl bg-white/10 p-3 text-xs font-semibold text-[#FFD23F]">{message}</p>}
-            <button type="button" onClick={submit} disabled={submitting} className="mt-4 w-full rounded-2xl bg-[#FFD23F] px-4 py-3.5 text-sm font-black text-[#1A1C1E] disabled:opacity-50">{submitting ? 'Recording laundry…' : 'Record My Laundry'}</button>
-          </div>
-        </>
       )}
     </section>
   );

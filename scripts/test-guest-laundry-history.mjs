@@ -11,12 +11,18 @@ assert.match(laundry, /pricing\.garmentTypes/,
   'the clothing list must come from this merchant published laundry configuration');
 assert.doesNotMatch(laundry, /DEFAULT_(?:CLOTHES|LAUNDRY)/,
   'the customer must not receive a generic fallback laundry catalog');
-assert.match(laundry, /Tap \+ once for every item/,
-  'the customer intake must explain the per-item plus controls');
-assert.match(laundry, /Your laundry basket[\s\S]*Clear all[\s\S]*Delete \$\{line\.garment\} from basket/,
-  'selected clothes must have a review basket with per-line delete and clear-all controls');
+assert.match(laundry, /Tap \+ to add an item to your cart/,
+  'the customer catalogue must explain its standard add-to-cart control');
+assert.match(laundry, /grid grid-cols-2 gap-3 sm:grid-cols-3/,
+  'laundry clothing choices must use a compact responsive product grid');
+assert.match(laundry, /View Cart[\s\S]*My Cart \(\{pieces\}\)[\s\S]*Continue to Checkout/,
+  'laundry selections must use the established StoreFlow cart and checkout pattern');
+assert.doesNotMatch(laundry, /Your laundry basket/,
+  'laundry must not introduce a second basket section below the item catalogue');
 assert.match(laundry, /line\.quantity \* line\.price/,
-  'the customer basket must recalculate each line from the merchant-published price');
+  'the customer cart must recalculate each line from the merchant-published price');
+assert.match(laundry, /dark:bg-zinc-900[\s\S]*dark:text-zinc-100[\s\S]*dark:bg-\[#FFD23F\]/,
+  'the laundry storefront must define explicit readable dark-mode surfaces and selected states');
 assert.match(laundry, /offerings\.some\(\(item: LaundryOffering\) => item\.id === selectedServiceId\)/,
   'the selected treatment must stay valid when the merchant republishes the catalogue');
 assert.match(laundry, /Customer name[\s\S]*Phone number[\s\S]*Address/,
