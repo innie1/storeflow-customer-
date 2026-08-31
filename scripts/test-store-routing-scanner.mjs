@@ -58,6 +58,10 @@ expectContains(app, "const matched = allStores.find(s => matchesPublicStoreRefer
 expectContains(app, "setErrorText('Showing the saved store while the connection refreshes.')", 'retained deep links surface a non-destructive refresh notice');
 expectContains(app, 'ms.enabled === false', 'empty marketplace settings do not incorrectly close a store');
 expectContains(app, 'ms.storeOpen === false', 'the merchant open/closed switch is honored');
+expectContains(app, "safeSetJSON('storeflow_cached_all_stores', data)", 'large store discovery caches cannot crash mobile storage');
+expectContains(app, "safeGetItem('storeflow_cached_products_' + cachedMatch.id)", 'cached deep-link catalogs tolerate unavailable mobile storage');
+expectContains(app, "safeSetJSON('storeflow_cached_products_' + resolvedStoreUuid, prods)", 'catalog cache writes cannot turn successful store loads into offline failures');
+if (app.includes("localStorage.setItem('storeflow_cached_all_stores'")) throw new Error('large discovery cache must use quota-safe storage');
 if (app.includes("selling_price, wholesale_price, retail_price")) throw new Error('product query must only request columns present in Supabase');
 if (app.includes("allStores?.[0]?.id")) throw new Error('orders must never fall back to a different discovered store');
 

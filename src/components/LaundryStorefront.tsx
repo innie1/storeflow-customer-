@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../supabase';
 import { safeGetItem, safeSetItem } from '../utils/safeStorage';
+import { subscribeUserToPush } from '../utils/pushNotifications';
 
 type LaundryOffering = {
   id: string;
@@ -158,6 +160,10 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
       safeSetItem('storeflow_saved_checkout_name', name.trim());
       safeSetItem('storeflow_saved_checkout_phone', phone.trim());
       safeSetItem('storeflow_pref_address', address.trim());
+      // A laundry order can be the customer's first checkout in StoreFlow.
+      // Bind this device to the submitted phone now so status updates continue
+      // to arrive after the app has been closed.
+      subscribeUserToPush(phone.trim()).catch(error => console.warn('[Push] Laundry checkout subscription failed:', error));
       onOrderPlaced(placed);
       setCartOpen(false);
       setCheckoutStep('cart');
@@ -228,14 +234,20 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
           const quantity = Number(clothes[garment] || 0);
           const price = unitPrice(garment);
           return (
-            <article key={garment} className={`flex min-h-40 flex-col rounded-2xl border p-3.5 transition-colors ${quantity ? 'border-[#FFD23F] bg-[#FFFBEA] dark:bg-[#FFD23F]/10' : surface}`}>
+            <article key={garment} className={`flex min-h-40 flex-col rounded-2xl border p-3.5 ${surface}`}>
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-zinc-300"><span className="material-symbols-outlined text-xl">dry_cleaning</span></div>
               <div className="mt-3 min-w-0 flex-1"><h3 className="truncate text-sm font-black text-[#1A1C1E] dark:text-zinc-100">{garment}</h3><p className="mt-0.5 text-[10px] font-semibold text-gray-500 dark:text-zinc-400">{price > 0 ? `₦${price.toLocaleString()} each` : 'Price to be confirmed'}</p></div>
               {view === 'record' ? (
-                <div className="mt-3 flex items-center justify-between">
-                  {quantity > 0 ? <button type="button" onClick={() => adjust(garment, -1)} aria-label={`Remove one ${garment}`} className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"><span className="material-symbols-outlined text-sm">remove</span></button> : <span />}
-                  {quantity > 0 && <span className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100">{quantity}</span>}
-                  <button type="button" onClick={() => adjust(garment, 1)} aria-label={`Add one ${garment}`} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFD23F] text-zinc-950 shadow-sm"><span className="material-symbols-outlined text-sm font-black">add</span></button>
+                <div className="mt-3 flex items-center justify-end">
+                  {quantity > 0 ? (
+                    <div className="flex items-center gap-2 rounded-full bg-[#1A1C1E] p-1 text-white shadow-md dark:bg-zinc-800">
+                      <button type="button" onClick={() => adjust(garment, -1)} aria-label={`Remove one ${garment}`} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white active:scale-95"><span className="material-symbols-outlined text-xs">remove</span></button>
+                      <span className="min-w-4 text-center text-xs font-black">{quantity}</span>
+                      <button type="button" onClick={() => adjust(garment, 1)} aria-label={`Add one ${garment}`} className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FFD23F] text-zinc-950 active:scale-95"><span className="material-symbols-outlined text-xs font-black">add</span></button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => adjust(garment, 1)} aria-label={`Add one ${garment}`} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFD23F] text-zinc-950 shadow-sm active:scale-95"><span className="material-symbols-outlined text-sm font-black">add</span></button>
+                  )}
                 </div>
               ) : <p className="mt-3 text-sm font-black text-[#1A1C1E] dark:text-[#FFD23F]">{price > 0 ? `₦${price.toLocaleString()}` : 'Ask store'}</p>}
             </article>
@@ -243,30 +255,30 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
         })}
       </div>
 
-      {view === 'record' && lines.length > 0 && (
-        <button type="button" onClick={() => { setCheckoutStep('cart'); setCartOpen(true); }} className="fixed bottom-20 left-4 right-4 z-40 mx-auto flex max-w-2xl items-center justify-between rounded-full bg-[#1A1C1E] px-5 py-3.5 text-white shadow-2xl ring-1 ring-white/10 dark:bg-[#FFD23F] dark:text-zinc-950">
-          <span className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FFD23F] text-[10px] font-black text-zinc-950 dark:bg-zinc-950 dark:text-[#FFD23F]">{pieces}</span><span className="text-xs font-black uppercase tracking-wide">View Cart</span></span>
-          <span className="text-sm font-black">{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'Review order'}</span>
-        </button>
+      {view === 'record' && lines.length > 0 && createPortal(
+        <button type="button" onClick={() => { setCheckoutStep('cart'); setCartOpen(true); }} className="fixed bottom-20 left-4 right-4 z-40 mx-auto flex max-w-2xl items-center justify-between rounded-full border border-white/5 bg-[#1A1C1E] px-6 py-4 text-white shadow-2xl active:scale-[0.98]">
+          <span className="flex items-center gap-3"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#FFD23F] font-mono text-[11px] font-black text-zinc-950">{pieces}</span><span className="text-sm font-black uppercase tracking-wider text-white">View Cart</span></span>
+          <span className="flex items-center gap-1.5"><span className="text-sm font-black text-[#FFD23F]">{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'Review order'}</span><span className="material-symbols-outlined text-lg font-bold text-[#FFD23F]">arrow_forward</span></span>
+        </button>, document.body
       )}
 
-      {cartOpen && (
+      {cartOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/65 backdrop-blur-sm" onClick={() => setCartOpen(false)}>
           <div className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-t-3xl bg-white text-[#1A1C1E] shadow-2xl dark:bg-zinc-900 dark:text-zinc-100" onClick={event => event.stopPropagation()}>
-            <div className="mx-auto mt-3 h-1 w-11 rounded-full bg-gray-200 dark:bg-zinc-700" />
+            <div className="mx-auto mt-3 h-1 w-12 rounded-full bg-gray-200 dark:bg-zinc-700" />
             {checkoutStep === 'cart' ? (
-              <div className="flex max-h-[84vh] flex-col p-5">
-                <div className="flex items-center justify-between"><div><div className="flex items-center gap-2"><h2 className="text-lg font-black">My Cart ({pieces})</h2><button type="button" onClick={() => { setClothes({}); setCartOpen(false); }} className="text-[10px] font-black text-red-600 dark:text-red-400">Clear All</button></div><p className="text-[11px] text-gray-500 dark:text-zinc-400">{selected?.name || 'Laundry service'}</p></div><button type="button" onClick={() => setCartOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-800"><span className="material-symbols-outlined text-lg">close</span></button></div>
-                <div className="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
+              <div className="flex max-h-[84vh] flex-col p-6">
+                <div className="flex items-center justify-between"><div><div className="flex items-center gap-3"><h2 className="text-lg font-black">My Cart ({pieces})</h2><button type="button" onClick={() => { setClothes({}); setCartOpen(false); }} className="text-xs font-bold text-red-600 dark:text-red-400">Clear All</button></div><p className="mt-1 text-xs text-gray-400 dark:text-zinc-400">{selected?.name || 'Laundry service'}</p></div><button type="button" onClick={() => setCartOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-[#1A1C1E] dark:bg-zinc-800 dark:text-white"><span className="material-symbols-outlined text-lg">close</span></button></div>
+                <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 py-2">
                   {lines.map(line => (
-                    <div key={line.garment} className="flex items-center gap-3 rounded-2xl border border-gray-100 p-3 dark:border-zinc-800">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-50 text-gray-500 dark:bg-zinc-800 dark:text-zinc-300"><span className="material-symbols-outlined">dry_cleaning</span></div>
-                      <div className="min-w-0 flex-1"><h3 className="truncate text-sm font-black">{line.garment}</h3><p className="text-[10px] text-gray-500 dark:text-zinc-400">{line.price > 0 ? `₦${line.price.toLocaleString()} each` : 'Price to be confirmed'}</p></div>
-                      <div className="flex items-center gap-2 rounded-full bg-gray-50 p-1 dark:bg-zinc-800"><button type="button" onClick={() => adjust(line.garment, -1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm dark:bg-zinc-700"><span className="material-symbols-outlined text-sm">remove</span></button><span className="w-4 text-center text-xs font-black">{line.quantity}</span><button type="button" onClick={() => adjust(line.garment, 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1C1E] text-[#FFD23F] dark:bg-[#FFD23F] dark:text-zinc-950"><span className="material-symbols-outlined text-sm">add</span></button></div>
+                    <div key={line.garment} className="flex items-center gap-4 border-b border-gray-100 pb-4 last:border-b-0 dark:border-zinc-800">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 text-gray-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"><span className="material-symbols-outlined">dry_cleaning</span></div>
+                      <div className="min-w-0 flex-1 text-left"><h3 className="truncate text-sm font-bold">{line.garment}</h3><p className="mt-0.5 text-xs font-semibold text-gray-400 dark:text-zinc-400">{line.price > 0 ? `₦${line.price.toLocaleString()} each` : 'Price to be confirmed'}</p></div>
+                      <div className="flex shrink-0 items-center gap-3 rounded-full border border-gray-100 bg-gray-50 p-1 dark:border-zinc-700 dark:bg-zinc-800"><button type="button" onClick={() => adjust(line.garment, -1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-100 bg-white text-[#1A1C1E] shadow-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"><span className="material-symbols-outlined text-sm font-bold">remove</span></button><span className="w-4 text-center text-sm font-black">{line.quantity}</span><button type="button" onClick={() => adjust(line.garment, 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1C1E] text-[#FFD23F] shadow-sm dark:bg-black"><span className="material-symbols-outlined text-sm font-black">add</span></button></div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 border-t border-gray-100 pt-4 dark:border-zinc-800"><div className="mb-4 flex items-center justify-between"><span className="text-sm font-bold">Estimated total</span><span className="text-lg font-black">{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'To be confirmed'}</span></div><button type="button" onClick={() => setCheckoutStep('checkout')} className="w-full rounded-full bg-[#1A1C1E] py-4 text-xs font-black uppercase tracking-wider text-[#FFD23F] dark:bg-[#FFD23F] dark:text-zinc-950">Continue to Checkout</button></div>
+                <div className="mt-4 border-t border-gray-100 pt-4 dark:border-zinc-800"><div className="mb-2 flex justify-between text-xs font-bold text-gray-400"><span>Subtotal</span><span>{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'To be confirmed'}</span></div><div className="mb-3 flex justify-between text-xs font-bold text-gray-400"><span>Delivery Fee</span><span>{fulfillment === 'delivery' ? 'Confirmed at checkout' : 'FREE'}</span></div><div className="mb-5 flex items-center justify-between border-t border-gray-100 pt-3 text-base font-black dark:border-zinc-800"><span>Total</span><span>{total > 0 && allSelectedLinesPriced ? `₦${total.toLocaleString()}` : 'To be confirmed'}</span></div><button type="button" onClick={() => setCheckoutStep('checkout')} className="w-full rounded-full bg-black py-4 text-xs font-black uppercase tracking-wider text-[#FFD23F]">Continue to Checkout</button></div>
               </div>
             ) : (
               <div className="max-h-[84vh] overflow-y-auto p-5">
@@ -282,7 +294,7 @@ export default function LaundryStorefront({ store, onOrderPlaced, onOpenOrders }
               </div>
             )}
           </div>
-        </div>
+        </div>, document.body
       )}
     </section>
   );

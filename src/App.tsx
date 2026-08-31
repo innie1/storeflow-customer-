@@ -42,12 +42,7 @@ interface Store {
 }
 
 function readCachedStores(): Store[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem('storeflow_cached_all_stores') || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return safeGetJSON<Store[]>('storeflow_cached_all_stores', []);
 }
 
 interface CartItem {
@@ -933,8 +928,8 @@ function App() {
   // ─── Offline Support: Load Cached Data ──────────────────────────────────────
 
   useEffect(() => {
-    const cachedStores = localStorage.getItem('storeflow_cached_all_stores');
-    const cachedHistory = localStorage.getItem('storeflow_cached_orders_history');
+    const cachedStores = safeGetItem('storeflow_cached_all_stores');
+    const cachedHistory = safeGetItem('storeflow_cached_orders_history');
     
     if (cachedStores) setAllStores(JSON.parse(cachedStores));
     if (cachedHistory) {
@@ -1286,7 +1281,10 @@ function App() {
       if (error) throw error;
       if (data) {
         setAllStores(data as unknown as Store[]);
-        localStorage.setItem('storeflow_cached_all_stores', JSON.stringify(data));
+        // A large multi-store catalog can exceed mobile localStorage. Cache
+        // failures must not turn a successful Supabase response into the
+        // app's offline/error path.
+        safeSetJSON('storeflow_cached_all_stores', data);
       }
     } catch (e) {
       console.warn('Supabase loading error, running offline fallback:', e);
@@ -1314,7 +1312,7 @@ function App() {
       setStore(cachedMatch);
       activeStoreRef.current = cachedMatch;
       setLoading(false); // don't block the UI — page renders immediately
-      const cachedProducts = localStorage.getItem('storeflow_cached_products_' + cachedMatch.id);
+      const cachedProducts = safeGetItem('storeflow_cached_products_' + cachedMatch.id);
       if (cachedProducts) {
         try {
           const cachedCatalog = JSON.parse(cachedProducts).filter((product: any) =>
@@ -1394,7 +1392,7 @@ function App() {
         if (requestId !== storeLoadRequestRef.current) return;
         console.log(`[StoreFlow QR] Final products loaded successfully. Count: ${prods.length}`);
         setProducts(prods);
-        localStorage.setItem('storeflow_cached_products_' + resolvedStoreUuid, JSON.stringify(prods));
+        safeSetJSON('storeflow_cached_products_' + resolvedStoreUuid, prods);
 
         // Dynamically compute categories list
         let cats = ['All'];
@@ -1429,7 +1427,7 @@ function App() {
       if (matched) {
         setStore(matched);
         activeStoreRef.current = matched;
-        const cached = localStorage.getItem('storeflow_cached_products_' + matched.id);
+        const cached = safeGetItem('storeflow_cached_products_' + matched.id);
         if (cached) {
           try { setProducts(JSON.parse(cached)); } catch { /* keep current catalog */ }
         }
@@ -1760,7 +1758,7 @@ function App() {
             setProducts(prods);
             const uniq = Array.from(new Set(prods.map((p: any) => p.category).filter((c: any) => !!c))) as string[];
             setCategories(['All', ...uniq]);
-            localStorage.setItem('storeflow_cached_products_' + payload.new.id, JSON.stringify(prods));
+            safeSetJSON('storeflow_cached_products_' + payload.new.id, prods);
           }).catch(error => console.warn('[StoreFlow Realtime] Catalog refresh failed:', error));
         }
       })

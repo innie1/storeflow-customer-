@@ -17,6 +17,14 @@ assert.match(laundry, /grid grid-cols-2 gap-3 sm:grid-cols-3/,
   'laundry clothing choices must use a compact responsive product grid');
 assert.match(laundry, /View Cart[\s\S]*My Cart \(\{pieces\}\)[\s\S]*Continue to Checkout/,
   'laundry selections must use the established StoreFlow cart and checkout pattern');
+assert.doesNotMatch(laundry, /quantity \? 'border-\[#FFD23F\]/,
+  'selecting a garment must not recolor the whole product card');
+assert.match(laundry, /rounded-full bg-\[#1A1C1E\] p-1 text-white[\s\S]*Remove one \$\{garment\}[\s\S]*Add one \$\{garment\}/,
+  'selected garments must use the same compact minus/count/plus control as provision products');
+assert.match(laundry, /border border-white\/5 bg-\[#1A1C1E\][\s\S]*arrow_forward/,
+  'the laundry View Cart bar must retain the high-contrast provision-store treatment in dark mode');
+assert.match(laundry, /lines\.length > 0 && createPortal\([\s\S]*document\.body/,
+  'the laundry View Cart bar must escape storefront scroll containers and stay above bottom navigation');
 assert.doesNotMatch(laundry, /Your laundry basket/,
   'laundry must not introduce a second basket section below the item catalogue');
 assert.match(laundry, /line\.quantity \* line\.price/,
@@ -29,6 +37,8 @@ assert.match(laundry, /Customer name[\s\S]*Phone number[\s\S]*Address/,
   'customer laundry intake must collect name, phone, and address');
 assert.match(laundry, /rpc\('customer_place_laundry_order'/,
   'laundry submission must use the server-validated atomic RPC');
+assert.match(laundry, /subscribeUserToPush\(phone\.trim\(\)\)/,
+  'laundry checkout must bind the device for closed-app order status notifications');
 assert.doesNotMatch(laundry, /from\('orders'\)\.insert/,
   'the browser must not insert an unvalidated laundry order directly');
 assert.match(app, /rpc\('get_customer_orders_by_tokens'/,
