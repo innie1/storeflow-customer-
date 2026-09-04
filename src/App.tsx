@@ -4,7 +4,9 @@ import { parseRoute, parseQRCode } from './router';
 import { listPublicStorefronts, matchesPublicStoreReference, resolvePublicStore } from './utils/storeResolver';
 import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotifications } from './utils/pushNotifications';
 import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
+import { computeOrderPricing } from './utils/orderPricing';
 import LaundryStorefront from './components/LaundryStorefront';
+import heroImage from './assets/hero.png';
 // STOREFLOW_SHARED_STORE_RESOLVER_V1
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
@@ -121,7 +123,7 @@ function saveItsMeProfile(profile: ItsMe) {
 // page used to) ────────────────────────────────────────────────────────────
 // The merchant app's "logo" field is often a design STYLE NAME (e.g.
 // "minimalist", "classic") from its built-in logo generator, not an actual
-// uploaded image URL. Treating any truthy string as an <img src> silently
+// uploaded image URL. Treating any truthy string as an <img loading="lazy" decoding="async" src> silently
 // fails to load and leaves a blank circle. Only real URLs should be rendered
 // as an <img>; anything else should fall back to a generated initials badge.
 // ─── Order access tokens ───────────────────────────────────────────────
@@ -217,7 +219,7 @@ function ProductImageWithFallback({
 
   if (src && !hasError) {
     return (
-      <img
+      <img loading="lazy" decoding="async"
         src={src}
         alt={alt || productName}
         className={className}
@@ -287,6 +289,86 @@ function ProductImageWithFallback({
     </div>
   );
 }
+
+const SEARCH_PLACEHOLDER_PHRASES = [
+  'Search for products...',
+  'Search for stores...',
+  'Search for brands...',
+  'Search groceries near you...',
+];
+
+/**
+ * The home search box types its own placeholder.
+ *
+ * This deliberately owns the animation state itself. It used to live in App,
+ * where a `setState` every 40-100ms re-rendered the entire application — every
+ * product grid, store card and modal — around twenty times a second, forever,
+ * for a decorative placeholder. Keeping it here means the animation repaints
+ * one input and nothing else. It also stops once the customer starts typing,
+ * and never runs at all for people who ask for reduced motion.
+ */
+function SearchPlaceholderInput({
+  value,
+  onChange,
+  className,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  className?: string;
+  ariaLabel: string;
+}) {
+  const [placeholder, setPlaceholder] = useState(SEARCH_PLACEHOLDER_PHRASES[0]);
+  const paused = value.length > 0;
+
+  useEffect(() => {
+    if (paused) return;
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      setPlaceholder(SEARCH_PLACEHOLDER_PHRASES[0]);
+      return;
+    }
+
+    let phraseIdx = 0;
+    let charIdx = SEARCH_PLACEHOLDER_PHRASES[0].length;
+    let isDeleting = true;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const tick = () => {
+      const phrase = SEARCH_PLACEHOLDER_PHRASES[phraseIdx];
+      charIdx += isDeleting ? -1 : 1;
+      setPlaceholder(phrase.slice(0, charIdx));
+
+      let speed = isDeleting ? 40 : 100;
+      if (!isDeleting && charIdx === phrase.length) {
+        speed = 2000;
+        isDeleting = true;
+      } else if (isDeleting && charIdx === 0) {
+        isDeleting = false;
+        phraseIdx = (phraseIdx + 1) % SEARCH_PLACEHOLDER_PHRASES.length;
+        speed = 300;
+      }
+      timer = setTimeout(tick, speed);
+    };
+
+    timer = setTimeout(tick, 1000);
+    return () => clearTimeout(timer);
+  }, [paused]);
+
+  return (
+    <input
+      className={className}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      type="search"
+      enterKeyHint="search"
+      autoComplete="off"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+    />
+  );
+}
+
+const ACTIVE_ORDER_STATUSES = ['Pending', 'Accepted', 'Preparing', 'Ready'];
 
 const ORDER_TOKEN_PREFIX = 'storeflow_order_token_';
 
@@ -360,7 +442,7 @@ function getStoreBrandSvg(name: string, style: string): string {
 }
 function StoreBrandMark({ store }: { store: any }) {
   const url = getStoreLogoUrl(store);
-  if (url) return <img src={url} className="w-full h-full object-cover" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />;
+  if (url) return <img loading="lazy" decoding="async" src={url} className="w-full h-full object-cover" alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />;
   return <div className="w-full h-full bg-white flex items-center justify-center" dangerouslySetInnerHTML={{ __html: getStoreBrandSvg(store?.business_name || 'Store', getStoreLogoStyle(store)) }} />;
 }
 
@@ -634,20 +716,25 @@ function App() {
   const paymentMethodsList = useMemo(() => {
     const ms = store?.data?.marketplaceSettings;
     const list = [];
-    
+
+    // Anything that would send the customer's money somewhere must come from
+    // the merchant's own settings. These entries previously fell back to
+    // placeholder details ("Access Bank: 1234567890", "08123456789") whenever
+    // a store had not configured payment — a customer following those would
+    // have transferred real money to an account that isn't the store's.
+    // A payment route with no destination is now simply not offered.
+    const walletNumber = ms?.walletNumber || ms?.opayNumber || store?.phone || '';
+    const bankAccountNumber = ms?.bankAccountNumber || '';
+
     if (!ms) {
-      return [
-        { key: 'opay', icon: 'phone_android', label: 'OPay Wallet', sub: `Instant transfer via OPay (${store?.profile?.phone || '08123456789'})` },
-        { key: 'transfer', icon: 'credit_card', label: 'Bank Transfer', sub: 'Access Bank: 1234567890 (StoreFlow)' },
-        { key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash' }
-      ];
+      return [{ key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash or POS on arrival' }];
     }
 
-    if (ms.paymentWalletEnabled !== false) {
-      list.push({ key: 'opay', icon: 'phone_android', label: 'Digital Wallet', sub: `Instant transfer via OPay (${store?.profile?.phone || '08123456789'})` });
+    if (ms.paymentWalletEnabled !== false && walletNumber) {
+      list.push({ key: 'opay', icon: 'phone_android', label: 'Digital Wallet', sub: `Instant transfer to ${walletNumber}` });
     }
-    if (ms.paymentTransferEnabled !== false) {
-      list.push({ key: 'transfer', icon: 'credit_card', label: 'Bank Transfer', sub: `${ms.bankName || 'Access Bank'}: ${ms.bankAccountNumber || '1234567890'} (${ms.bankAccountName || store.storeName})` });
+    if (ms.paymentTransferEnabled !== false && bankAccountNumber) {
+      list.push({ key: 'transfer', icon: 'credit_card', label: 'Bank Transfer', sub: `${ms.bankName || 'Bank'}: ${bankAccountNumber}${ms.bankAccountName ? ` (${ms.bankAccountName})` : ''}` });
     }
     if (ms.paymentCashEnabled !== false) {
       list.push({ key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash or POS on arrival' });
@@ -704,48 +791,6 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  // Search bar typing placeholder animation state
-  const [searchPlaceholder, setSearchPlaceholder] = useState('Search for products...');
-  useEffect(() => {
-    const phrases = [
-      'Search for products...',
-      'Search for stores...',
-      'Search for brands...',
-      'Search groceries near you...'
-    ];
-    let phraseIdx = 0;
-    let charIdx = phrases[phraseIdx].length;
-    let isDeleting = true;
-    let timer: any = null;
-
-    const tick = () => {
-      const currentPhrase = phrases[phraseIdx];
-      if (isDeleting) {
-        setSearchPlaceholder(currentPhrase.substring(0, charIdx - 1));
-        charIdx--;
-      } else {
-        setSearchPlaceholder(currentPhrase.substring(0, charIdx + 1));
-        charIdx++;
-      }
-
-      let speed = isDeleting ? 40 : 100;
-
-      if (!isDeleting && charIdx === currentPhrase.length) {
-        speed = 2000; // Pause at end of phrase
-        isDeleting = true;
-      } else if (isDeleting && charIdx === 0) {
-        isDeleting = false;
-        phraseIdx = (phraseIdx + 1) % phrases.length;
-        speed = 300; // Pause before typing next phrase
-      }
-
-      timer = setTimeout(tick, speed);
-    };
-
-    timer = setTimeout(tick, 1000);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Cart & Modal
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -765,10 +810,13 @@ function App() {
 
   // Location selector State
   const [selectedAddress, setSelectedAddress] = useState(() => localStorage.getItem('storeflow_address') || 'Select Location');
-  const [savedAddresses, setSavedAddresses] = useState<string[]>(() => {
-    const cached = localStorage.getItem('storeflow_saved_addresses');
-    return cached ? JSON.parse(cached) : ['Warri, Delta State', '23 Allen Avenue, Ikeja', '5 GRA, Ikeja', 'Lagos, Nigeria'];
-  });
+  // A new customer used to open the location picker and find four addresses
+  // already "saved" for them — '23 Allen Avenue, Ikeja', 'Warri, Delta State'
+  // and friends — sample data that was easy to pick by mistake and have an
+  // order delivered to. Start empty; the list fills from what they add.
+  const [savedAddresses, setSavedAddresses] = useState<string[]>(
+    () => safeGetJSON<string[]>('storeflow_saved_addresses', [])
+  );
   const [newAddressInput, setNewAddressInput] = useState('');
   const [editingAddress, setEditingAddress] = useState<string | null>(null);
 
@@ -848,7 +896,21 @@ function App() {
 
   const [rejectionReason, setRejectionReason] = useState('');
   const [changeRequestMessage, setChangeRequestMessage] = useState('');
-  if (false) console.log({ rejectionReason, setRejectionReason, changeRequestMessage, setChangeRequestMessage });
+
+  // The tracking screen has always had a "Reason:" panel for a rejected order
+  // and a quote box for a requested change, but nothing ever filled them in —
+  // setRejectionReason was never called, so a customer whose order was turned
+  // down only ever saw "The merchant rejected your order" with no explanation.
+  // The status RPC already returns the merchant's message; this reads it from
+  // wherever it is carried and leaves the panel hidden when there is none.
+  const applyMerchantMessages = useCallback((data: any, parsedNotes: any) => {
+    setRejectionReason(
+      data?.rejection_reason || parsedNotes?.rejection_reason || parsedNotes?.rejectionReason || ''
+    );
+    setChangeRequestMessage(
+      data?.change_request_message || parsedNotes?.change_request_message || parsedNotes?.changeRequestMessage || ''
+    );
+  }, []);
 
   const normalizeNigerianPhone = useCallback((num: string): string => {
     const cleaned = num.replace(/\D/g, '');
@@ -857,8 +919,9 @@ function App() {
     } else if (cleaned.startsWith('0') && cleaned.length === 11) {
       return '+234' + cleaned.substring(1);
     } else if (cleaned.length === 10) {
-      return '+234' + cleaned;
-    } else if ((cleaned.startsWith('8') || cleaned.startsWith('7') || cleaned.startsWith('9')) && cleaned.length === 10) {
+      // A 10-digit number is already the national number without its leading
+      // zero. The branch that used to follow this one re-tested `length === 10`
+      // for numbers starting 7/8/9 and so could never be reached.
       return '+234' + cleaned;
     }
     return '';
@@ -874,6 +937,9 @@ function App() {
   const [showScanner, setShowScanner] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanSuccess, setScanSuccess] = useState(false);
+  // The rAF loop is created once per camera start, so reading the state
+  // variable directly would capture the value it had at that moment.
+  const scanSuccessRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -889,7 +955,9 @@ function App() {
   const [manualInputVal, setManualInputVal] = useState('');
   const [focusRing, setFocusRing] = useState<{ x: number; y: number } | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  const lastFrameDataRef = useRef<Uint8ClampedArray | null>(null);
+  // Reused across frames so the motion check does not allocate a new
+  // multi-megabyte buffer sixty times a second.
+  const lastFrameSampleRef = useRef<Uint8Array | null>(null);
   const scanStartTimeRef = useRef<number>(0);
   const isProcessingFrameRef = useRef<boolean>(false);
 
@@ -904,12 +972,13 @@ function App() {
     return initialItsMe.displayName || localStorage.getItem('storeflow_profile_name') || '';
   });
   const [profileEmail, setProfileEmail] = useState('');
-  const [profilePhone, setProfilePhone] = useState('');
-  if (false) console.log({ profilePhone, setProfilePhone });
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('storeflow_dark_mode') === 'true');
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
+    // Keeps the browser/PWA chrome (address bar, task switcher) matching the
+    // theme instead of staying on the light colour baked into index.html.
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', darkMode ? '#121315' : '#2F343A');
   }, [darkMode]);
 
   // ─── It'sMe Identity State ───────────────────────────────────────────────────
@@ -1123,13 +1192,33 @@ function App() {
       subscribeUserToPush(normalizedPhone).catch(() => {});
     }
 
-    // Smart polling: 6 seconds when active/visible, 20 seconds when backgrounded to save battery
-    let pollId: any = null;
+    // Order history was polled every 6 seconds, forever, for the entire life
+    // of the app — even for a customer with nothing in flight, and even while
+    // they sat on the Home screen. Nothing about a Completed order from last
+    // week changes, so the fast cadence is now reserved for orders that are
+    // genuinely still moving; everything else falls back to a slow refresh.
+    // The Tracking screen keeps its own separate 3s poll for the open order.
+    const FAST_MS = 10000;
+    const IDLE_MS = 60000;
+    const HIDDEN_MS = 60000;
+
+    let pollId: ReturnType<typeof setInterval> | null = null;
+    let currentInterval = 0;
+
+    const desiredInterval = () => {
+      if (document.hidden) return HIDDEN_MS;
+      return hasActiveOrdersRef.current ? FAST_MS : IDLE_MS;
+    };
+
     const startSmartPolling = () => {
+      const interval = desiredInterval();
+      if (pollId && interval === currentInterval) return;
       if (pollId) clearInterval(pollId);
-      const interval = document.hidden ? 20000 : 6000;
+      currentInterval = interval;
       pollId = setInterval(() => {
         if (navigator.onLine) loadOrdersHistory();
+        // Re-evaluate cadence as orders start and finish.
+        if (desiredInterval() !== currentInterval) startSmartPolling();
       }, interval);
     };
 
@@ -1166,7 +1255,7 @@ function App() {
     }
 
     return () => {
-      clearInterval(pollId);
+      if (pollId) clearInterval(pollId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSWMessage);
@@ -1176,18 +1265,24 @@ function App() {
 
   // Orders still in progress — drives the badge on the bottom-nav "Orders" tab
   const activeOrdersCount = useMemo(
-    () => ordersHistory.filter((o: any) => ['Pending', 'Accepted', 'Preparing', 'Ready'].includes(o.status)).length,
+    () => ordersHistory.filter((o: any) => ACTIVE_ORDER_STATUSES.includes(o.status)).length,
     [ordersHistory]
   );
+
+  // Read by the long-lived polling interval, which is set up once and must not
+  // be torn down and rebuilt every time the order list changes.
+  const hasActiveOrdersRef = useRef(false);
+  useEffect(() => {
+    hasActiveOrdersRef.current = activeOrdersCount > 0;
+  }, [activeOrdersCount]);
 
   // Active orders first (Pending/Accepted/Preparing/Ready), finished orders
   // (Completed/Cancelled/Rejected) pushed below — so an order from last week
   // that's already done doesn't bury today's order that's still in progress.
   // Each group keeps its own most-recent-first order from the query.
-  const ACTIVE_STATUSES = ['Pending', 'Accepted', 'Preparing', 'Ready'];
   const sortedOrdersHistory = useMemo(() => {
-    const active = ordersHistory.filter((o: any) => ACTIVE_STATUSES.includes(o.status));
-    const finished = ordersHistory.filter((o: any) => !ACTIVE_STATUSES.includes(o.status));
+    const active = ordersHistory.filter((o: any) => ACTIVE_ORDER_STATUSES.includes(o.status));
+    const finished = ordersHistory.filter((o: any) => !ACTIVE_ORDER_STATUSES.includes(o.status));
     return [...active, ...finished];
   }, [ordersHistory]);
 
@@ -1265,7 +1360,6 @@ function App() {
       setCurrentUser(session.user);
       setProfileName(session.user.user_metadata?.full_name || '');
       setProfileEmail(session.user.email || '');
-      setProfilePhone(session.user.phone || '');
       setCustomerName(session.user.user_metadata?.full_name || '');
       setCustomerPhone(session.user.phone || '');
       syncItsMeProfileWithCloud(session.user);
@@ -1379,6 +1473,9 @@ function App() {
           const visitMeta = JSON.parse(localStorage.getItem('storeflow_scanned_stores_meta') || '{}');
           visitMeta[storeData.id] = new Date().toISOString();
           localStorage.setItem('storeflow_scanned_stores_meta', JSON.stringify(visitMeta));
+          // Re-derive "Your Stores" so a newly opened store moves to the front
+          // of the list instead of waiting for some unrelated re-render.
+          setScannedStoresVersion(v => v + 1);
         } catch (e) {
           console.error('[StoreFlow QR] Error saving scanned store history:', e);
         }
@@ -1577,6 +1674,7 @@ function App() {
               try {
                 const parsedNotes = data.notes ? JSON.parse(data.notes) : null;
                 setProcessingStage(parsedNotes?.processingStage || null);
+                applyMerchantMessages(data, parsedNotes);
               } catch {
                 setProcessingStage(null);
               }
@@ -1642,6 +1740,7 @@ function App() {
             try {
               const parsedNotes = data.notes ? JSON.parse(data.notes) : null;
               setProcessingStage(parsedNotes?.processingStage || null);
+              applyMerchantMessages(data, parsedNotes);
             } catch {
               setProcessingStage(null);
             }
@@ -1884,7 +1983,7 @@ function App() {
     playBeep();
     if (navigator.vibrate) navigator.vibrate(120);
 
-    setScanSuccess(true);
+    setScanSuccess(true); scanSuccessRef.current = true;
     
     // Defer stop and actions slightly to show success feedback ring
     setTimeout(async () => {
@@ -1916,7 +2015,7 @@ function App() {
             if (parsedProductId) {
               const { data: prodData } = await supabase
                 .from('products')
-                .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at')
+                .select('id, store_id, category_id, barcode, sku, name, description, brand, selling_price, quantity, unit, image, status, is_service')
                 .eq('id', parsedProductId)
                 .maybeSingle();
               if (prodData) {
@@ -1937,7 +2036,7 @@ function App() {
         setLoading(true);
         const { data: prodDb } = await supabase
           .from('products')
-          .select('id, store_id, category_id, barcode, qr_code, sku, name, description, brand, selling_price, quantity, minimum_stock, maximum_stock, unit, image, expiry_date, status, created_at, updated_at, restock_count, units_sold, total_revenue, first_sale_at, last_sold_at')
+          .select('id, store_id, category_id, barcode, sku, name, description, brand, selling_price, quantity, unit, image, status, is_service')
           .eq('barcode', codeValue)
           .limit(1)
           .maybeSingle();
@@ -2016,14 +2115,14 @@ function App() {
     }
     setShowScanner(false);
     setScanError(null);
-    setScanSuccess(false);
+    setScanSuccess(false); scanSuccessRef.current = false;
     setTorchOn(false);
     setScanHint(null);
   }, []);
 
   const startScanner = useCallback(async () => {
     setScanError(null);
-    setScanSuccess(false);
+    setScanSuccess(false); scanSuccessRef.current = false;
     setShowScanner(true);
     setTorchOn(false);
     setAutoTorchTriggered(false);
@@ -2082,7 +2181,7 @@ function App() {
     setAutoTorchTriggered(false);
     setScanHint(null);
     isProcessingFrameRef.current = false;
-    lastFrameDataRef.current = null;
+    lastFrameSampleRef.current = null;
 
     if (!workerRef.current) {
       workerRef.current = new Worker(
@@ -2099,93 +2198,107 @@ function App() {
       }
     };
 
+    // One camera frame used to cost two full canvas read-backs, two pixel
+    // loops, a fresh ~3 MB Uint8ClampedArray for the motion diff, another
+    // ~3 MB copy for the worker, and a setState — sixty times a second. The
+    // setState alone re-rendered the whole application on every frame while
+    // the scanner was open, which is what made scanning feel laggy.
+    //
+    // Now: the frame is read once, analysis runs on a strided sample every
+    // few frames, the previous frame is kept in a reused buffer, and the hint
+    // only hits React state when it actually changes.
+    const ANALYSE_EVERY = 4;
+    let frameCounter = 0;
+    let lastHint: string | null = null;
+
     const tick = () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      if (!video || !canvas || video.readyState < 2 || scanSuccess) {
+      if (!video || !canvas || video.readyState < 2 || scanSuccessRef.current) {
         scanFrameRef.current = requestAnimationFrame(tick);
         return;
       }
 
       // Cap the working resolution instead of processing full camera frames
       // (often 1920x1080) every tick. Decoding at full res is the main cost
-      // behind slow/laggy scans — pixel loops and the ZXing/jsQR decode both
+      // behind slow/laggy scans - pixel loops and the ZXing/jsQR decode both
       // scale with pixel count. 900px on the long edge is still comfortably
-      // above what's needed to resolve a QR/barcode held in-frame, and cuts
-      // per-frame work (and the data sent to the worker) by roughly 3-4x.
+      // above what's needed to resolve a QR/barcode held in-frame.
       const MAX_SCAN_DIM = 900;
       const scale = Math.min(1, MAX_SCAN_DIM / Math.max(video.videoWidth, video.videoHeight));
-      canvas.width = Math.round(video.videoWidth * scale);
-      canvas.height = Math.round(video.videoHeight * scale);
-      const ctx = canvas.getContext('2d');
+      const targetW = Math.round(video.videoWidth * scale);
+      const targetH = Math.round(video.videoHeight * scale);
+      // Assigning width/height reallocates and clears the backing store, so
+      // only do it when the camera resolution actually changes.
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) {
         scanFrameRef.current = requestAnimationFrame(tick);
         return;
       }
 
-      // Draw original frame (scaled down) to read raw pixels for hints
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = rawImageData.data;
-
-      // Frame analysis
-      const len = data.length / 4;
-      let totalLuminance = 0;
-      for (let i = 0; i < len; i += 10) {
-        totalLuminance += (data[i * 4] + data[i * 4 + 1] + data[i * 4 + 2]) / 3;
-      }
-      const avgLuminance = totalLuminance / (len / 10);
-
-      let hint: string | null = null;
-      if (avgLuminance < 45) {
-        hint = 'More light needed';
-        if (!autoTorchTriggered) {
-          setAutoTorchTriggered(true);
-          setTorchOn(true);
-          applyTorchConstraint(true);
-        }
-      }
-
-      if (lastFrameDataRef.current && lastFrameDataRef.current.length === data.length) {
-        let diffCount = 0;
-        const totalSampled = len / 20;
-        for (let i = 0; i < len; i += 20) {
-          const idx = i * 4;
-          const deltaR = Math.abs(data[idx] - lastFrameDataRef.current[idx]);
-          const deltaG = Math.abs(data[idx + 1] - lastFrameDataRef.current[idx + 1]);
-          const deltaB = Math.abs(data[idx + 2] - lastFrameDataRef.current[idx + 2]);
-          if (deltaR + deltaG + deltaB > 90) {
-            diffCount++;
-          }
-        }
-        const motionPct = diffCount / totalSampled;
-        if (motionPct > 0.15) {
-          hint = 'Hold steady';
-        }
-      }
-      lastFrameDataRef.current = new Uint8ClampedArray(data);
-
-      if (!hint && Date.now() - scanStartTimeRef.current > 3000) {
-        hint = 'Move closer';
-      }
-      setScanHint(hint);
-
-      // Enhance brightness/contrast in-place on canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
+      // A single draw, already contrast-enhanced and greyscaled, feeds both
+      // the frame analysis and the decoder.
       ctx.filter = 'contrast(1.5) brightness(1.2) grayscale(1.0)';
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
+      ctx.filter = 'none';
 
-      const enhancedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      const pixelCount = data.length / 4;
+
+      frameCounter++;
+      if (frameCounter % ANALYSE_EVERY === 0) {
+        const STRIDE = 16;
+        let totalLuminance = 0;
+        let samples = 0;
+        let diffCount = 0;
+        const previous = lastFrameSampleRef.current;
+        const sampleCount = Math.ceil(pixelCount / STRIDE);
+        const sample = previous && previous.length === sampleCount ? previous : new Uint8Array(sampleCount);
+
+        for (let i = 0, n = 0; i < pixelCount; i += STRIDE, n++) {
+          // The frame is already greyscale, so one channel is the luminance.
+          const lum = data[i * 4];
+          totalLuminance += lum;
+          samples++;
+          if (previous && previous.length === sampleCount && Math.abs(lum - previous[n]) > 30) diffCount++;
+          sample[n] = lum;
+        }
+
+        const hadPrevious = previous && previous.length === sampleCount;
+        lastFrameSampleRef.current = sample;
+
+        const avgLuminance = samples ? totalLuminance / samples : 255;
+        let hint: string | null = null;
+        if (avgLuminance < 45) {
+          hint = 'More light needed';
+          if (!autoTorchTriggered) {
+            setAutoTorchTriggered(true);
+            setTorchOn(true);
+            applyTorchConstraint(true);
+          }
+        }
+        if (hadPrevious && diffCount / samples > 0.15) hint = 'Hold steady';
+        if (!hint && Date.now() - scanStartTimeRef.current > 3000) hint = 'Move closer';
+
+        // Only touch React state when the message the customer sees changes.
+        if (hint !== lastHint) {
+          lastHint = hint;
+          setScanHint(hint);
+        }
+      }
 
       if (workerRef.current && !isProcessingFrameRef.current) {
         isProcessingFrameRef.current = true;
-        const buf = enhancedImageData.data.buffer.slice(0);
+        const buf = data.buffer.slice(0);
         workerRef.current.postMessage({
           dataArray: buf,
-          width: enhancedImageData.width,
-          height: enhancedImageData.height
+          width: imageData.width,
+          height: imageData.height
         }, [buf]);
       }
 
@@ -2193,7 +2306,7 @@ function App() {
     };
 
     scanFrameRef.current = requestAnimationFrame(tick);
-  }, [scanSuccess, autoTorchTriggered]);
+  }, [autoTorchTriggered]);
 
   // ─── Authentication Flow ───────────────────────────────────────────────────
 
@@ -2254,7 +2367,6 @@ function App() {
         if (error) throw error;
         if (data.user) {
           setCurrentUser(data.user);
-          setProfilePhone(data.user.phone || '');
           setCustomerPhone(data.user.phone || '');
           navigateToScreen('home');
           syncItsMeProfileWithCloud(data.user);
@@ -2389,8 +2501,48 @@ function App() {
   const getQty = (productId: string) => cart.find(i => i.product.id === productId)?.quantity ?? 0;
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + getPrice(i.product) * i.quantity, 0), [cart, getPrice]);
-  const deliveryFee = useMemo(() => (deliveryType === 'pickup' || subtotal === 0) ? 0 : subtotal >= 5000 ? 0 : 500, [deliveryType, subtotal]);
-  const total = subtotal + deliveryFee;
+
+  // The store page advertises the merchant's own delivery fee, free-delivery
+  // threshold and online discount. Checkout used to ignore all three and
+  // charge a flat ₦500 (free over a hard-coded ₦5,000), so the total the
+  // customer was billed disagreed with the terms they had just been shown.
+  // Everything below now reads from the same marketplace settings the store
+  // page renders.
+  const marketplaceSettings = store?.data?.marketplaceSettings ?? null;
+
+  const pricing = useMemo(
+    () => computeOrderPricing(subtotal, marketplaceSettings, { deliveryType }),
+    [subtotal, marketplaceSettings, deliveryType]
+  );
+
+  const deliveryFee = pricing.deliveryFee;
+  // Advertised on the store page as "Applied automatically on checkout", but
+  // it was never actually subtracted from anything.
+  const onlineDiscount = pricing.discount;
+  // The merchant app writes `deliveryMinOrder`; the customer app only ever
+  // read `minimumOrder`, a key that appears on none of the live stores — so
+  // a merchant's minimum order was silently ignored. Both are accepted.
+  const minimumOrder = pricing.minimumOrder;
+
+  // Fulfilment used to offer both Store Pickup and Home Delivery to everyone,
+  // regardless of what the merchant enabled.
+  const fulfilment = useMemo(() => {
+    const ms = store?.data?.marketplaceSettings;
+    const pickup = ms?.pickupEnabled !== false;
+    const delivery = ms?.deliveryEnabled !== false;
+    // If a merchant somehow disabled both, fall back to pickup rather than
+    // leaving the customer with no way to complete an order.
+    return pickup || delivery ? { pickup, delivery } : { pickup: true, delivery: false };
+  }, [store]);
+
+  useEffect(() => {
+    if (deliveryType === 'delivery' && !fulfilment.delivery) setDeliveryType('pickup');
+    if (deliveryType === 'pickup' && !fulfilment.pickup) setDeliveryType('delivery');
+  }, [fulfilment, deliveryType]);
+
+  const belowMinimumOrder = pricing.belowMinimum;
+
+  const total = pricing.total;
   const totalItemsCount = useMemo(() => cart.reduce((s, i) => s + i.quantity, 0), [cart]);
 
   // ─── Place Order / Checkout Sync ───────────────────────────────────────────
@@ -2412,13 +2564,24 @@ function App() {
     const finalDeliveryLandmark = overrides?.deliveryLandmark ?? deliveryLandmark;
     const finalPaymentMethod = overrides?.paymentMethod ?? paymentMethod;
     const finalSpecialInstructions = overrides?.specialInstructions ?? specialInstructions;
-    const finalDeliveryFee = (finalDeliveryType === 'pickup' || subtotal === 0) ? 0 : subtotal >= 5000 ? 0 : 500;
     const willRedeemLoyalty = redeemLoyalty && !!loyaltyBalance?.enabled && loyaltyBalance.points >= loyaltyBalance.redeemThreshold;
     const loyaltyDiscount = willRedeemLoyalty ? loyaltyBalance!.redeemValueNaira : 0;
-    const finalTotal = Math.max(0, subtotal + finalDeliveryFee - loyaltyDiscount);
+    // Same function the cart totals come from, so what is submitted can never
+    // drift from what the customer was shown.
+    const finalPricing = computeOrderPricing(subtotal, marketplaceSettings, {
+      deliveryType: finalDeliveryType,
+      loyaltyDiscount,
+    });
+    const finalDeliveryFee = finalPricing.deliveryFee;
+    const finalTotal = finalPricing.total;
 
     if (!finalCustomerName || !finalCustomerPhone) {
       alert('Please enter your details first.');
+      return;
+    }
+
+    if (belowMinimumOrder) {
+      setOrderSubmitError(`This store has a ₦${minimumOrder.toLocaleString()} minimum order.`);
       return;
     }
     if (cart.length === 0) {
@@ -2448,6 +2611,8 @@ function App() {
       instructions: finalSpecialInstructions,
       pricing_mode: priceMode,
       loyalty_discount: loyaltyDiscount || undefined,
+      delivery_fee: finalDeliveryFee || undefined,
+      online_discount: onlineDiscount || undefined,
       // Previously omitted entirely — order history always fell back to
       // generic "Product" / "StoreFlow Partner" placeholder text because
       // there was nothing real to read. Embedding this at order time also
@@ -3266,17 +3431,33 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
     }
   };
 
+  // Pull-to-refresh used to write React state on every touchmove event, which
+  // re-rendered the entire application on every frame of the gesture and made
+  // the pull itself stutter. Coalescing to one update per animation frame
+  // keeps the indicator smooth without changing how it behaves.
+  const pullRafRef = useRef<number | null>(null);
+  const pendingPullRef = useRef(0);
+
   const handleTouchMove = (e: React.TouchEvent) => {
     if (touchStart > 0 && window.scrollY === 0 && !refreshing) {
       const currentY = e.touches[0].clientY;
       const dist = Math.max(0, currentY - touchStart);
-      if (dist < 100) {
-        setPullDistance(dist);
+      if (dist >= 100) return;
+      pendingPullRef.current = dist;
+      if (pullRafRef.current === null) {
+        pullRafRef.current = requestAnimationFrame(() => {
+          pullRafRef.current = null;
+          setPullDistance(pendingPullRef.current);
+        });
       }
     }
   };
 
   const handleTouchEnd = () => {
+    if (pullRafRef.current !== null) {
+      cancelAnimationFrame(pullRafRef.current);
+      pullRafRef.current = null;
+    }
     setTouchStart(0);
     if (pullDistance > 60) {
       setRefreshing(true);
@@ -3356,11 +3537,22 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
     return (
       <div className="relative">
         <div className="h-48 md:h-64 relative w-full overflow-hidden bg-[#1A1C1E]">
-          <img 
-            className="w-full h-full object-cover opacity-50 mix-blend-luminosity animate-fade-in" 
-            src="https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=1200&q=80" 
-            alt="" 
-          />
+          {/* Every storefront used to be topped with the same hot-linked
+              Unsplash supermarket photo, while the merchant's own
+              marketplaceSettings.coverImage was never read at all. Use their
+              cover when they have set one, and a neutral brand wash when they
+              have not, rather than dressing every shop up as a supermarket. */}
+          {storeCoverImage ? (
+            <img
+              className="w-full h-full object-cover opacity-50 mix-blend-luminosity animate-fade-in"
+              src={storeCoverImage}
+              alt=""
+              decoding="async"
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-[#1A1C1E] via-[#26282c] to-[#3a3227]" />
+          )}
           <div className="absolute inset-0 bg-gradient-to-b from-[#1A1C1E]/60 via-transparent to-[#1A1C1E] pointer-events-none" />
           <header className="flex justify-between items-center w-full px-4 h-16 absolute top-0 left-0 z-20">
             <button 
@@ -3457,6 +3649,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
     );
   };
 
+  const storeCoverImage = useMemo(() => {
+    const cover = store?.data?.marketplaceSettings?.coverImage;
+    return isLogoImageUrl(cover) ? String(cover) : null;
+  }, [store]);
+
   const renderStoreInfoCard = () => {
     const ms = store?.data?.marketplaceSettings;
     const address = store?.address;
@@ -3465,20 +3662,24 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
     const website = ms?.website;
     const openingTime = ms?.openingTime;
     const closingTime = ms?.closingTime;
-    const deliveryTime = ms?.deliveryTime || '15-25 min';
-    const deliveryFee = ms?.deliveryFee !== undefined ? ms.deliveryFee : 1500;
-    const minimumOrder = ms?.minimumOrder || 0;
+    // Only state facts the merchant actually published. These used to fall back
+    // to invented values — every store claimed a "15-25 min" delivery window,
+    // a ₦1,500 fee and, most misleadingly, that it was "0.8 km away" from
+    // whoever was looking at it.
+    const deliveryTime = ms?.deliveryTime || '';
+    const configuredDeliveryFee = Number(ms?.deliveryFee);
+    const hasConfiguredFee = Number.isFinite(configuredDeliveryFee) && configuredDeliveryFee >= 0;
     const storeType = getStoreBusinessTypeLabel(store);
     const numProducts = products.length;
-    const distance = ms?.distance || '0.8 km';
+    const distance = ms?.distance || '';
 
     const hasAddress = !!address;
     const hasPhone = !!phone;
     const hasEmail = !!email;
     const hasWebsite = !!website;
     const hasHours = !!(openingTime && closingTime);
-    const hasDelivery = !!(deliveryTime || deliveryFee !== undefined);
-    const hasMinOrder = minimumOrder !== undefined;
+    const hasDelivery = !!(deliveryTime || hasConfiguredFee);
+    const hasMinOrder = minimumOrder > 0;
     const hasStoreType = !!storeType;
     const hasProducts = numProducts > 0;
     const hasDistance = !!distance;
@@ -3505,7 +3706,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               <div className="min-w-0">
                 <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Delivery</p>
                 <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">
-                  {deliveryTime} • {deliveryFee === 0 ? 'Free' : '₦' + deliveryFee.toLocaleString()}
+                  {[deliveryTime, hasConfiguredFee ? (configuredDeliveryFee === 0 ? 'Free' : '₦' + configuredDeliveryFee.toLocaleString()) : ''].filter(Boolean).join(' • ')}
                 </p>
               </div>
             </div>
@@ -4102,8 +4303,17 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
     }
   };
 
+  // Most recently opened store first. This used to be done by an external
+  // script that re-appended the already-rendered cards directly into the DOM,
+  // behind React's back — which both fought the reconciler and forced the
+  // store name to a near-white colour on top of a white card, making it
+  // invisible. Ordering the data instead keeps React the only thing that
+  // writes to the DOM.
   const scannedStores = useMemo(() => {
-    return allStores.filter(s => scannedStoreIds.includes(s.id));
+    const visitMeta = safeGetJSON<Record<string, string>>('storeflow_scanned_stores_meta', {});
+    return allStores
+      .filter(s => scannedStoreIds.includes(s.id))
+      .sort((a, b) => (Date.parse(visitMeta[b.id] || '') || 0) - (Date.parse(visitMeta[a.id] || '') || 0));
   }, [allStores, scannedStoreIds]);
 
   const searchedStores = useMemo(() => {
@@ -4141,7 +4351,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               </p>
             </div>
             <div className="relative w-72 h-72 bg-white border border-gray-100 rounded-[40px] shadow-sm overflow-hidden flex items-center justify-center p-6">
-              <img className="w-full h-full object-cover rounded-3xl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqOVy4Qz9h-3rrA4QjtMif0NFdiQx8MP6W-YhT_kpIfRfOGfci_B4Xc9XLeWSafM-YqlExuIeOPtgv4axxkmJPWtOydIXtAo86zx5AnnoGPt0yViyi2oCJAS4daz9Mh07eaV4aJPzZz7WZnjp_7l5oDmOSOJstc_mvowOIXnl5L-vSjdmi1GbTe36GnOgDJZDBewq7CAYcn2Y9bJlUnFmSrNbwRXfmqYHrhMyJIfbPz8kHRI6SS8t1eg" alt="" />
+              <img className="w-full h-full object-cover rounded-3xl" src={heroImage} alt="" width={288} height={288} fetchPriority="high" decoding="async" />
             </div>
             <div className="flex justify-center space-x-1.5">
               <div className="h-1.5 w-1.5 rounded-full bg-gray-200"></div>
@@ -4334,6 +4544,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
             <div className="space-y-2">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Saved Addresses</h3>
               <div className="bg-white dark:bg-[#18191b] border border-gray-100 dark:border-zinc-800 rounded-3xl overflow-hidden divide-y divide-gray-100/50 dark:divide-zinc-800/50 shadow-sm">
+                {savedAddresses.length === 0 && (
+                  <p className="py-8 px-5 text-center text-xs font-semibold text-gray-400 dark:text-zinc-500">
+                    No saved addresses yet. Add one below so checkout can fill it in for you.
+                  </p>
+                )}
                 {savedAddresses.map(addr => (
                   <div
                     key={addr}
@@ -4419,12 +4634,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
             {/* Search Bar */}
             <div className="relative w-full h-14 bg-white dark:bg-zinc-900 rounded-full flex items-center px-4 border border-gray-200 dark:border-zinc-800 focus-within:border-gray-400 dark:focus-within:border-zinc-600 focus-within:ring-2 focus-within:ring-gray-100 dark:focus-within:ring-zinc-800 transition-all shadow-sm">
               <span className="material-symbols-outlined text-gray-400 dark:text-zinc-400 mr-3">search</span>
-              <input
-                className="bg-transparent border-none focus:ring-0 focus:outline-none w-full text-sm outline-none text-[#1A1C1E] dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500"
-                placeholder={searchPlaceholder}
-                type="text"
+              <SearchPlaceholderInput
+                className="bg-transparent border-none focus:ring-0 focus:outline-none w-full text-sm outline-none text-[#1A1C1E] dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500 [&::-webkit-search-cancel-button]:hidden"
+                ariaLabel="Search stores and products"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={setSearchQuery}
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery('')} className="mr-2 cursor-pointer text-gray-400 hover:text-black dark:hover:text-white">
@@ -4452,15 +4666,27 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               </div>
             )}
 
-            {/* Banner Carousel */}
-            <section className="relative w-full aspect-[21/9] rounded-[24px] overflow-hidden shadow-sm bg-[#1A1C1E] text-white p-6 flex flex-col justify-between">
-              <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-transparent to-transparent z-10" />
-              <img className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-luminosity" src="https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=1200&q=80" alt="" />
+            {/*
+              This slot used to advertise a "Nigeria Grocery Deals" promo
+              offering "free delivery and up to 25% off StoreFlow partner
+              orders today" — to every customer, on every store, permanently.
+              No such promotion exists anywhere in the app: nothing waived a
+              delivery fee or applied a discount at checkout. Real per-store
+              offers already render from the merchant's own settings in
+              renderStorePromotions, so this is now a plain statement of what
+              the app does, and the hot-linked Unsplash photo behind it is a
+              gradient instead of a 1200px third-party request.
+            */}
+            <section className="relative w-full aspect-[21/9] rounded-[24px] overflow-hidden shadow-sm bg-gradient-to-br from-[#1A1C1E] via-[#24262a] to-[#3a3227] text-white p-6 flex flex-col justify-center">
               <div className="relative z-20 space-y-1.5 max-w-xs text-left">
-                <span className="bg-[#FFD23F] text-slate-950 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded">Promo</span>
-                <h2 className="text-lg md:text-xl font-extrabold text-white">Nigeria Grocery Deals</h2>
-                <p className="text-[10px] text-gray-300 font-medium">Get free delivery and up to 25% off StoreFlow partner orders today.</p>
+                <span className="inline-flex items-center gap-1 bg-[#FFD23F] text-slate-950 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded">
+                  <span className="material-symbols-outlined text-[11px] leading-none">bolt</span>
+                  StoreFlow
+                </span>
+                <h2 className="text-lg md:text-xl font-extrabold text-white">Scan. Order. Collect.</h2>
+                <p className="text-[11px] text-gray-200 font-medium leading-relaxed">Order from any StoreFlow shop in under a minute — no account needed.</p>
               </div>
+              <span aria-hidden="true" className="material-symbols-outlined absolute -right-4 -bottom-6 text-[140px] leading-none text-white/5 select-none pointer-events-none">storefront</span>
             </section>
 
             {/* Categories */}
@@ -4489,29 +4715,37 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
               {searchedStores.length === 0 ? (
                 /* Empty state — no stores scanned yet */
-                <div className="flex flex-col items-center justify-center py-12 text-center space-y-5">
+                <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
+                  {/*
+                    This used to be a 176px button that a block of !important CSS
+                    in index.css silently resized to 220px, blanked the QR glyph
+                    out of (font-size: 0) and repainted as a plain animated
+                    rectangle — so the one affordance on an empty Home screen
+                    read as an empty box. The scanner target is expressed here
+                    now, at a size that keeps the heading above the fold.
+                  */}
                   <button
                     onClick={startScanner}
-                    aria-label="Scan a Store QR Code"
-                    title="Scan a Store QR Code"
-                    className="relative w-44 h-44 sm:w-48 sm:h-48 bg-white border border-gray-100/90 rounded-[40px] flex items-center justify-center shadow-sm cursor-pointer active-scale hover:border-amber-300 hover:shadow-lg transition-all duration-300 group overflow-hidden"
+                    aria-label="Scan a store QR code"
+                    className="sf-scan-target relative w-36 h-36 bg-white border border-gray-200 rounded-[32px] flex items-center justify-center shadow-sm cursor-pointer active-scale hover:border-amber-300 hover:shadow-md transition-all duration-300 overflow-hidden"
                   >
-                    {/* Soft ambient background glow */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-amber-500/5 via-transparent to-black/5 opacity-40 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                    
-                    {/* Animated scanning beam */}
-                    <div className="absolute inset-x-5 h-[2.5px] bg-gradient-to-r from-transparent via-[#FFD23F] to-transparent animate-scan-beam pointer-events-none opacity-80 z-10 shadow-[0_0_8px_#FFD23F]" />
-                    
-                    {/* Large animated QR Code icon */}
-                    <span className="material-symbols-outlined text-[96px] sm:text-[110px] animate-qr-gray-black select-none pointer-events-none transition-transform duration-300 leading-none">
+                    <span className="material-symbols-outlined text-[84px] leading-none text-[#1A1C1E] select-none pointer-events-none">
                       qr_code_2
                     </span>
+                    <span className="sf-scan-beam pointer-events-none" aria-hidden="true" />
                   </button>
 
-                  <div className="space-y-1.5 max-w-[240px]">
+                  <div className="space-y-1.5 max-w-[260px]">
                     <h3 className="text-base font-black text-[#1A1C1E]">No stores yet</h3>
-                    <p className="text-xs text-gray-400 font-semibold leading-relaxed">Tap the QR icon above, or scan a store's QR code or barcode to instantly open their store profile and start shopping.</p>
+                    <p className="text-xs text-gray-500 font-semibold leading-relaxed">Scan a store’s QR code to open their storefront and start ordering.</p>
                   </div>
+
+                  <button
+                    onClick={startScanner}
+                    className="min-h-11 px-6 rounded-full bg-[#1A1C1E] text-[#FFD23F] text-xs font-black uppercase tracking-wider shadow-sm active-scale hover:bg-black transition-colors cursor-pointer"
+                  >
+                    Scan a store
+                  </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -4536,11 +4770,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                         <span className="material-symbols-outlined text-sm">close</span>
                       </button>
                       <div className="w-16 h-16 bg-[#F8F9FA] border border-gray-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
-                        {isLogoImageUrl(s.logo) ? (
-                          <img className="w-full h-full object-cover" src={s.logo} alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                        ) : (
-                          <span className="text-3xl">🏪</span>
-                        )}
+                        <StoreBrandMark store={s} />
                       </div>
                       <div className="flex-1 min-w-0 text-left pr-4">
                         <h4 className="font-extrabold text-base text-[#1A1C1E] truncate">{s.business_name}</h4>
@@ -4676,7 +4906,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                     >
                       <div className="w-16 h-16 bg-[#F8F9FA] border border-gray-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
                         {isLogoImageUrl(s.logo) ? (
-                          <img className="w-full h-full object-cover" src={s.logo} alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          <img loading="lazy" decoding="async" className="w-full h-full object-cover" src={s.logo} alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
                           <span className="text-3xl">🏪</span>
                         )}
@@ -5224,7 +5454,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               <div className="flex items-center justify-center gap-2">
                 <div className="w-6 h-6 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
                   {isLogoImageUrl(store.logo) ? (
-                    <img src={store.logo} className="w-full h-full object-cover" alt="" />
+                    <img loading="lazy" decoding="async" src={store.logo} className="w-full h-full object-cover" alt="" />
                   ) : (
                     <span className="text-[10px]">🏪</span>
                   )}
@@ -5702,7 +5932,11 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                       }
                     }}
                     placeholder="Enter your display name..."
-                    className="flex-1 px-4 h-12 bg-[#F8F9FA] dark:bg-zinc-950 text-[#1A1C1E] dark:text-zinc-100 rounded-xl border border-gray-200 dark:border-zinc-800 focus:outline-none focus:border-[#FFD23F] text-xs font-extrabold shadow-inner"
+                    // min-w-0: a flex item defaults to min-width:auto, so this
+                    // input refused to shrink below its intrinsic width and
+                    // pushed the (shrink-0) Save button off the right edge of
+                    // the screen on a phone.
+                    className="flex-1 min-w-0 px-4 h-12 bg-[#F8F9FA] dark:bg-zinc-950 text-[#1A1C1E] dark:text-zinc-100 rounded-xl border border-gray-200 dark:border-zinc-800 focus:outline-none focus:border-[#FFD23F] text-xs font-extrabold shadow-inner"
                   />
                   <button
                     type="button"
@@ -5833,8 +6067,8 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
             ) : (
               searchFilteredOrdersHistory.map((o: any, idx: number) => {
                 // Section divider right where active orders end and finished ones begin
-                const isFirstFinished = ACTIVE_STATUSES.includes(o.status) === false &&
-                  idx > 0 && ACTIVE_STATUSES.includes(searchFilteredOrdersHistory[idx - 1]?.status);
+                const isFirstFinished = ACTIVE_ORDER_STATUSES.includes(o.status) === false &&
+                  idx > 0 && ACTIVE_ORDER_STATUSES.includes(searchFilteredOrdersHistory[idx - 1]?.status);
                 let itemsSummary: any[] = [];
                 let paymentMethodText = 'Cash';
                 let storeNameText = 'Partner Store';
@@ -5878,7 +6112,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
                           {isLogoImageUrl(cardStore?.logo) ? (
-                            <img src={cardStore!.logo} className="w-full h-full object-cover" alt="" />
+                            <img loading="lazy" decoding="async" src={cardStore!.logo} className="w-full h-full object-cover" alt="" />
                           ) : (
                             <span className="text-sm">🏪</span>
                           )}
@@ -6129,7 +6363,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                       <div className="flex-1 min-w-0 text-left">
                         <h4 className="font-bold text-sm text-[#1A1C1E] truncate">{item.product.name}</h4>
                         <span className="text-xs text-gray-400 mt-0.5 block font-semibold">
-                          ₦{getPrice(item.product)} {item.product.unit && item.product.unit !== 'pcs' ? `/ ${item.product.unit}` : 'each'}
+                          ₦{getPrice(item.product).toLocaleString()} {item.product.unit && item.product.unit !== 'pcs' ? `/ ${item.product.unit}` : 'each'}
                         </span>
                       </div>
                       {item.product.unit && item.product.unit !== 'pcs' ? (
@@ -6162,18 +6396,29 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                     <div className="flex justify-between text-xs text-gray-400 font-bold">
                       <span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span>
                     </div>
+                    {onlineDiscount > 0 && (
+                      <div className="flex justify-between text-xs text-emerald-600 font-bold">
+                        <span>Online Discount ({store?.data?.marketplaceSettings?.onlineDiscount}%)</span>
+                        <span>−₦{onlineDiscount.toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-xs text-gray-400 font-bold">
-                      <span>Delivery Fee</span><span>{deliveryFee === 0 ? 'FREE' : `₦${deliveryFee}`}</span>
+                      <span>Delivery Fee</span><span>{deliveryFee === 0 ? 'FREE' : `₦${deliveryFee.toLocaleString()}`}</span>
                     </div>
                     <div className="h-[1px] bg-gray-105 my-2"></div>
                     <div className="flex justify-between text-base font-black text-[#1A1C1E]">
                       <span>Total</span><span>₦{total.toLocaleString()}</span>
                     </div>
                   </div>
+                  {belowMinimumOrder && (
+                    <p className="mb-3 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-left">
+                      This store has a ₦{minimumOrder.toLocaleString()} minimum order. Add ₦{(minimumOrder - subtotal).toLocaleString()} more to check out.
+                    </p>
+                  )}
                   <button
-                    disabled={cart.length === 0}
+                    disabled={cart.length === 0 || belowMinimumOrder}
                     onClick={() => setCheckoutStep('checkout')}
-                    className="w-full py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md transition-all cursor-pointer bg-black text-[#FFD23F] hover:bg-black/90 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
+                    className="w-full py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md transition-all cursor-pointer bg-black text-[#FFD23F] hover:bg-black/90 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
                   >
                     Continue to Checkout
                   </button>
@@ -6229,13 +6474,17 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                 </div>
                 <div className="space-y-2 text-left">
                   <label className="text-xs font-black text-gray-400 uppercase tracking-wider">Order Option</label>
-                  <div className="grid grid-cols-2 gap-2 bg-gray-50 rounded-full p-1 border border-gray-100">
-                    <button onClick={() => setDeliveryType('pickup')} className={`py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${deliveryType === 'pickup' ? 'bg-[#1A1C1E] text-white shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}>
-                      Store Pickup
-                    </button>
-                    <button onClick={() => setDeliveryType('delivery')} className={`py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${deliveryType === 'delivery' ? 'bg-[#1A1C1E] text-white shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}>
-                      Home Delivery
-                    </button>
+                  <div className={`grid gap-2 bg-gray-50 rounded-full p-1 border border-gray-100 ${fulfilment.pickup && fulfilment.delivery ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    {fulfilment.pickup && (
+                      <button onClick={() => setDeliveryType('pickup')} className={`py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${deliveryType === 'pickup' ? 'bg-[#1A1C1E] text-white shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}>
+                        Store Pickup
+                      </button>
+                    )}
+                    {fulfilment.delivery && (
+                      <button onClick={() => setDeliveryType('delivery')} className={`py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${deliveryType === 'delivery' ? 'bg-[#1A1C1E] text-white shadow-sm' : 'text-gray-400 hover:text-gray-700'}`}>
+                        Home Delivery
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -6537,7 +6786,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                 {/* Avatar with Photo Upload */}
                 <div className="relative group w-14 h-14">
                   {itsMeProfile.profilePhoto ? (
-                    <img src={itsMeProfile.profilePhoto} className="w-14 h-14 rounded-xl object-cover border border-[#FFD23F]/30" alt="" />
+                    <img loading="lazy" decoding="async" src={itsMeProfile.profilePhoto} className="w-14 h-14 rounded-xl object-cover border border-[#FFD23F]/30" alt="" />
                   ) : (
                     <div className="w-14 h-14 rounded-xl bg-[#FFD23F]/20 border border-[#FFD23F]/30 flex items-center justify-center text-xl font-black text-[#FFD23F]">
                       {itsMeProfile.displayName ? itsMeProfile.displayName.charAt(0).toUpperCase() : '✦'}
@@ -6583,7 +6832,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
             <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm flex flex-col items-center justify-center text-center space-y-3">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Your Personal QR Code</p>
               <div className="bg-[#1A1C1E] p-4 rounded-[24px] shadow-md border border-white/5">
-                <img
+                <img loading="lazy" decoding="async"
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(itsMeProfile.customerId)}`}
                   alt="Customer ID QR Code"
                   className="w-40 h-40 bg-white p-2.5 rounded-2xl mx-auto"
@@ -6805,7 +7054,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                       className="flex items-center gap-3 bg-[#F8F9FA] rounded-2xl px-4 py-3 border border-gray-100 cursor-pointer hover:border-gray-200 transition"
                     >
                       <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 overflow-hidden flex items-center justify-center shrink-0">
-                        {isLogoImageUrl(s.logo) ? <img src={s.logo} className="w-full h-full object-cover" alt="" /> : <span className="text-lg">🏪</span>}
+                        {isLogoImageUrl(s.logo) ? <img loading="lazy" decoding="async" src={s.logo} className="w-full h-full object-cover" alt="" /> : <span className="text-lg">🏪</span>}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-black text-[#1A1C1E] truncate">{s.business_name}</p>
@@ -6865,7 +7114,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
                       {isLogoImageUrl(currentCartStore?.logo) ? (
-                        <img src={currentCartStore!.logo} className="w-full h-full object-cover" alt="" />
+                        <img loading="lazy" decoding="async" src={currentCartStore!.logo} className="w-full h-full object-cover" alt="" />
                       ) : <span className="text-sm">🏪</span>}
                     </div>
                     <span className="text-[9px] font-bold text-gray-400 max-w-[70px] truncate">{currentCartStore?.business_name}</span>
@@ -6874,7 +7123,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
                       {isLogoImageUrl(newProductStore?.logo) ? (
-                        <img src={newProductStore!.logo} className="w-full h-full object-cover" alt="" />
+                        <img loading="lazy" decoding="async" src={newProductStore!.logo} className="w-full h-full object-cover" alt="" />
                       ) : <span className="text-sm">🏪</span>}
                     </div>
                     <span className="text-[9px] font-bold text-gray-400 max-w-[70px] truncate">{newProductStore?.business_name}</span>

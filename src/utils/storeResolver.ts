@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase, normalizeStoreServices } from '../supabase';
 
 export const PUBLIC_STORE_COLUMNS = 'id, store_id, business_name, currency, country, state, city, address, phone, email, logo, subscription_status, data, access_code, qr_code';
 
@@ -78,7 +78,7 @@ export async function resolvePublicStore(value: string): Promise<{ store: Public
 
   try {
     const rpc = await supabase.rpc('get_public_storefront', { p_key: key });
-    if (!rpc.error && rpc.data) return { store: rpc.data as PublicStoreRecord, error: null };
+    if (!rpc.error && rpc.data) return { store: normalizeStoreServices(rpc.data) as PublicStoreRecord, error: null };
     return { store: null, error: rpc.error || null };
   } catch (error) {
     return { store: null, error };
@@ -93,7 +93,7 @@ export async function listPublicStorefronts(limit = 100, offset = 0, query = '')
       p_query: query.trim() || null,
     });
     if (rpc.error) return { stores: [], error: rpc.error };
-    return { stores: Array.isArray(rpc.data) ? rpc.data as PublicStoreRecord[] : [], error: null };
+    return { stores: Array.isArray(rpc.data) ? rpc.data.map(normalizeStoreServices) as PublicStoreRecord[] : [], error: null };
   } catch (error) {
     return { stores: [], error };
   }

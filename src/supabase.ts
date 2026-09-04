@@ -13,7 +13,19 @@ function writeQueue(queue: QueuedRpc[]) { try { localStorage.setItem(QUEUE_KEY, 
 function looksLikeNetworkFailure(error: unknown): boolean { if (!error) return false; const e = error as { message?: string; name?: string }; const message = `${e.name || ''} ${e.message || ''}`.toLowerCase(); return !navigator.onLine || message.includes('network') || message.includes('fetch') || message.includes('failed to fetch') || message.includes('timeout') || message.includes('offline'); }
 async function queueOfflineOrder(args: RpcArgs): Promise<any> { const id = `offline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; const queue = readQueue(); queue.push({ id, args }); writeQueue(queue); return { data: id, error: null, count: null, status: 200, statusText: 'offline-queued' }; }
 
-function normalizeStoreServices(store: any): any {
+/**
+ * Fold a merchant's legacy `data.games` / `data.services` arrays into the
+ * canonical `businessTemplate.offerings` list (and into `data.products`) so a
+ * service storefront shows its services regardless of which shape the merchant
+ * app happened to save them in.
+ *
+ * This is exported because the customer app no longer reads the `stores_public`
+ * table directly — every store now arrives through the get_public_storefront /
+ * list_public_storefronts RPCs — and this normalisation was only ever applied
+ * to `from('stores_public')` results. It had quietly stopped running, which
+ * left any service store still on the legacy shape showing an empty catalog.
+ */
+export function normalizeStoreServices(store: any): any {
   if (!store || typeof store !== 'object' || !store.data || typeof store.data !== 'object') return store;
   const data = store.data;
   const template = data.businessTemplate && typeof data.businessTemplate === 'object' ? data.businessTemplate : {};

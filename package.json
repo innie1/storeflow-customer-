@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node scripts/test-store-specific-service-flow.mjs && node scripts/test-store-routing-scanner.mjs && node scripts/test-store-catalog-isolation.mjs && node scripts/test-guest-laundry-history.mjs",
-    "prebuild": "node scripts/patch-storefront-branding.mjs && node scripts/patch-service-customer-flow.mjs && node scripts/fix-store-public-columns.mjs && node scripts/patch-storefront-store-identity.mjs && node scripts/patch-customer-analytics.mjs && node scripts/patch-storefront-runtime-stability.mjs && node scripts/patch-store-routing-scanner.mjs",
+    "test": "node scripts/test-store-specific-service-flow.mjs && node scripts/test-store-routing-scanner.mjs && node scripts/test-store-catalog-isolation.mjs && node scripts/test-guest-laundry-history.mjs && node scripts/test-order-pricing.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"

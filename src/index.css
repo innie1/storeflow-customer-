@@ -1,3 +1,14 @@
+/* These must stay above `@import "tailwindcss"`: Tailwind inlines itself in
+   place, so anything imported after it ends up below thousands of rules and
+   is dropped as a misplaced @import.
+
+   They are pulled into the `base` layer on purpose. Google's sheet ships an
+   unlayered `.material-symbols-outlined { font-size: 24px }`, and unlayered
+   rules beat layered ones regardless of specificity — so while these were
+   plain <link> tags in index.html, every icon in the app rendered at 24px and
+   every Tailwind size class on an icon was silently ignored. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap") layer(base);
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap") layer(base);
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -207,88 +218,29 @@ html, body, #root { max-width: 100%; overflow-x: hidden; }
   color: #f3f4f6 !important;
 }
 
-/* Empty-store scanner square.
-   The existing JSX already provides the square, scan-beam and QR placeholder.
-   We deliberately keep that structure and style it here so the animation is
-   stable and does not require a DOM observer or JavaScript animation loop. */
-@keyframes storeflow-empty-scan {
-  0%, 100% { top: 12%; opacity: 0; }
-  8% { opacity: 1; }
-  48% { opacity: 1; }
-  55% { top: 88%; opacity: 1; }
-  92% { opacity: 1; }
+/* Empty-state scanner target.
+   Previously ~90 lines of !important overrides that resized the button,
+   hid its QR glyph behind font-size: 0 and repainted it as an animated
+   rectangle, all keyed off a :has() selector and a class name. The markup
+   now describes what it is; this only adds the sweeping beam. */
+@keyframes sf-scan-sweep {
+  0%   { transform: translateY(-52px); opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateY(52px); opacity: 0; }
 }
 
-@keyframes storeflow-empty-spread {
-  0% { transform: scaleX(0); opacity: 0.05; transform-origin: left center; }
-  8% { opacity: 1; }
-  42% { transform: scaleX(1); opacity: 1; transform-origin: left center; }
-  50% { transform: scaleX(1); opacity: 1; }
-  92% { transform: scaleX(0); opacity: 1; transform-origin: right center; }
-  100% { transform: scaleX(0); opacity: 0.05; transform-origin: right center; }
-}
-
-/* Make the empty-state square larger while keeping it perfectly square. */
-.group:has(.animate-qr-gray-black) {
-  width: 220px !important;
-  height: 220px !important;
-  min-width: 220px !important;
-  min-height: 220px !important;
-  border-radius: 36px !important;
-  background: #ffffff !important;
-  border-color: #e5e7eb !important;
-}
-
-/* Remove the actual QR glyph. This span becomes the animated white square. */
-.animate-qr-gray-black {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  display: block !important;
-  font-size: 0 !important;
-  line-height: 0 !important;
-  color: transparent !important;
-  background: #ffffff !important;
-  border-radius: 36px !important;
-  overflow: hidden !important;
-  z-index: 4 !important;
-  transform: none !important;
-}
-
-.animate-qr-gray-black::after {
-  content: "";
+.sf-scan-target .sf-scan-beam {
   position: absolute;
-  inset: 0;
-  background: #08090a;
-  transform: scaleX(0);
-  transform-origin: left center;
-  animation: storeflow-empty-spread 3.2s ease-in-out infinite;
-  border-radius: inherit;
+  left: 14%;
+  right: 14%;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #FFD23F 20%, #FFD23F 80%, transparent);
+  box-shadow: 0 0 12px rgba(255, 210, 63, .9);
+  animation: sf-scan-sweep 2.6s ease-in-out infinite;
 }
-
-/* Yellow scanner line moving vertically over the square. */
-.animate-scan-beam {
-  left: 10% !important;
-  right: 10% !important;
-  height: 3px !important;
-  top: 12% !important;
-  background: linear-gradient(90deg, transparent, #FFD23F 20%, #FFD23F 80%, transparent) !important;
-  box-shadow: 0 0 10px rgba(255, 210, 63, 0.85) !important;
-  opacity: 1 !important;
-  animation: storeflow-empty-scan 3.2s ease-in-out infinite !important;
-  z-index: 12 !important;
-}
-
-/* Keep the ambient layer out of the way of the monochrome animation. */
-.animate-qr-gray-black ~ * { pointer-events: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-scan-beam,
-  .animate-qr-gray-black::after {
-    animation: none !important;
-  }
-  .animate-qr-gray-black::after {
-    transform: scaleX(0) !important;
-  }
+  .sf-scan-target .sf-scan-beam { animation: none; opacity: .9; }
 }

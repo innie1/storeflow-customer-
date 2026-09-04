@@ -62,8 +62,8 @@ self.addEventListener('push', (event: PushEvent) => {
   } = {
     title: 'StoreFlow Order Update',
     body: 'You have a new status update on your order!',
-    icon: '/logo.jpg',
-    badge: '/logo.jpg',
+    icon: '/logo-192.png',
+    badge: '/logo-192.png',
     url: '/',
     tag: 'storeflow-notification',
     orderId: '',
@@ -88,8 +88,8 @@ self.addEventListener('push', (event: PushEvent) => {
   const showNotification = () => {
     const options: any = {
       body: data.body || 'New update received!',
-      icon: data.icon || '/logo.jpg',
-      badge: data.badge || '/logo.jpg',
+      icon: data.icon || '/logo-192.png',
+      badge: data.badge || '/logo-192.png',
       data: {
         url: targetUrl,
         orderId: data.orderId || null,

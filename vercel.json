@@ -1,6 +1,9 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
@@ -13,7 +16,7 @@
       ]
     },
     {
-      "source": "/logo.jpg",
+      "source": "/(logo-192.png|logo-512.jpg|favicon-32.png|apple-touch-icon.png)",
       "headers": [
         {
           "key": "Cache-Control",

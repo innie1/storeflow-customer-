@@ -6,6 +6,22 @@ import customerStoreDiscoveryPlugin from './vite-plugin-store-discovery.js'
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    rolldownOptions: {
+      output: {
+        // The app shipped as one ~654 kB chunk, so a customer re-downloaded
+        // React and the whole Supabase client on every deploy even when only
+        // app code changed. Splitting the two big, rarely-changing vendor
+        // groups out lets them stay in the browser cache across releases.
+        advancedChunks: {
+          groups: [
+            { name: 'react-vendor', test: /node_modules[\/](react|react-dom|scheduler)[\/]/ },
+            { name: 'supabase-vendor', test: /node_modules[\/]@supabase[\/]/ },
+          ],
+        },
+      },
+    },
+  },
   plugins: [
     customerStoreDiscoveryPlugin(),
     react(),
@@ -16,7 +32,7 @@ export default defineConfig({
       filename: 'sw.ts',
       registerType: 'autoUpdate',
       // Serve .well-known files without extension check
-      includeAssets: ['logo.jpg', 'favicon.svg', 'icons.svg', '.well-known/**'],
+      includeAssets: ['favicon-32.png', 'apple-touch-icon.png', 'favicon.svg', 'icons.svg', '.well-known/**'],
       manifest: {
         name: 'StoreFlow Customer',
         short_name: 'StoreFlow',
@@ -28,9 +44,12 @@ export default defineConfig({
         scope: '/',
         start_url: '/?utm_source=pwa',
         categories: ['shopping'],
+        // These declared 512x512 but pointed at a 1024x1024 file, so every
+        // install downloaded 175 kB to render a home-screen icon.
         icons: [
-          { src: 'logo.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'any' },
-          { src: 'logo.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'maskable' }
+          { src: 'logo-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'logo-512.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'any' },
+          { src: 'logo-512.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'maskable' }
         ],
         shortcuts: [
           {
@@ -38,7 +57,7 @@ export default defineConfig({
             short_name: 'Scan',
             description: 'Open camera to scan a store QR code',
             url: '/?action=scan',
-            icons: [{ src: 'logo.jpg', sizes: '512x512', type: 'image/jpeg' }]
+            icons: [{ src: 'logo-192.png', sizes: '192x192', type: 'image/png' }]
           }
         ]
       },

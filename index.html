@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/jpeg" href="/logo.jpg" />
+    <!-- Was /logo.jpg: a 1024x1024, 175 kB JPEG downloaded on every first
+         load just to draw a 16px tab icon. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -10,12 +13,29 @@
     <title>StoreFlow Customer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <!--
+      The font stylesheets are imported from src/index.css into the `base`
+      cascade layer instead of being linked here. Google's sheet ships an
+      unlayered `.material-symbols-outlined { font-size: 24px }`, and an
+      unlayered rule beats any layered one no matter its specificity — so
+      while these were plain <link> tags every icon in the app rendered at
+      24px and every Tailwind size class on an icon (text-xl, text-[84px],
+      text-[9px] ...) was silently ignored.
+    -->
   </head>
   <body>
+    <script>
+      // Applied before first paint. React only adds this class in an effect,
+      // which runs after the first render, so anyone with dark mode on saw a
+      // full-screen white flash every single time they opened the app.
+      try {
+        if (localStorage.getItem('storeflow_dark_mode') === 'true') {
+          document.documentElement.classList.add('dark');
+          document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#121315');
+        }
+      } catch (e) { /* private mode: fall back to light */ }
+    </script>
     <div id="root"></div>
-    <script src="/store-branding-patch.js" defer></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

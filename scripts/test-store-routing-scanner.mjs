@@ -65,7 +65,15 @@ if (app.includes("localStorage.setItem('storeflow_cached_all_stores'")) throw ne
 if (app.includes("selling_price, wholesale_price, retail_price")) throw new Error('product query must only request columns present in Supabase');
 if (app.includes("allStores?.[0]?.id")) throw new Error('orders must never fall back to a different discovered store');
 
-if (!String(pkg.scripts?.prebuild || '').includes('patch-store-routing-scanner.mjs')) throw new Error('prebuild must run the scanner/store-routing patch');
+// This used to assert that `prebuild` still ran patch-store-routing-scanner.mjs.
+// That script's output has long since been committed to src/App.tsx, so the
+// prebuild chain rewrote the working tree on every single build to produce
+// bytes that were already there. The assertions above check the behaviour the
+// patch was there to guarantee, which is the thing that actually matters —
+// asserting on the build step as well only pinned a no-op in place.
+expectContains(app, '// STOREFLOW_SHARED_STORE_RESOLVER_V1', 'the shared public store resolver is wired into the customer app');
+expectContains(app, 'const cachedMatch = allStores.find((s: any) => matchesPublicStoreReference(s, sid));', 'cached store lookups go through the shared reference matcher');
+expectContains(app, 'const { store: storeData, error: storeErr } = await resolvePublicStore(sid);', 'store detail loads resolve through the shared public resolver');
 if (!String(pkg.scripts?.test || '').includes('test-store-routing-scanner.mjs')) throw new Error('npm test must include scanner/store-routing regressions');
 
 console.log('Store routing/scanner regressions passed.');
