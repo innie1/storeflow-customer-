@@ -3120,13 +3120,13 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
         </div>
 
         {/* Center the store branding */}
-        <div className="relative bg-white rounded-t-[28px] -mt-8 pt-20 pb-4 px-4 md:px-6 text-center flex flex-col items-center max-w-5xl lg:max-w-6xl mx-auto">
-          <div className="absolute -top-16 w-32 h-32 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden flex items-center justify-center shrink-0 animate-fade-in">
+        <div className="relative bg-white dark:bg-zinc-900 rounded-t-[28px] -mt-8 pt-14 pb-3 px-4 md:px-6 text-center flex flex-col items-center max-w-5xl lg:max-w-6xl mx-auto">
+          <div className="absolute -top-11 w-24 h-24 rounded-full border-4 border-white dark:border-zinc-900 bg-white shadow-xl overflow-hidden flex items-center justify-center shrink-0 animate-fade-in">
             <StoreBrandMark store={store} />
           </div>
 
-          <div className="space-y-2">
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#1A1C1E] flex items-center justify-center gap-1.5 font-headline-xl">
+          <div className="space-y-1.5">
+            <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-[#1A1C1E] dark:text-zinc-100 flex items-center justify-center gap-1.5 font-headline-xl">
               {store?.business_name || store?.data?.storeName || store?.data?.businessName || 'Store'}
               {showVerified && (
                 <span className="material-symbols-outlined text-[#FFD23F] text-xl font-bold font-variation-fill" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
@@ -3166,9 +3166,14 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               )}
             </div>
 
-            <p className="text-sm text-gray-500 font-medium max-w-sm mx-auto leading-relaxed pt-1">
-              {store?.data?.marketplaceSettings?.description || 'Your trusted neighborhood store.'}
-            </p>
+            {/* Only the merchant's own description. This used to fall back to
+                "Your trusted neighborhood store." for every shop that had not
+                written one, which said nothing and cost a line of screen. */}
+            {store?.data?.marketplaceSettings?.description && (
+              <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium max-w-sm mx-auto leading-relaxed pt-1">
+                {store.data.marketplaceSettings.description}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -3180,221 +3185,129 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
     return isLogoImageUrl(cover) ? String(cover) : null;
   }, [store]);
 
+  /**
+   * A compact strip of facts about the store.
+   *
+   * This was a card of eight large two-column tiles that pushed the catalog
+   * most of a screen down, truncated its own values ("Provision / ..."), and
+   * left ragged empty cells whenever a merchant had filled in only three
+   * fields. It is now a wrapping row of chips: it takes the height it needs,
+   * nothing is cut off, and every fact the merchant published is shown.
+   *
+   * A service shop is not an inventory shop, so the wording follows the
+   * business: a laundry or barber offers "services" that are "booked" and have
+   * a turnaround; a provision store has "items" that are "in stock".
+   */
   const renderStoreInfoCard = () => {
     const ms = store?.data?.marketplaceSettings;
-    const address = store?.address;
-    const phone = store?.phone;
-    const email = store?.email;
-    const website = ms?.website;
-    const openingTime = ms?.openingTime;
-    const closingTime = ms?.closingTime;
-    // Only state facts the merchant actually published. These used to fall back
-    // to invented values — every store claimed a "15-25 min" delivery window,
-    // a ₦1,500 fee and, most misleadingly, that it was "0.8 km away" from
-    // whoever was looking at it.
-    const deliveryTime = ms?.deliveryTime || '';
+    const serviceShop = isServiceStore(store);
+
     const configuredDeliveryFee = Number(ms?.deliveryFee);
     const hasConfiguredFee = Number.isFinite(configuredDeliveryFee) && configuredDeliveryFee >= 0;
-    const storeType = getStoreBusinessTypeLabel(store);
-    const numProducts = products.length;
-    const distance = ms?.distance || '';
+    const freeOver = Number(ms?.freeDeliveryThreshold);
 
-    const hasAddress = !!address;
-    const hasPhone = !!phone;
-    const hasEmail = !!email;
-    const hasWebsite = !!website;
-    const hasHours = !!(openingTime && closingTime);
-    const hasDelivery = !!(deliveryTime || hasConfiguredFee);
-    const hasMinOrder = minimumOrder > 0;
-    const hasStoreType = !!storeType;
-    const hasProducts = numProducts > 0;
-    const hasDistance = !!distance;
+    const deliveryLabel = [
+      ms?.deliveryTime || '',
+      hasConfiguredFee ? (configuredDeliveryFee === 0 ? 'Free' : '₦' + configuredDeliveryFee.toLocaleString()) : '',
+      Number.isFinite(freeOver) && freeOver > 0 ? `free over ₦${freeOver.toLocaleString()}` : '',
+    ].filter(Boolean).join(' · ');
+
+    // Turnaround is a service-shop fact: how long the job takes, not stock.
+    const turnaround = products.map(p => p.turnaround).filter(Boolean)[0] || '';
+
+    const chips: Array<{ icon: string; label: string; value: string; href?: string }> = [];
+
+    if (fulfilment.delivery) {
+      chips.push({ icon: 'local_shipping', label: 'Delivery', value: deliveryLabel || 'Available' });
+    }
+    if (fulfilment.pickup) {
+      chips.push({ icon: 'storefront', label: serviceShop ? 'Drop-off' : 'Pickup', value: 'In store' });
+    }
+    if (minimumOrder > 0) {
+      chips.push({ icon: 'payments', label: 'Min order', value: '₦' + minimumOrder.toLocaleString() });
+    }
+    if (products.length > 0) {
+      chips.push({
+        icon: serviceShop ? 'design_services' : 'inventory_2',
+        label: serviceShop ? 'Services' : 'Catalog',
+        value: `${products.length} ${serviceShop ? (products.length === 1 ? 'service' : 'services') : (products.length === 1 ? 'item' : 'items')}`,
+      });
+    }
+    if (serviceShop && turnaround) {
+      chips.push({ icon: 'timer', label: 'Turnaround', value: String(turnaround) });
+    }
+    if (ms?.openingTime && ms?.closingTime) {
+      chips.push({ icon: 'schedule', label: 'Hours', value: `${ms.openingTime} – ${ms.closingTime}` });
+    }
+    if (store?.address) {
+      chips.push({ icon: 'place', label: 'Address', value: String(store.address) });
+    }
+    if (store?.phone) {
+      chips.push({ icon: 'call', label: 'Phone', value: String(store.phone), href: `tel:${store.phone}` });
+    }
+    if (store?.email) {
+      chips.push({ icon: 'mail', label: 'Email', value: String(store.email), href: `mailto:${store.email}` });
+    }
+    if (ms?.website) {
+      chips.push({ icon: 'language', label: 'Website', value: String(ms.website), href: String(ms.website) });
+    }
+
+    if (chips.length === 0 && !loyaltyBalance?.enabled) return null;
+
+    const chipClass = 'inline-flex items-center gap-2 rounded-full border border-gray-150 dark:border-zinc-800 bg-[#F8F9FA] dark:bg-zinc-950/60 pl-2.5 pr-3.5 py-1.5 max-w-full';
 
     return (
-      <div className="bg-white dark:bg-zinc-900 rounded-[24px] p-4 sm:p-5 border border-gray-100 dark:border-zinc-800 shadow-sm text-left space-y-4 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <h3 className="font-black text-xs sm:text-sm uppercase tracking-wider text-gray-400 dark:text-zinc-500">Store Information</h3>
-          {hasDistance && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-100 dark:border-emerald-500/20">
-              <span className="material-symbols-outlined text-xs">near_me</span>
-              {distance} away
-            </span>
-          )}
+      <div className="bg-white dark:bg-zinc-900 rounded-[20px] p-3.5 sm:p-4 border border-gray-100 dark:border-zinc-800 shadow-sm text-left space-y-3 animate-fade-in">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-black text-[10px] uppercase tracking-wider text-gray-400 dark:text-zinc-500">
+            {getStoreBusinessTypeLabel(store)}
+          </h3>
+          <button
+            onClick={() => { navigateToScreen('history'); loadOrdersHistory(); }}
+            className="text-[11px] font-black text-[#1A1C1E] dark:text-zinc-200 hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+          >
+            My orders
+            <span className="material-symbols-outlined text-sm">chevron_right</span>
+          </button>
         </div>
 
-        {/* Compact 2-col (mobile) / 4-col (desktop) Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-          {hasDelivery && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">local_shipping</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Delivery</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">
-                  {[deliveryTime, hasConfiguredFee ? (configuredDeliveryFee === 0 ? 'Free' : '₦' + configuredDeliveryFee.toLocaleString()) : ''].filter(Boolean).join(' • ')}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {hasMinOrder && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">payments</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Min Order</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">
-                  {minimumOrder === 0 ? 'No Minimum' : '₦' + minimumOrder.toLocaleString()}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {hasStoreType && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">storefront</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Store Type</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate capitalize mt-0.5">{storeType}</p>
-              </div>
-            </div>
-          )}
-
-          {hasProducts && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">inventory_2</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">{isServiceStore(store) ? 'Services' : 'Catalog'}</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{numProducts} {isServiceStore(store) ? 'services' : 'items'}</p>
-              </div>
-            </div>
-          )}
-
-          {hasHours && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">schedule</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Opening Hours</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{openingTime} – {closingTime}</p>
-              </div>
-            </div>
-          )}
-
-          {hasAddress && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
-              <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">location_on</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Address</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{address}</p>
-              </div>
-            </div>
-          )}
-
-          {hasPhone && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
-              <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">call</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Phone</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{phone}</p>
-              </div>
-            </div>
-          )}
-
-          {hasEmail && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
-              <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">mail</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Email</p>
-                <p className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 truncate mt-0.5">{email}</p>
-              </div>
-            </div>
-          )}
-
-          {hasWebsite && (
-            <div className="p-3 bg-[#F8F9FA] dark:bg-zinc-950/60 border border-gray-100 dark:border-zinc-800/80 rounded-2xl flex items-center gap-2.5 min-w-0 col-span-2 md:col-span-2">
-              <div className="w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-base font-bold">language</span>
-              </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-gray-400 dark:text-zinc-500 uppercase text-[9px] tracking-wider truncate">Website</p>
-                <a href={website.startsWith('http') ? website : 'https://' + website} target="_blank" rel="noreferrer" className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100 hover:underline truncate block mt-0.5">
-                  {website}
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Quick Action Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-extrabold text-center pt-1">
-          {hasPhone && (
-            <a 
-              href={'tel:' + phone}
-              className="bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer text-[#1A1C1E] dark:text-zinc-100 active-scale transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800"
-            >
-              <span className="material-symbols-outlined text-base text-[#FFD23F] font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>call</span>
-              <span>Call</span>
-            </a>
-          )}
-          {hasPhone && (
-            <a 
-              href={'https://wa.me/' + phone.replace(/\D/g, '')}
-              target="_blank"
-              rel="noreferrer"
-              className="bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer text-[#1A1C1E] dark:text-zinc-100 active-scale transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800"
-            >
-              <span className="material-symbols-outlined text-base text-emerald-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-              <span>WhatsApp</span>
-            </a>
-          )}
-          {hasAddress && (
-            <a 
-              href={'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address)}
-              target="_blank"
-              rel="noreferrer"
-              className="bg-[#F8F9FA] dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer text-[#1A1C1E] dark:text-zinc-100 active-scale transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800"
-            >
-              <span className="material-symbols-outlined text-base text-sky-500 font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>directions</span>
-              <span>Directions</span>
-            </a>
-          )}
+        <div className="flex flex-wrap gap-2">
+          {chips.map(chip => {
+            const inner = (
+              <>
+                <span className="material-symbols-outlined text-sm text-gray-400 dark:text-zinc-500 shrink-0">{chip.icon}</span>
+                <span className="min-w-0">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500 block leading-none mb-0.5">{chip.label}</span>
+                  <span className="text-[11px] font-black text-[#1A1C1E] dark:text-zinc-100 block leading-tight break-words">{chip.value}</span>
+                </span>
+              </>
+            );
+            return chip.href ? (
+              <a
+                key={chip.label}
+                href={chip.href}
+                target={chip.href.startsWith('http') ? '_blank' : undefined}
+                rel={chip.href.startsWith('http') ? 'noreferrer' : undefined}
+                className={chipClass + ' hover:border-gray-300 dark:hover:border-zinc-700 transition-colors'}
+              >
+                {inner}
+              </a>
+            ) : (
+              <div key={chip.label} className={chipClass}>{inner}</div>
+            );
+          })}
         </div>
 
         {loyaltyBalance?.enabled && (
-          <div className="mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-amber-100/60 border border-amber-200 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide">Loyalty Points</p>
-              <p className="text-sm font-black text-[#1A1C1E] mt-0.5">🪙 {loyaltyBalance.points} points</p>
-            </div>
-            <p className="text-[11px] text-amber-700 font-bold text-right max-w-[110px]">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:border-amber-500/20 px-3 py-2">
+            <p className="text-[11px] font-black text-[#1A1C1E] dark:text-amber-200">🪙 {loyaltyBalance.points} points</p>
+            <p className="text-[10px] text-amber-700 dark:text-amber-300 font-bold text-right">
               {loyaltyBalance.points >= loyaltyBalance.redeemThreshold
-                ? `Ready to redeem for ₦${loyaltyBalance.redeemValueNaira.toLocaleString()} off!`
+                ? `Ready to redeem for ₦${loyaltyBalance.redeemValueNaira.toLocaleString()} off`
                 : `${loyaltyBalance.redeemThreshold - loyaltyBalance.points} more for ₦${loyaltyBalance.redeemValueNaira.toLocaleString()} off`}
             </p>
           </div>
         )}
-
-        <button
-          onClick={() => { navigateToScreen('history'); loadOrdersHistory(); }}
-          className="w-full mt-3 py-3 rounded-2xl bg-[#1A1C1E] text-white font-black text-xs uppercase tracking-wide flex items-center justify-center gap-2 active-scale cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-base">receipt_long</span>
-          My Order History
-        </button>
       </div>
     );
   };
@@ -3413,17 +3326,18 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
         ? 'bg-amber-500' 
         : 'bg-rose-500';
 
+    const closingTime = store?.data?.marketplaceSettings?.closingTime;
+
     return (
       <div className="space-y-3">
-        {/* Status indicator without inverse background box */}
-        <div className="flex items-center justify-between py-1.5 px-1 text-xs font-bold">
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${dotColor} animate-pulse`} />
-            <span className={`uppercase tracking-wider font-extrabold text-[10px] ${statusTextColor}`}>{status === 'Closed' ? 'Closed' : status === 'Closing Soon' ? 'Closing Soon' : 'Open'}</span>
-          </div>
-          <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-semibold">
-            {status === 'Closed' ? 'Accepting orders when open' : status === 'Closing Soon' ? 'Closing shortly' : 'Accepting orders now'}
-          </span>
+        {/* One line, and it says when the store closes rather than repeating
+            "Accepting orders now" — which the Open dot already implies. */}
+        <div className="flex items-center gap-2 px-1 text-xs font-bold">
+          <span className={`w-2 h-2 rounded-full ${dotColor} ${status === 'Open' ? 'animate-pulse' : ''}`} />
+          <span className={`uppercase tracking-wider font-extrabold text-[10px] ${statusTextColor}`}>{status}</span>
+          {closingTime && status !== 'Closed' && (
+            <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-semibold">· closes {closingTime}</span>
+          )}
         </div>
 
         {/* Closed warning message */}
