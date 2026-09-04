@@ -3162,6 +3162,49 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
       .sort((a, b) => (Date.parse(visitMeta[b.id] || '') || 0) - (Date.parse(visitMeta[a.id] || '') || 0));
   }, [allStores, scannedStoreIds]);
 
+  /**
+   * Products matching what the customer typed into Quick Order, searched
+   * across the stores they have actually scanned.
+   *
+   * The box used to have no results at all: typing filtered the Home screen
+   * behind the overlay — which the overlay covers — and Enter did nothing, so
+   * it read as broken. Searching the scanned stores' embedded catalogs keeps
+   * this instant and offline.
+   */
+  const quickOrderMatches = useMemo(() => {
+    const q = quickOrderInput.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const found: Array<{ product: Product; storeName: string }> = [];
+    for (const s of scannedStores) {
+      const catalog = Array.isArray((s as any)?.data?.products) ? (s as any).data.products : [];
+      for (const p of catalog) {
+        if (found.length >= 8) return found;
+        if (!p || p.discontinued === true) continue;
+        const name = String(p.name || p.productName || '');
+        if (!name.toLowerCase().includes(q)) continue;
+        const price = Number(p.sellingPrice ?? p.selling_price ?? 0);
+        found.push({
+          storeName: s.business_name,
+          product: {
+            id: String(p.id || p.productId || name),
+            store_id: s.id,
+            name,
+            selling_price: price,
+            retail_price: price,
+            wholesale_price: price,
+            quantity: Number(p.quantity ?? 0),
+            unit: p.unit || 'pcs',
+            image: p.image || '',
+            category: p.category || 'General',
+            isService: p.isService === true,
+            status: 'active',
+          } as Product,
+        });
+      }
+    }
+    return found;
+  }, [quickOrderInput, scannedStores]);
+
   const searchedStores = useMemo(() => {
     const base = scannedStores;
     if (!searchQuery) return base;
@@ -3536,69 +3579,115 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
           setIsCartOpen={setIsCartOpen}
         />
       )}
-      {/* ─── ⚡ Quick Order Overlay Sheet ─── */}
+      {/* ─── Quick Order Overlay Sheet ─── */}
       {showQuickOrder && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowQuickOrder(false)}>
-          <div className="bg-white w-full rounded-t-3xl overflow-hidden p-6 animate-slide-up space-y-6 text-[#1A1C1E]" onClick={e => e.stopPropagation()}>
-            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => { setShowQuickOrder(false); setQuickOrderInput(''); }}>
+          <div className="bg-white dark:bg-zinc-900 w-full rounded-t-3xl p-6 animate-slide-up space-y-5 text-[#1A1C1E] dark:text-zinc-100 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-1 bg-gray-200 dark:bg-zinc-700 rounded-full mx-auto" />
             <div className="flex justify-between items-center text-left">
-              <h3 className="font-black text-lg flex items-center gap-2 text-[#1A1C1E]">
+              {/* There used to be a bolt icon AND a lightning emoji in the
+                  text, so this read as two lightning bolts side by side. */}
+              <h3 className="font-black text-lg flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#FFD23F] font-black text-xl">bolt</span>
-                <span>⚡ Quick Order</span>
+                <span>Quick Order</span>
               </h3>
-              <button onClick={() => setShowQuickOrder(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center cursor-pointer text-[#1A1C1E] hover:bg-gray-200">
+              <button
+                onClick={() => { setShowQuickOrder(false); setQuickOrderInput(''); }}
+                aria-label="Close"
+                className="w-8 h-8 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center cursor-pointer hover:bg-gray-200 dark:hover:bg-zinc-700"
+              >
                 <span className="material-symbols-outlined text-base">close</span>
               </button>
             </div>
 
-            <div className="space-y-4">
-              {/* Vocal search */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={quickOrderInput}
-                  onChange={e => { setQuickOrderInput(e.target.value); setSearchQuery(e.target.value); }}
-                  placeholder="Voice search or barcode scan..."
-                  className="flex-1 px-4 h-12 bg-white text-[#1A1C1E] rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#1A1C1E]/20 text-sm font-semibold shadow-sm"
-                />
-                <button
-                  onClick={handleVoiceSearch}
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center cursor-pointer transition-colors active-scale ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-[#1A1C1E] hover:bg-gray-200'}`}
-                >
-                  <span className="material-symbols-outlined text-xl">{isListening ? 'mic' : 'mic_none'}</span>
-                </button>
-              </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={quickOrderInput}
+                onChange={e => setQuickOrderInput(e.target.value)}
+                placeholder="Search your stores, or scan"
+                aria-label="Search your stores"
+                autoFocus
+                className="flex-1 px-4 h-12 bg-white dark:bg-zinc-950 rounded-xl border border-gray-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#FFD23F]/50 text-sm font-semibold shadow-sm"
+              />
+              <button
+                onClick={handleVoiceSearch}
+                aria-label={isListening ? 'Listening' : 'Search by voice'}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center cursor-pointer transition-colors active-scale ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700'}`}
+              >
+                <span className="material-symbols-outlined text-xl">{isListening ? 'mic' : 'mic_none'}</span>
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3 text-left">
-                <button onClick={startScanner} className="p-4 bg-white border border-gray-200 hover:bg-gray-50 rounded-2xl flex flex-col items-center gap-1.5 cursor-pointer active-scale shadow-sm">
-                  <span className="material-symbols-outlined text-[#FFD23F] text-2xl font-black">qr_code_scanner</span>
-                  <span className="text-xs font-black text-[#1A1C1E]">Scan Barcode</span>
-                </button>
+            {/* Live results from the stores this customer has actually scanned.
+                Typing used to filter the Home screen behind this overlay, which
+                the overlay covers — so it looked like nothing happened, and
+                Home was left filtered after closing. */}
+            {quickOrderInput.trim().length >= 2 && (
+              quickOrderMatches.length > 0 ? (
+                <div className="space-y-1.5 text-left">
+                  {quickOrderMatches.map(({ product, storeName }) => (
+                    <button
+                      key={product.store_id + product.id}
+                      onClick={() => { setShowQuickOrder(false); setQuickOrderInput(''); openProductFromList(product); }}
+                      className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl border border-gray-100 dark:border-zinc-800 bg-[#F8F9FA] dark:bg-zinc-950/60 hover:border-gray-300 dark:hover:border-zinc-700 transition-colors cursor-pointer text-left"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-xs font-black truncate">{product.name}</span>
+                        <span className="block text-[10px] font-semibold text-gray-400 dark:text-zinc-500 truncate">{storeName}</span>
+                      </span>
+                      <span className="text-xs font-black shrink-0">₦{product.selling_price.toLocaleString()}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs font-semibold text-gray-400 dark:text-zinc-500 text-left px-1">
+                  Nothing matching that in your stores. Scan a store to add its catalog.
+                </p>
+              )
+            )}
+
+            <div className="grid grid-cols-2 gap-3 text-left">
+              <button onClick={() => { setShowQuickOrder(false); startScanner(); }} className="p-4 bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-2xl flex flex-col items-center gap-1.5 cursor-pointer active-scale shadow-sm">
+                <span className="material-symbols-outlined text-[#FFD23F] text-2xl font-black">qr_code_scanner</span>
+                <span className="text-xs font-black">Scan Barcode</span>
+              </button>
+              {/*
+                This opened allStores[0] — the first entry of the global store
+                discovery list, an arbitrary shop the customer had usually never
+                visited — and never looked at order history at all, despite
+                being labelled "Repeat Order". It now reorders the most recent
+                order through the same handleReorder the Orders screen uses, and
+                offers browsing instead when there is nothing to repeat.
+              */}
+              {sortedOrdersHistory[0] ? (
                 <button
-                  onClick={() => {
-                    const firstStore = allStores[0];
-                    if (firstStore) {
-                      setStoreId(firstStore.id);
-                      loadStoreDetails(firstStore.id);
-                      navigateToScreen('store');
-                      setShowQuickOrder(false);
-                    }
-                  }}
-                  className="p-4 bg-white border border-gray-200 hover:bg-gray-50 rounded-2xl flex flex-col items-center gap-1.5 cursor-pointer active-scale shadow-sm"
+                  onClick={() => { setShowQuickOrder(false); handleReorder(sortedOrdersHistory[0]); }}
+                  className="p-4 bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-2xl flex flex-col items-center gap-1 cursor-pointer active-scale shadow-sm"
                 >
                   <span className="material-symbols-outlined text-[#FFD23F] text-2xl font-black">history</span>
-                  <span className="text-xs font-black text-[#1A1C1E]">Repeat Order</span>
+                  <span className="text-xs font-black">Repeat last order</span>
+                  <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 truncate max-w-full">#{sortedOrdersHistory[0].order_number}</span>
                 </button>
-              </div>
-
-              <div className="space-y-2 text-left">
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">AI Smart Suggestions</h4>
-                <div className="p-4 bg-[#FFD23F]/5 border border-[#FFD23F]/20 rounded-2xl space-y-2">
-                  <p className="text-xs font-black text-[#1A1C1E]">Cheaper Store Found!</p>
-                  <p className="text-xs text-gray-500 font-semibold">Indomie Chicken is 15% cheaper at FreshMart. Switch to save ₦120.</p>
-                </div>
-              </div>
+              ) : (
+                <button
+                  onClick={() => { setShowQuickOrder(false); navigateToScreen('explore'); }}
+                  className="p-4 bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-2xl flex flex-col items-center gap-1.5 cursor-pointer active-scale shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[#FFD23F] text-2xl font-black">storefront</span>
+                  <span className="text-xs font-black">Browse stores</span>
+                </button>
+              )}
             </div>
+
+            {/*
+              An "AI Smart Suggestions" card used to sit here with hard-coded
+              text: "Indomie Chicken is 15% cheaper at FreshMart. Switch to save
+              N120." There is no FreshMart, no such product, and no price
+              comparison anywhere in this app — every customer saw that exact
+              sentence forever. Removed rather than left claiming a capability
+              that does not exist.
+            */}
           </div>
         </div>
       )}
