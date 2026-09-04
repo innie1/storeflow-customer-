@@ -16,7 +16,8 @@ import { saveOrderAccessToken, getOrderAccessToken, getStoredOrderCredentials } 
 import { loadItsMeProfile, saveItsMeProfile, type ItsMe } from './lib/itsMe';
 import ProductImageWithFallback from './components/ProductImageWithFallback';
 import SearchPlaceholderInput from './components/SearchPlaceholderInput';
-import heroImage from './assets/hero.png';
+import OnboardingScreen from './screens/OnboardingScreen';
+import StoreNotFoundScreen from './screens/StoreNotFoundScreen';
 // STOREFLOW_SHARED_STORE_RESOLVER_V1
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
@@ -3913,37 +3914,10 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
         </div>
       )}
 
-      {/* ─── 2. Onboarding Screen ─── */}
       {screen === 'onboarding' && (
-        <div className="bg-[#F8F9FA] min-h-screen text-[#1A1C1E] flex flex-col justify-between p-6 max-w-md mx-auto">
-          <div className="flex justify-end pt-4">
-            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); navigateToScreen('home'); }} className="text-sm font-bold text-gray-400 hover:text-black cursor-pointer">Skip</button>
-          </div>
-          <main className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-            <div className="space-y-2">
-              <h1 className="text-3xl font-black text-[#1A1C1E] font-headline-xl">Welcome to StoreFlow</h1>
-              <p className="text-sm text-gray-500 max-w-xs mx-auto leading-relaxed font-semibold">
-                Connect to nearby stores, select products, and check out in under a minute.
-              </p>
-            </div>
-            <div className="relative w-72 h-72 bg-white border border-gray-100 rounded-[40px] shadow-sm overflow-hidden flex items-center justify-center p-6">
-              <img className="w-full h-full object-cover rounded-3xl" src={heroImage} alt="" width={288} height={288} fetchPriority="high" decoding="async" />
-            </div>
-            <div className="flex justify-center space-x-1.5">
-              <div className="h-1.5 w-1.5 rounded-full bg-gray-200"></div>
-              <div className="h-1.5 w-6 rounded-full bg-[#1A1C1E]"></div>
-              <div className="h-1.5 w-1.5 rounded-full bg-gray-200"></div>
-            </div>
-          </main>
-          <footer className="space-y-4 pb-8">
-            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); navigateToScreen('login'); }} className="w-full h-14 bg-[#1A1C1E] text-white font-bold rounded-xl active-scale cursor-pointer hover:bg-black transition-colors shadow-sm">
-              Get Started
-            </button>
-            <button onClick={() => { localStorage.setItem('storeflow_onboarded', 'true'); setIsOnboarded(true); navigateToScreen('home'); }} className="w-full h-14 bg-white border border-gray-200 text-[#1A1C1E] font-bold rounded-xl active-scale cursor-pointer hover:bg-gray-50 transition-colors shadow-sm">
-              Explore as Guest
-            </button>
-          </footer>
-        </div>
+        <OnboardingScreen
+          onFinish={next => { setIsOnboarded(true); navigateToScreen(next); }}
+        />
       )}
 
       {/* ─── 3. Login / Signup Screen ─── */}
@@ -5772,28 +5746,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
       )}
       {/* ─── 10. Store Not Found Screen ─── */}
       {screen === 'store_not_found' && (
-        <main className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-background text-on-surface">
-          <div className="max-w-md w-full p-8 bg-surface-container rounded-3xl border border-outline-variant/10 shadow-xl space-y-6 animate-scale">
-            <div className="w-20 h-20 bg-error-container text-error rounded-[28%] flex items-center justify-center mx-auto shadow-md">
-              <span className="material-symbols-outlined text-4xl font-bold">storefront</span>
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-black tracking-tight text-on-background font-headline-xl">Store Not Found</h1>
-              <p className="text-sm text-secondary-fixed-dim leading-relaxed max-w-[280px] mx-auto">
-                The link or QR code you scanned does not correspond to an active partner merchant on StoreFlow.
-              </p>
-            </div>
-            <div className="pt-2">
-              <button
-                onClick={() => navigateToScreen('home')}
-                className="w-full h-14 bg-primary text-on-primary font-bold rounded-full shadow-lg active:scale-98 hover:bg-primary/95 transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined text-lg">home</span>
-                <span>Go to Home Page</span>
-              </button>
-            </div>
-          </div>
-        </main>
+        <StoreNotFoundScreen onGoHome={() => navigateToScreen('home')} />
       )}
 
       {selectedProduct && screen === 'store' && (
@@ -5841,7 +5794,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
               {selectedProduct.description && (
                 <div>
                   <h4 className="text-xs font-bold text-secondary uppercase mb-1">Description</h4>
-                  <p className="text-sm text-secondary-fixed-dim leading-relaxed">{selectedProduct.description}</p>
+                  <p className="text-sm text-secondary leading-relaxed">{selectedProduct.description}</p>
                 </div>
               )}
             </div>
