@@ -605,7 +605,7 @@ export default function StoreScreen(props: StoreScreenProps) {
           opacity: pullDistance > 0 ? 1 : 0
         }}
       >
-        <div className="flex items-center gap-2 bg-white/90 backdrop-blur-md py-1.5 px-3 rounded-full shadow-md border border-gray-100 text-xs font-bold text-slate-700">
+        <div className="flex items-center gap-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md py-1.5 px-3 rounded-full shadow-md border border-gray-100 dark:border-zinc-800 text-xs font-bold text-slate-700 dark:text-zinc-200">
           {refreshing ? (
             <>
               <span className="material-symbols-outlined text-sm animate-spin text-[#FFD23F]">progress_activity</span>
@@ -613,7 +613,7 @@ export default function StoreScreen(props: StoreScreenProps) {
             </>
           ) : (
             <>
-              <span className="material-symbols-outlined text-sm text-gray-400">arrow_downward</span>
+              <span className="material-symbols-outlined text-sm text-gray-500 dark:text-zinc-300">arrow_downward</span>
               <span>{pullDistance > 60 ? 'Release to refresh' : 'Pull to refresh'}</span>
             </>
           )}
@@ -802,11 +802,11 @@ export default function StoreScreen(props: StoreScreenProps) {
                           {/* Badges Container */}
                           <div className="absolute top-1 left-1 z-10 flex flex-col gap-1 pointer-events-none">
                             {isOutOfStock ? (
-                              <span className="bg-rose-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Sold Out</span>
+                              <span className="bg-rose-500/15 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-500/30 font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider">Sold Out</span>
                             ) : isLimited ? (
-                              <span className="bg-amber-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Limited</span>
+                              <span className="bg-amber-500/15 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200 border border-amber-500/30 font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider">Limited</span>
                             ) : (
-                              <span className="bg-emerald-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Available</span>
+                              <span className="bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30 font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider">Available</span>
                             )}
 
                             {isNew && !isOutOfStock && (
@@ -828,7 +828,7 @@ export default function StoreScreen(props: StoreScreenProps) {
                               e.stopPropagation();
                               toggleFavorite(p.id);
                             }}
-                            className="absolute top-1 right-1 z-10 w-7 h-7 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm cursor-pointer text-gray-400 hover:text-rose-500 transition-transform"
+                            className="absolute top-1 right-1 z-10 w-7 h-7 bg-white/80 dark:bg-zinc-900/85 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm cursor-pointer text-gray-500 dark:text-zinc-300 hover:text-rose-500 dark:hover:text-rose-400 transition-transform"
                           >
                             <span className={`material-symbols-outlined text-base ${isFavorited ? 'text-rose-500 font-variation-fill' : ''}`} style={isFavorited ? { fontVariationSettings: "'FILL' 1" } : undefined}>
                               favorite

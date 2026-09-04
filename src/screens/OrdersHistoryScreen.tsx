@@ -29,7 +29,7 @@ export default function OrdersHistoryScreen({
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 dark:border-zinc-800 px-4 text-[#1A1C1E] dark:text-zinc-100">
         <button 
           onClick={onBack} 
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 active:scale-95 transition cursor-pointer"
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-800 dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 active:scale-95 transition cursor-pointer"
         >
           <span className="material-symbols-outlined text-lg">arrow_back</span>
         </button>
@@ -39,35 +39,35 @@ export default function OrdersHistoryScreen({
 
       <main className="mt-6 px-4 md:px-8 max-w-md md:max-w-2xl lg:max-w-3xl mx-auto space-y-4 text-left">
         {orders.length > 0 && (
-          <div className="relative w-full h-11 bg-white rounded-xl flex items-center px-4 border border-gray-200 shadow-sm">
-            <span className="material-symbols-outlined text-gray-400 text-sm mr-2.5">search</span>
+          <div className="relative w-full h-11 bg-white dark:bg-zinc-900 rounded-xl flex items-center px-4 border border-gray-200 dark:border-zinc-700 shadow-sm">
+            <span className="material-symbols-outlined text-gray-400 dark:text-zinc-500 text-sm mr-2.5">search</span>
             <input
               type="text"
               placeholder="Search by store, item, order ID, or date..."
               value={searchQuery}
               onChange={e => onSearchChange(e.target.value)}
-              className="bg-transparent border-none text-xs focus:ring-0 focus:outline-none w-full text-[#1A1C1E] placeholder:text-gray-400"
+              className="bg-transparent border-none text-xs focus:ring-0 focus:outline-none w-full text-[#1A1C1E] dark:text-zinc-100 placeholder:text-gray-400"
             />
             {searchQuery && (
-              <button onClick={() => onSearchChange('')} className="text-gray-400 cursor-pointer">
+              <button onClick={() => onSearchChange('')} className="text-gray-400 dark:text-zinc-500 cursor-pointer">
                 <span className="material-symbols-outlined text-base">close</span>
               </button>
             )}
           </div>
         )}
         {orders.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 flex flex-col items-center justify-center gap-3">
-            <span className="material-symbols-outlined text-5xl text-gray-300">receipt_long</span>
-            <p className="text-sm font-black uppercase tracking-wider text-[#1A1C1E]">No orders placed yet</p>
-            <p className="text-xs text-gray-500 font-medium max-w-xs leading-relaxed">
+          <div className="text-center py-16 text-gray-400 dark:text-zinc-500 flex flex-col items-center justify-center gap-3">
+            <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-zinc-600">receipt_long</span>
+            <p className="text-sm font-black uppercase tracking-wider text-[#1A1C1E] dark:text-zinc-100">No orders placed yet</p>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 font-medium max-w-xs leading-relaxed">
               When you place an order, it will appear here instantly with live tracking updates.
             </p>
           </div>
         ) : visibleOrders.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 flex flex-col items-center justify-center gap-3">
-            <span className="material-symbols-outlined text-5xl text-gray-300">search_off</span>
-            <p className="text-sm font-black uppercase tracking-wider text-[#1A1C1E]">No matching orders</p>
-            <p className="text-xs text-gray-500 font-medium max-w-xs leading-relaxed">
+          <div className="text-center py-16 text-gray-400 dark:text-zinc-500 flex flex-col items-center justify-center gap-3">
+            <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-zinc-600">search_off</span>
+            <p className="text-sm font-black uppercase tracking-wider text-[#1A1C1E] dark:text-zinc-100">No matching orders</p>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 font-medium max-w-xs leading-relaxed">
               Try a different search term, or clear the search to see all your orders.
             </p>
           </div>
@@ -109,25 +109,25 @@ export default function OrdersHistoryScreen({
               <div key={o.id} className="space-y-4">
               {isFirstFinished && (
                 <div className="flex items-center gap-3 pt-2 pb-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Order History</span>
-                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-zinc-500">Order History</span>
+                  <div className="flex-1 h-px bg-gray-200 dark:bg-zinc-800" />
                 </div>
               )}
               <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-3xl p-5 shadow-sm space-y-4 text-left">
                 {/* Header: Store Logo, Name & Date */}
-                <div className="flex justify-between items-start border-b border-gray-100 pb-3">
+                <div className="flex justify-between items-start border-b border-gray-100 dark:border-zinc-800 pb-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
                       <StoreBrandMark store={cardStore} />
                     </div>
                     <div className="text-left min-w-0">
-                      <h4 className="font-extrabold text-sm text-[#1A1C1E] truncate max-w-[160px]">{storeNameText}</h4>
-                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">#{o.order_number}</p>
+                      <h4 className="font-extrabold text-sm text-[#1A1C1E] dark:text-zinc-100 truncate max-w-[160px]">{storeNameText}</h4>
+                      <p className="text-[10px] text-gray-400 dark:text-zinc-500 font-mono mt-0.5">#{o.order_number}</p>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="text-[10px] text-gray-400 font-bold block">{new Date(o.created_at).toLocaleDateString()}</span>
-                    <span className="text-[10px] text-gray-400 font-semibold block">{new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-bold block">{new Date(o.created_at).toLocaleDateString()}</span>
+                    <span className="text-[10px] text-gray-400 dark:text-zinc-500 font-semibold block">{new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider mt-1 ${
                       o.status === 'Completed' || o.status === 'Delivered' ? 'bg-emerald-55 text-emerald-700 border border-emerald-100' :
                       o.status === 'Rejected' || o.status === 'Cancelled' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
@@ -140,32 +140,32 @@ export default function OrdersHistoryScreen({
 
                 {/* Receipt Items list */}
                 <div className="space-y-2 text-xs text-left">
-                  <p className="font-bold text-[10px] text-gray-400 uppercase tracking-wider">Order Items</p>
+                  <p className="font-bold text-[10px] text-gray-400 dark:text-zinc-500 uppercase tracking-wider">Order Items</p>
                   <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                     {itemsSummary.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center text-gray-600">
-                        <span className="font-semibold text-gray-800 text-left">
-                          {item.name} <span className="text-gray-400 font-mono text-[10px]">x{item.quantity}</span>
+                      <div key={idx} className="flex justify-between items-center text-gray-600 dark:text-zinc-300">
+                        <span className="font-semibold text-gray-800 dark:text-zinc-100 text-left">
+                          {item.name} <span className="text-gray-400 dark:text-zinc-500 font-mono text-[10px]">x{item.quantity}</span>
                         </span>
-                        <span className="font-mono text-gray-500">₦{Number(item.price || 0).toLocaleString()}</span>
+                        <span className="font-mono text-gray-500 dark:text-zinc-400">₦{Number(item.price || 0).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Totals & Metadata */}
-                <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100 space-y-2 text-xs text-left">
-                  <div className="flex justify-between text-gray-500 font-semibold">
+                <div className="bg-gray-50 dark:bg-zinc-950/60 p-3 rounded-2xl border border-gray-100 dark:border-zinc-800 space-y-2 text-xs text-left">
+                  <div className="flex justify-between text-gray-500 dark:text-zinc-400 font-semibold">
                     <span>Total Items</span>
                     <span>{totalQty} items</span>
                   </div>
-                  <div className="flex justify-between text-gray-500 font-semibold">
+                  <div className="flex justify-between text-gray-500 dark:text-zinc-400 font-semibold">
                     <span>Payment Mode</span>
                     <span className="capitalize">{paymentMethodText}</span>
                   </div>
-                  <div className="flex justify-between text-[#1A1C1E] font-extrabold border-t border-gray-100 pt-2">
+                  <div className="flex justify-between text-[#1A1C1E] dark:text-zinc-100 font-extrabold border-t border-gray-100 dark:border-zinc-800 pt-2">
                     <span>Paid Total</span>
-                    <span className="text-[#1A1C1E] font-black">₦{o.total.toLocaleString()}</span>
+                    <span className="text-[#1A1C1E] dark:text-zinc-100 font-black">₦{o.total.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -173,7 +173,7 @@ export default function OrdersHistoryScreen({
                 <div className="flex gap-2 pt-1 text-xs font-bold">
                   <button
                     onClick={() => onOpenOrder(o)}
-                    className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-[#1A1C1E] rounded-xl text-center cursor-pointer uppercase tracking-wider transition shadow-sm"
+                    className="flex-1 py-3 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 hover:bg-gray-50 text-[#1A1C1E] dark:text-zinc-100 rounded-xl text-center cursor-pointer uppercase tracking-wider transition shadow-sm"
                   >
                     Track Status
                   </button>

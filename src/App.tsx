@@ -6,7 +6,7 @@ import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotif
 import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
 import { computeOrderPricing } from './utils/orderPricing';
 import type { Product, Store, CartItem, Order, TrackedOrder } from './types';
-import { computeStoreOpen, isServiceStore } from './lib/storeIdentity';
+import { computeStoreOpen, isServiceStore, getStorePrepMinutes } from './lib/storeIdentity';
 import StoreBrandMark from './components/StoreBrandMark';
 import { saveOrderAccessToken, getOrderAccessToken, getStoredOrderCredentials } from './lib/orderTokens';
 import { loadItsMeProfile, saveItsMeProfile, type ItsMe } from './lib/itsMe';
@@ -3333,6 +3333,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
           onCopyOrderNumber={copyOrderNumber}
           orderNumberCopied={orderCopied}
           onInstall={deferredPrompt ? triggerInstall : null}
+          prepMinutes={getStorePrepMinutes(store)}
         />
       )}
 

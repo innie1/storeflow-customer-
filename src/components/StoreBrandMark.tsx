@@ -25,7 +25,16 @@ export default function StoreBrandMark({ store }: { store: any }) {
   }
   return (
     <div
-      className="w-full h-full bg-white flex items-center justify-center"
+      className="w-full h-full flex items-center justify-center"
+      /*
+        The generated mark draws near-black strokes and text (#0F172A and
+        friends), so it needs a light plate to sit on. `bg-white` cannot be
+        used: index.css turns every .bg-white dark, which left the mark drawing
+        dark-on-dark and the logo looked empty in dark mode. An inline style is
+        not reachable by that override, so the plate stays light in both themes
+        — which is also how a real uploaded logo behaves.
+      */
+      style={{ backgroundColor: '#ffffff' }}
       dangerouslySetInnerHTML={{ __html: getStoreBrandSvg(store?.business_name || 'Store', getStoreLogoStyle(store)) }}
     />
   );

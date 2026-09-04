@@ -77,6 +77,7 @@ export default function TrackingScreen({
   onCopyOrderNumber,
   orderNumberCopied,
   onInstall,
+  prepMinutes,
 }: {
   store: any;
   order: TrackingOrderView;
@@ -90,6 +91,7 @@ export default function TrackingScreen({
   onCopyOrderNumber: () => void;
   orderNumberCopied: boolean;
   onInstall: (() => void) | null;
+  prepMinutes: number | null;
 }) {
   const { status, submitting, statusHistory, processingStage, summary } = order;
   const failed = status === 'Rejected' || status === 'Cancelled';
@@ -139,6 +141,14 @@ export default function TrackingScreen({
             <div className="min-w-0 flex-1">
               <h1 className="text-lg font-black tracking-tight">{heading}</h1>
               <p className="text-xs text-gray-500 dark:text-zinc-400 font-semibold leading-relaxed mt-0.5">{detail}</p>
+              {/* The merchant's own published prep time — not an estimate made
+                  up here, which is what the old "30-45 min" tile was. */}
+              {prepMinutes !== null && !submitting && ['Pending', 'Accepted', 'Preparing'].includes(status) && (
+                <p className="text-[11px] text-gray-400 dark:text-zinc-500 font-bold mt-1 inline-flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">schedule</span>
+                  This store usually takes about {prepMinutes} min
+                </p>
+              )}
             </div>
           </div>
 
@@ -259,7 +269,7 @@ export default function TrackingScreen({
                     <div className="flex flex-col items-center">
                       <span
                         className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                          isReached ? 'bg-[#1A1C1E] text-[#FFD23F] dark:bg-[#FFD23F] dark:text-zinc-950' : 'bg-gray-100 dark:bg-zinc-800 text-gray-300 dark:text-zinc-600'
+                          isReached ? 'bg-[#1A1C1E] text-[#FFD23F] dark:bg-[#FFD23F] dark:text-zinc-950' : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-zinc-400'
                         }`}
                       >
                         <span className="material-symbols-outlined text-[11px] font-bold">{isReached ? 'check' : 'circle'}</span>
@@ -269,7 +279,7 @@ export default function TrackingScreen({
                       )}
                     </div>
                     <div className="pb-4 -mt-0.5 min-w-0">
-                      <p className={`text-xs font-bold ${isReached ? '' : 'text-gray-300 dark:text-zinc-600'}`}>
+                      <p className={`text-xs font-bold ${isReached ? '' : 'text-gray-400 dark:text-zinc-400'}`}>
                         {STAGE_LABELS[stage]}
                         {isCurrent && !failed && <span className="text-gray-400 dark:text-zinc-500 font-semibold"> · now</span>}
                       </p>

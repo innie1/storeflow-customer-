@@ -74,4 +74,34 @@ for (const bad of [null, undefined, { deliveryFee: 'abc', onlineDiscount: 'x', d
   assert.equal(p.total, 0);
 }
 
+// ── The merchant's real reward keys ─────────────────────────────────────────
+// There is no `onlineDiscount` key anywhere in the merchant app. Its
+// promotions section writes onlineOrderRewardType/Value, and expresses free
+// delivery as deliveryRewardType: 'free' over deliveryMinSpend.
+{
+  const pct = computeOrderPricing(5000, { onlineOrderRewardType: 'percentage', onlineOrderRewardValue: 5 }, { deliveryType: 'pickup' });
+  assert.equal(pct.discount, 250, '5% of 5,000');
+
+  const flat = computeOrderPricing(5000, { onlineOrderRewardType: 'flat', onlineOrderRewardValue: 750 }, { deliveryType: 'pickup' });
+  assert.equal(flat.discount, 750, 'a flat reward comes off in naira, not percent');
+
+  const capped = computeOrderPricing(500, { onlineOrderRewardType: 'flat', onlineOrderRewardValue: 900 }, { deliveryType: 'pickup' });
+  assert.equal(capped.discount, 500, 'a flat reward can never exceed the subtotal');
+
+  for (const type of ['points', 'none']) {
+    const p = computeOrderPricing(5000, { onlineOrderRewardType: type, onlineOrderRewardValue: 5 }, { deliveryType: 'pickup' });
+    assert.equal(p.discount, 0, `'${type}' is not money off`);
+  }
+
+  // Free delivery expressed the promotions way.
+  const under = computeOrderPricing(4999, { deliveryFee: 1200, deliveryRewardType: 'free', deliveryMinSpend: 5000 }, { deliveryType: 'delivery' });
+  assert.equal(under.deliveryFee, 1200, 'below deliveryMinSpend the fee still applies');
+  const over = computeOrderPricing(5000, { deliveryFee: 1200, deliveryRewardType: 'free', deliveryMinSpend: 5000 }, { deliveryType: 'delivery' });
+  assert.equal(over.deliveryFee, 0, 'at deliveryMinSpend delivery becomes free');
+
+  // The legacy key still works for settings saved before the rename.
+  const legacy = computeOrderPricing(1000, { onlineDiscount: 10 }, { deliveryType: 'pickup' });
+  assert.equal(legacy.discount, 100, 'legacy onlineDiscount is still honoured');
+}
+
 console.log('Order pricing regressions passed.');

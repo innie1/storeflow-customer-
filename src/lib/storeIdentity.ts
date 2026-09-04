@@ -50,7 +50,16 @@ export function computeStoreOpen(s: any): boolean {
   
   const ms = s?.data?.marketplaceSettings;
   if (ms && typeof ms === 'object') {
-    if (ms.enabled === false || ms.storeOpen === false || ms.temporaryClosure === true || ms.temporarilyHidden === true) return false;
+    // `ms.enabled` is not a key the merchant app writes — its equivalent is
+    // marketplaceListingEnabled. It is kept in the check because older stored
+    // settings may still carry it.
+    if (
+      ms.enabled === false ||
+      ms.marketplaceListingEnabled === false ||
+      ms.storeOpen === false ||
+      ms.temporaryClosure === true ||
+      ms.temporarilyHidden === true
+    ) return false;
     if (!ms.openingTime || !ms.closingTime) return true;
     const now = new Date();
     if (Array.isArray(ms.businessDays) && !ms.businessDays.includes(now.getDay())) return false;
@@ -63,3 +72,20 @@ export function computeStoreOpen(s: any): boolean {
 export const SERVICE_BUSINESS_TYPES = new Set(['laundry','barber','salon','tailoring','repair','printing','cyber_cafe','car_wash','photography','cleaning','spa','games','gaming','restaurant']);
 export function getStoreBusinessType(storeData: any): string { return String(storeData?.data?.businessTemplate?.type || storeData?.data?.storeType || storeData?.storeType || storeData?.business_type || '').toLowerCase(); }
 export function isServiceStore(storeData: any): boolean { const type=getStoreBusinessType(storeData); const modes=storeData?.data?.businessTemplate?.modes; return SERVICE_BUSINESS_TYPES.has(type) || (Array.isArray(modes) && modes.includes('services')); }
+
+/**
+ * How long this merchant says they take to prepare an order, in minutes.
+ *
+ * The merchant app stores `defaultPrepTime` as a string of minutes, or the
+ * literal 'custom' in which case `customPrepTime` holds the number. Returns
+ * null when the merchant has published neither — the tracking screen used to
+ * show an "Estimated Time" of "30-45 min" that was invented in the customer
+ * app and ignored this entirely.
+ */
+export function getStorePrepMinutes(s: any): number | null {
+  const ms = s?.data?.marketplaceSettings;
+  if (!ms) return null;
+  const raw = ms.defaultPrepTime;
+  const minutes = String(raw) === 'custom' ? Number(ms.customPrepTime) : Number(raw);
+  return Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes) : null;
+}

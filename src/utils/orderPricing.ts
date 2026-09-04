@@ -17,11 +17,26 @@
 export interface MarketplaceSettings {
   deliveryFee?: unknown;
   freeDeliveryThreshold?: unknown;
-  onlineDiscount?: unknown;
   /** What the merchant app writes. */
   deliveryMinOrder?: unknown;
   /** Older name for the same thing. */
   minimumOrder?: unknown;
+
+  /**
+   * The merchant's actual online-order reward. There is no `onlineDiscount`
+   * key anywhere in the merchant app — its promotions section writes these
+   * two. 'points' awards loyalty points rather than money off, so it is not a
+   * discount here.
+   */
+  onlineOrderRewardType?: unknown;
+  onlineOrderRewardValue?: unknown;
+
+  /** Free delivery over `deliveryMinSpend`, the merchant's other spelling of a threshold. */
+  deliveryRewardType?: unknown;
+  deliveryMinSpend?: unknown;
+
+  /** Legacy percentage discount, kept so older stored settings still work. */
+  onlineDiscount?: unknown;
 }
 
 export interface OrderPricing {
@@ -49,6 +64,20 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** Money off this order, from whichever reward the merchant configured. */
+function resolveDiscount(ms: MarketplaceSettings, subtotal: number): number {
+  const rewardType = String(ms.onlineOrderRewardType ?? '');
+  const rewardValue = toPositiveNumber(ms.onlineOrderRewardValue);
+
+  if (rewardType === 'percentage') return (subtotal * Math.min(rewardValue, 100)) / 100;
+  if (rewardType === 'flat') return Math.min(rewardValue, subtotal);
+  // 'points' pays in loyalty points and 'none' pays nothing; neither is money off.
+  if (rewardType === 'points' || rewardType === 'none') return 0;
+
+  const legacyPct = Math.min(toPositiveNumber(ms.onlineDiscount), 100);
+  return (subtotal * legacyPct) / 100;
+}
+
 export function computeOrderPricing(
   subtotal: number,
   settings: MarketplaceSettings | null | undefined,
@@ -57,10 +86,12 @@ export function computeOrderPricing(
   const ms = settings || {};
   const safeSubtotal = Number.isFinite(subtotal) && subtotal > 0 ? subtotal : 0;
 
-  const discountPct = Math.min(toPositiveNumber(ms.onlineDiscount), 100);
-  const discount = round2((safeSubtotal * discountPct) / 100);
+  const discount = round2(resolveDiscount(ms, safeSubtotal));
 
-  const threshold = toPositiveNumber(ms.freeDeliveryThreshold);
+  // Two spellings of the same idea: an explicit freeDeliveryThreshold, or the
+  // promotions section's "free delivery over deliveryMinSpend".
+  const threshold = toPositiveNumber(ms.freeDeliveryThreshold)
+    || (String(ms.deliveryRewardType) === 'free' ? toPositiveNumber(ms.deliveryMinSpend) : 0);
   const qualifiesForFreeDelivery = threshold > 0 && safeSubtotal >= threshold;
 
   let deliveryFee = 0;

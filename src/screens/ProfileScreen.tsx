@@ -94,7 +94,7 @@ export default function ProfileScreen({
                   </p>
                 </div>
               </div>
-              <span className="material-symbols-outlined text-white/30 group-hover:text-[#FFD23F]/60 transition-colors text-lg shrink-0">chevron_right</span>
+              <span className="material-symbols-outlined text-white/55 group-hover:text-[#FFD23F] transition-colors text-lg shrink-0">chevron_right</span>
             </div>
           </div>
         </button>
