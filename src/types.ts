@@ -60,3 +60,19 @@ export interface Order {
   created_at: string;
   order_items?: OrderItem[];
 }
+
+/**
+ * What the customer ordered, kept locally so the tracking screen can show the
+ * items and the amount owed. The merchant's copy of the order is the source of
+ * truth; this is only for display on this device.
+ */
+export interface TrackedOrder {
+  total: number;
+  subtotal: number;
+  discount: number;
+  deliveryFee: number;
+  loyaltyDiscount: number;
+  deliveryType: 'pickup' | 'delivery';
+  paymentMethod: string;
+  items: Array<{ name: string; quantity: number; price: number }>;
+}

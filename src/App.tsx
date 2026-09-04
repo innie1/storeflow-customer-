@@ -6,7 +6,7 @@ import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotif
 import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
 import { computeOrderPricing } from './utils/orderPricing';
 import LaundryStorefront from './components/LaundryStorefront';
-import type { Product, Store, CartItem, Order } from './types';
+import type { Product, Store, CartItem, Order, TrackedOrder } from './types';
 import {
   isLogoImageUrl, getStoreBusinessTypeLabel, computeStoreOpen,
   getStoreBusinessType, isServiceStore,
@@ -20,6 +20,7 @@ import OnboardingScreen from './screens/OnboardingScreen';
 import StoreNotFoundScreen from './screens/StoreNotFoundScreen';
 import LoginScreen from './screens/LoginScreen';
 import LocationScreen from './screens/LocationScreen';
+import TrackingScreen from './screens/TrackingScreen';
 // STOREFLOW_SHARED_STORE_RESOLVER_V1
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
@@ -439,6 +440,15 @@ function App() {
       localStorage.removeItem('storeflow_tracking_order_status');
     }
   }, [orderStatus]);
+  // Persisted so reopening the app on the tracking screen still shows the
+  // order's contents rather than a bare status.
+  const [trackedOrder, setTrackedOrder] = useState<TrackedOrder | null>(
+    () => safeGetJSON<TrackedOrder | null>('storeflow_tracking_order_summary', null)
+  );
+  useEffect(() => {
+    if (trackedOrder) safeSetJSON('storeflow_tracking_order_summary', trackedOrder);
+  }, [trackedOrder]);
+
   const [orderCopied, setOrderCopied] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
@@ -2179,6 +2189,25 @@ function App() {
     // background below. Previously this was one long blocking await chain
     // (place order → wait → insert notification → wait → THEN navigate),
     // which is why order submission felt slow even on a decent connection.
+    // Snapshot of what was ordered, purely for the tracking screen. The
+    // tracking screen previously showed no total and no item list at all, so a
+    // customer could not see what they had ordered or what it would cost. This
+    // does not touch the order payload sent to the merchant.
+    setTrackedOrder({
+      total: finalTotal,
+      subtotal,
+      discount: onlineDiscount,
+      deliveryFee: finalDeliveryFee,
+      loyaltyDiscount,
+      deliveryType: finalDeliveryType,
+      paymentMethod: finalPaymentMethod,
+      items: cart.map(item => ({
+        name: item.product.name,
+        quantity: item.quantity,
+        price: getPrice(item.product),
+      })),
+    });
+
     setOrderNumber(genOrderNo);
     setOrderStatus('Pending');
     setOrderId('pending-' + Date.now());
@@ -4635,394 +4664,37 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
       {/* ─── 7. Order Tracking timeline ─── */}
       {screen === 'tracking' && (
-        <div className="bg-[#F8F9FA] dark:bg-zinc-950 min-h-screen text-[#1A1C1E] dark:text-zinc-100 pb-32">
-          {/* Header */}
-          <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md flex justify-between items-center w-full h-16 border-b border-gray-100 dark:border-zinc-800 px-4 text-[#1A1C1E] dark:text-zinc-100">
-            <button 
-              onClick={() => {
-                goBack('store');
-              }} 
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-900 text-[#1A1C1E] dark:text-zinc-100 active:scale-95 transition cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-lg">arrow_back</span>
-            </button>
-            <span className="text-sm font-black tracking-wider uppercase">Track Order</span>
-            <div className="w-10 h-10" />
-          </header>
-
-          <main className="mt-6 px-4 md:px-8 max-w-md md:max-w-2xl lg:max-w-3xl mx-auto space-y-6 text-left">
-            {/* Store identity chip */}
-            {store && (
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-                  {isLogoImageUrl(store.logo) ? (
-                    <img loading="lazy" decoding="async" src={store.logo} className="w-full h-full object-cover" alt="" />
-                  ) : (
-                    <span className="text-[10px]">🏪</span>
-                  )}
-                </div>
-                <span className="text-xs font-bold text-gray-500">{store.business_name}</span>
-              </div>
-            )}
-
-            {/* Status Header Hero */}
-            <div className="text-center flex flex-col items-center gap-2.5 py-4">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-1 ${
-                orderStatus === 'Rejected' || orderStatus === 'Cancelled' 
-                  ? 'bg-rose-100 text-rose-600 border border-rose-200' 
-                  : 'bg-[#FFD23F]/20 text-[#1A1C1E] border border-[#FFD23F]/40'
-              }`}>
-                <span className={`material-symbols-outlined text-3xl font-black ${orderSubmitting ? 'animate-spin' : ''}`}>
-                  {orderSubmitting ? 'progress_activity' : orderStatus === 'Rejected' ? 'block' : orderStatus === 'Cancelled' ? 'close' : 'receipt_long'}
-                </span>
-              </div>
-              <h1 className="text-2xl font-black text-[#1A1C1E] font-display uppercase tracking-tight">
-                {orderSubmitting ? 'Sending Order...' : orderStatus === 'Rejected' ? 'Order Rejected' : orderStatus === 'Cancelled' ? 'Order Cancelled' : 'Order Placed! 🎉'}
-              </h1>
-              <p className="text-xs text-gray-500 font-semibold max-w-xs leading-relaxed">
-                {orderSubmitting && 'Confirming with the store — this only takes a moment.'}
-                {!orderSubmitting && orderStatus === 'Pending Approval' && 'The store is currently reviewing your order details.'}
-                {!orderSubmitting && orderStatus === 'Accepted' && 'Your order was accepted! Awaiting packaging.'}
-                {!orderSubmitting && orderStatus === 'Preparing' && 'Staff are preparing and packing your order.'}
-                {!orderSubmitting && orderStatus === 'Ready' && 'Your order is ready! Awaiting pickup/delivery.'}
-                {!orderSubmitting && orderStatus === 'Out for Delivery' && 'Your package is on its way to you.'}
-                {!orderSubmitting && orderStatus === 'Delivered' && 'Order marked as delivered. Enjoy!'}
-                {!orderSubmitting && orderStatus === 'Completed' && 'Thank you for shopping with StoreFlow!'}
-                {!orderSubmitting && orderStatus === 'Changes Requested' && 'The merchant requested changes to your order.'}
-              </p>
-            </div>
-
-            {/* Background sync error — order is safe, just delayed */}
-            {orderSubmitError && (
-              <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 p-4 rounded-2xl text-xs space-y-1.5 shadow-sm animate-fade-in backdrop-blur-sm text-left">
-                <h4 className="font-extrabold text-sm flex items-center gap-2 text-amber-900 dark:text-amber-100">
-                  <span className="w-7 h-7 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-base font-bold">wifi_off</span>
-                  </span>
-                  <span>Order queued</span>
-                </h4>
-                <p className="leading-relaxed text-amber-700 dark:text-amber-300 font-medium">{orderSubmitError}</p>
-              </div>
-            )}
-
-            {/* Live Order Timeline */}
-            {!orderSubmitting && orderStatusHistory.length > 0 && (
-              <div className="bg-white rounded-[24px] p-5 shadow-sm border border-gray-100">
-                <h4 className="font-black text-xs uppercase tracking-wider text-gray-400 mb-4">Order Timeline</h4>
-                {(() => {
-                  const TIMELINE_STAGES = ['Pending', 'Accepted', 'Preparing', 'Ready', 'Completed'];
-                  const historyByStatus = new Map(orderStatusHistory.map(h => [h.status, h.at]));
-                  const isTerminalNegative = orderStatus === 'Rejected' || orderStatus === 'Cancelled';
-                  const currentStageIdx = TIMELINE_STAGES.indexOf(orderStatus);
-                  return (
-                    <div className="space-y-0">
-                      {TIMELINE_STAGES.map((stage, i) => {
-                        const reachedAt = historyByStatus.get(stage);
-                        const isReached = !!reachedAt || (!isTerminalNegative && currentStageIdx >= 0 && i <= currentStageIdx);
-                        const isCurrent = stage === orderStatus;
-                        const isLast = i === TIMELINE_STAGES.length - 1;
-                        const stageLabel: Record<string, string> = {
-                          Pending: 'Order Placed', Accepted: 'Store Received Order', Preparing: 'Preparing',
-                          Ready: 'Ready', Completed: 'Completed'
-                        };
-                        return (
-                          <div key={stage} className="flex gap-3">
-                            <div className="flex flex-col items-center">
-                              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                                isReached ? 'bg-[#1A1C1E] text-[#FFD23F]' : 'bg-gray-100 text-gray-300'
-                              }`}>
-                                <span className="material-symbols-outlined text-xs font-bold">
-                                  {isReached ? 'check' : 'circle'}
-                                </span>
-                              </div>
-                              {!isLast && <div className={`w-0.5 flex-1 min-h-[24px] ${isReached && i < currentStageIdx ? 'bg-[#1A1C1E]' : 'bg-gray-100'}`} />}
-                            </div>
-                            <div className="pb-6 -mt-0.5">
-                              <p className={`text-xs font-bold ${isReached ? 'text-[#1A1C1E]' : 'text-gray-300'}`}>
-                                {stageLabel[stage]}{isCurrent && !isTerminalNegative ? ' (current)' : ''}
-                              </p>
-                              {reachedAt && (
-                                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
-                                  {new Date(reachedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                </p>
-                              )}
-                              {stage === 'Preparing' && isCurrent && processingStage && (
-                                <p className="text-[11px] text-[#1A1C1E] font-bold mt-1 inline-flex items-center gap-1 bg-[#FFD23F]/20 px-2 py-0.5 rounded-full">
-                                  🧺 {processingStage}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {isTerminalNegative && (
-                        <div className="flex gap-3">
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-rose-500 text-white">
-                            <span className="material-symbols-outlined text-xs font-bold">close</span>
-                          </div>
-                          <div className="-mt-0.5">
-                            <p className="text-xs font-bold text-rose-600">{orderStatus}</p>
-                            {historyByStatus.get(orderStatus) && (
-                              <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
-                                {new Date(historyByStatus.get(orderStatus)!).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Fulfillment duration summary — once accepted, shows how long it took */}
-                {(() => {
-                  const historyByStatus = new Map(orderStatusHistory.map(h => [h.status, h.at]));
-                  const acceptedAt = historyByStatus.get('Accepted');
-                  const completedAt = historyByStatus.get('Completed');
-                  if (!acceptedAt) return null;
-                  const durationMs = completedAt
-                    ? new Date(completedAt).getTime() - new Date(acceptedAt).getTime()
-                    : Date.now() - new Date(acceptedAt).getTime();
-                  const mins = Math.max(1, Math.round(durationMs / 60000));
-                  return (
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">
-                          {completedAt ? 'Fulfillment Time' : 'Time Since Accepted'}
-                        </p>
-                        <p className="text-sm font-black text-[#1A1C1E] mt-0.5">
-                          {mins < 60 ? `${mins} minute${mins === 1 ? '' : 's'}` : `${Math.floor(mins / 60)}h ${mins % 60}m`}
-                        </p>
-                      </div>
-                      <span className="material-symbols-outlined text-gray-300 text-xl">timer</span>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Message the store about this specific order — no need to search for a number */}
-            {store?.phone && (
-              <a
-                href={`https://wa.me/${store.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                  `Hi, I'm checking on my order${orderNumber ? ` #${orderNumber}` : ''} at ${store.business_name}. Current status: ${orderStatus}${processingStage ? ` (${processingStage})` : ''}. Could you give me an update?`
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-[#25D366]/10 border border-[#25D366]/30 text-[#128C4A] font-black text-xs uppercase tracking-wide active-scale"
-              >
-                <span className="material-symbols-outlined text-base">chat</span>
-                Message {store.business_name} on WhatsApp
-              </a>
-            )}
-
-            {/* Rejection Notice Banner */}
-            {orderStatus === 'Rejected' && (
-              <div className="bg-rose-50/90 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-800/60 text-rose-900 dark:text-rose-200 p-4 rounded-2xl text-xs space-y-2 shadow-sm animate-fade-in backdrop-blur-sm text-left">
-                <h4 className="font-extrabold text-sm flex items-center gap-2 text-rose-900 dark:text-rose-100">
-                  <span className="w-7 h-7 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-base font-bold">warning</span>
-                  </span>
-                  <span>Cancellation details</span>
-                </h4>
-                <p className="text-rose-700 dark:text-rose-300 font-semibold leading-relaxed">
-                  The merchant rejected your order.
-                </p>
-                {rejectionReason && (
-                  <p className="mt-2 bg-white dark:bg-zinc-900 p-3 rounded-xl border border-rose-200/60 dark:border-rose-800/60 text-rose-900 dark:text-rose-200 font-bold font-mono">
-                    Reason: {rejectionReason}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Changes Requested Interactive Box */}
-            {orderStatus === 'Changes Requested' && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-[20px] text-xs space-y-3.5 shadow-sm">
-                <h4 className="font-extrabold text-sm flex items-center gap-1.5 text-amber-950">
-                  <span className="material-symbols-outlined text-sm font-bold">info</span>
-                  <span>Review Proposal</span>
-                </h4>
-                {changeRequestMessage && (
-                  <div className="bg-white p-3 rounded-xl border border-amber-100 text-[#1A1C1E] leading-relaxed font-bold shadow-sm">
-                    "{changeRequestMessage}"
-                  </div>
-                )}
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => handleCancelOrder()}
-                    disabled={loading || orderSubmitting}
-                    className="flex-1 py-3 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-600 font-extrabold rounded-xl transition cursor-pointer text-center uppercase tracking-wider text-xs shadow-sm"
-                  >
-                    Cancel Order
-                  </button>
-                  <button
-                    onClick={handleApproveChanges}
-                    disabled={loading}
-                    className="flex-1 py-3 bg-[#1A1C1E] hover:bg-black text-[#FFD23F] font-black rounded-xl transition cursor-pointer text-center uppercase tracking-wider text-xs shadow-sm"
-                  >
-                    {loading ? 'Approving...' : 'Approve Proposal'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Inline cancel error banner — replaces alert(), matches the
-                style already used for orderSubmitError above so a failed
-                cancel doesn't feel like a jarring browser popup. */}
-            {cancelOrderError && (
-              <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-[20px] text-xs space-y-1.5 shadow-sm flex items-start gap-2.5">
-                <span className="material-symbols-outlined text-sm font-bold shrink-0 mt-0.5">error</span>
-                <div className="flex-1">
-                  <h4 className="font-extrabold text-sm">Couldn't cancel order</h4>
-                  <p className="leading-relaxed mt-0.5">{cancelOrderError}</p>
-                </div>
-                <button onClick={() => setCancelOrderError(null)} className="shrink-0 cursor-pointer text-rose-400 hover:text-rose-600">
-                  <span className="material-symbols-outlined text-sm">close</span>
-                </button>
-              </div>
-            )}
-
-            {/* General Cancel Order — customer can cancel any time before preparation starts */}
-            {(orderStatus === 'Pending' || orderStatus === 'Accepted') && !orderSubmitting && (
-              <button
-                onClick={() => { setCancelOrderError(null); setCancelReason(''); setShowCancelConfirm(true); }}
-                className="w-full py-3 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 font-extrabold rounded-2xl transition cursor-pointer text-center uppercase tracking-wider text-xs shadow-sm flex items-center justify-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-sm">cancel</span>
-                Cancel This Order
-              </button>
-            )}
-
-            {/* Cancel confirmation dialog */}
-            {showCancelConfirm && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowCancelConfirm(false)}>
-                <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
-                  <div className="text-center space-y-1.5">
-                    <span className="material-symbols-outlined text-3xl text-rose-500">warning</span>
-                    <h3 className="font-black text-base text-[#1A1C1E]">Cancel this order?</h3>
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      This can't be undone. The store will be notified immediately and won't prepare this order.
-                      {paymentMethod !== 'cash' && ' If you already paid online, contact the store directly using the details on this order to arrange a refund.'}
-                    </p>
-                  </div>
-
-                  {/* Optional cancellation reason — helps merchants see patterns
-                      in why orders get cancelled, without blocking the flow
-                      if the customer just wants to cancel quickly. */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-0.5">Reason (optional)</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {CANCEL_REASONS.map(r => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setCancelReason(prev => prev === r ? '' : r)}
-                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-colors cursor-pointer ${
-                            cancelReason === r ? 'bg-[#1A1C1E] text-white border-[#1A1C1E]' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                          }`}
-                        >
-                          {r}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowCancelConfirm(false)}
-                      className="flex-1 py-3 bg-gray-100 text-[#1A1C1E] font-bold rounded-xl text-xs uppercase tracking-wider cursor-pointer"
-                    >
-                      Keep Order
-                    </button>
-                    <button
-                      onClick={() => { setShowCancelConfirm(false); handleCancelOrder(cancelReason); }}
-                      disabled={loading}
-                      className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider cursor-pointer disabled:opacity-60"
-                    >
-                      {loading ? 'Cancelling...' : 'Yes, Cancel'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Reference Badge Card */}
-            <div className="bg-white border border-gray-100 rounded-[20px] p-5 flex items-center justify-between shadow-sm">
-              <div>
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Order Number</div>
-                <div className="text-xl font-black mt-0.5 tracking-wider text-[#1A1C1E] font-mono">#{orderNumber}</div>
-              </div>
-              <button 
-                onClick={copyOrderNumber} 
-                className="px-4 py-2 rounded-xl bg-gray-50 border border-gray-100 text-xs font-black flex items-center gap-2 cursor-pointer hover:bg-gray-100 active:scale-95 transition-all text-[#1A1C1E]"
-              >
-                <span className="material-symbols-outlined text-sm">{orderCopied ? 'check' : 'content_copy'}</span>
-                <span>{orderCopied ? 'Copied' : 'Copy'}</span>
-              </button>
-            </div>
-
-            {/* Details Grid */}
-            <div className="grid grid-cols-3 gap-3 text-[#1A1C1E] text-xs">
-              <div className="p-3 bg-white border border-gray-100 rounded-[20px] flex flex-col items-center text-center gap-1 shadow-sm">
-                <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">schedule</span>
-                <span className="font-black text-[11px] mt-1 truncate">{deliveryType === 'delivery' ? '30–45 min' : '15–20 min'}</span>
-                <span className="text-[9px] text-gray-400 font-bold">Estimated Time</span>
-              </div>
-              <div className="p-3 bg-white border border-gray-100 rounded-[20px] flex flex-col items-center text-center gap-1 shadow-sm">
-                <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">{deliveryType === 'delivery' ? 'local_shipping' : 'storefront'}</span>
-                <span className="font-black text-[11px] mt-1 capitalize truncate">{deliveryType}</span>
-                <span className="text-[9px] text-gray-400 font-bold">Order Mode</span>
-              </div>
-              <div className="p-3 bg-white border border-gray-100 rounded-[20px] flex flex-col items-center text-center gap-1 shadow-sm">
-                <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">credit_card</span>
-                <span className="font-black text-[11px] mt-1 capitalize truncate">{paymentMethod}</span>
-                <span className="text-[9px] text-gray-400 font-bold">Payment</span>
-              </div>
-            </div>
-
-            {/* Navigation Actions */}
-            <div className="space-y-3 pt-2">
-              <button
-                onClick={() => {
-                  navigateToScreen('store');
-                }}
-                className="w-full py-4 bg-[#1A1C1E] text-[#FFD23F] font-black rounded-2xl flex items-center justify-center gap-2 active:scale-98 transition shadow-lg text-sm uppercase tracking-wider cursor-pointer hover:bg-black"
-              >
-                <span className="material-symbols-outlined text-base font-bold">arrow_back</span>
-                <span>Back to Storefront</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  navigateToScreen('history');
-                  loadOrdersHistory();
-                }}
-                className="w-full py-4 bg-white border border-gray-100 text-[#1A1C1E] font-extrabold rounded-2xl flex items-center justify-between px-5 hover:bg-gray-50 cursor-pointer shadow-sm"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">receipt_long</span>
-                  <span>View All Past Orders</span>
-                </span>
-                <span className="material-symbols-outlined text-gray-400 text-lg">chevron_right</span>
-              </button>
-
-              {/* PWA Installer banner */}
-              {deferredPrompt && (
-                <button 
-                  onClick={triggerInstall} 
-                  className="w-full py-4 bg-[#FFD23F]/10 border border-[#FFD23F]/20 text-[#1A1C1E] font-extrabold rounded-2xl flex items-center justify-between px-5 hover:bg-[#FFD23F]/15 cursor-pointer"
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#FFD23F] text-lg font-black">download</span>
-                    <span>Install PWA Web App</span>
-                  </span>
-                  <span className="material-symbols-outlined text-gray-400 text-lg">chevron_right</span>
-                </button>
-              )}
-            </div>
-          </main>
-        </div>
+        <TrackingScreen
+          store={store}
+          order={{
+            number: orderNumber,
+            status: orderStatus,
+            submitting: orderSubmitting,
+            submitError: orderSubmitError,
+            statusHistory: orderStatusHistory,
+            processingStage,
+            summary: trackedOrder,
+          }}
+          merchantMessage={{ rejectionReason, changeRequestMessage }}
+          cancel={{
+            error: cancelOrderError,
+            clearError: () => setCancelOrderError(null),
+            reason: cancelReason,
+            setReason: setCancelReason,
+            reasons: CANCEL_REASONS,
+            showConfirm: showCancelConfirm,
+            setShowConfirm: setShowCancelConfirm,
+            onCancel: handleCancelOrder,
+          }}
+          busy={loading}
+          onApproveChanges={handleApproveChanges}
+          onBack={() => goBack('store')}
+          onViewStore={() => navigateToScreen('store')}
+          onViewOrders={() => { navigateToScreen('history'); loadOrdersHistory(); }}
+          onCopyOrderNumber={copyOrderNumber}
+          orderNumberCopied={orderCopied}
+          onInstall={deferredPrompt ? triggerInstall : null}
+        />
       )}
 
       {/* ─── 8. Profile Hub Screen ─── */}
