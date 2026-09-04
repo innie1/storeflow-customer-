@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import { readFile } from './lib/appSource.mjs';
 
-const source = fs.readFileSync(new URL('../src/components/ServiceBusinessExperience.tsx', import.meta.url), 'utf8');
-const main = fs.readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8');
+const source = readFile('src/components/ServiceBusinessExperience.tsx');
+const main = readFile('src/main.tsx');
 
 assert.doesNotMatch(main, /ServiceBusinessExperience/,
   'the legacy laundry-only experience must never be mounted over the unified customer app');

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import { readFile, readAppSource } from './lib/appSource.mjs';
 
-const app = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-const laundry = fs.readFileSync(new URL('../src/components/LaundryStorefront.tsx', import.meta.url), 'utf8');
-const migration = fs.readFileSync(new URL('../supabase/migrations/20260829232352_guest_laundry_order_history.sql', import.meta.url), 'utf8');
+const app = readAppSource();
+const laundry = readFile('src/components/LaundryStorefront.tsx');
+const migration = readFile('supabase/migrations/20260829232352_guest_laundry_order_history.sql');
 
 assert.match(app, /getStoreBusinessType\(store\) === 'laundry'[\s\S]*<LaundryStorefront/,
   'laundry stores must render the dedicated self-service intake instead of the generic empty catalog');

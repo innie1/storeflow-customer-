@@ -1,8 +1,4 @@
-import fs from 'node:fs';
-
-function read(path) {
-  return fs.readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
-}
+import { readFile as read, readAppSource } from './lib/appSource.mjs';
 
 function expectContains(text, needle, label) {
   if (!text.includes(needle)) throw new Error(`${label}: missing ${needle}`);
@@ -15,7 +11,7 @@ const pkg = JSON.parse(read('package.json'));
 const router = read('src/router.ts');
 const vite = read('vite.config.ts');
 const main = read('src/main.tsx');
-const app = read('src/App.tsx');
+const app = readAppSource();
 
 expectContains(resolver, "supabase.rpc('get_public_storefront'", 'shared resolver uses public RPC');
 expectContains(resolver, "supabase.rpc('list_public_storefronts'", 'store discovery uses the public listing RPC');

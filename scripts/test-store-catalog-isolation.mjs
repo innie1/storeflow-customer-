@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import { readAppSource } from './lib/appSource.mjs';
 
-const source = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+const source = readAppSource();
 
 assert.match(source, /const requestId = \+\+storeLoadRequestRef\.current;[\s\S]*?setProducts\(\[\]\);[\s\S]*?setCategories\(\['All'\]\);/,
   'switching stores must clear the previous merchant catalog immediately');
