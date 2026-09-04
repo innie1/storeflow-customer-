@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 import { parseRoute, parseQRCode } from './router';
 import { listPublicStorefronts, matchesPublicStoreReference, resolvePublicStore } from './utils/storeResolver';
 import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotifications } from './utils/pushNotifications';
-import { safeGetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
+import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
 import { computeOrderPricing } from './utils/orderPricing';
 import LaundryStorefront from './components/LaundryStorefront';
 import type { Product, Store, CartItem, Order } from './types';
@@ -19,6 +19,7 @@ import SearchPlaceholderInput from './components/SearchPlaceholderInput';
 import OnboardingScreen from './screens/OnboardingScreen';
 import StoreNotFoundScreen from './screens/StoreNotFoundScreen';
 import LoginScreen from './screens/LoginScreen';
+import LocationScreen from './screens/LocationScreen';
 // STOREFLOW_SHARED_STORE_RESOLVER_V1
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
@@ -389,8 +390,6 @@ function App() {
   const [savedAddresses, setSavedAddresses] = useState<string[]>(
     () => safeGetJSON<string[]>('storeflow_saved_addresses', [])
   );
-  const [newAddressInput, setNewAddressInput] = useState('');
-  const [editingAddress, setEditingAddress] = useState<string | null>(null);
 
   // Checkout & Order State
   const [checkoutStep, setCheckoutStep] = useState<'shopping' | 'checkout' | 'payment'>('shopping');
@@ -1908,19 +1907,28 @@ function App() {
     navigateToScreen('home');
   };
 
-  const addNewAddress = () => {
-    if (!newAddressInput.trim()) return;
-    let list;
-    if (editingAddress) {
-      list = savedAddresses.map(addr => addr === editingAddress ? newAddressInput : addr);
-      setEditingAddress(null);
-    } else {
-      list = [newAddressInput, ...savedAddresses];
-    }
+  const persistAddressList = (list: string[]) => {
     setSavedAddresses(list);
-    localStorage.setItem('storeflow_saved_addresses', JSON.stringify(list));
-    selectAddressAndSave(newAddressInput);
-    setNewAddressInput('');
+    safeSetJSON('storeflow_saved_addresses', list);
+  };
+
+  const saveAddressList = (list: string[], select: string) => {
+    persistAddressList(list);
+    selectAddressAndSave(select);
+  };
+
+  const deleteAddress = (addr: string) => {
+    const remaining = savedAddresses.filter(a => a !== addr);
+    persistAddressList(remaining);
+    if (selectedAddress !== addr) return;
+    // Deleting the address that was in use used to write the replacement to
+    // 'storeflow_selected_address', a key nothing ever reads back — the app
+    // reads 'storeflow_address' — so the change was lost on next launch. It
+    // also fell back to a hard-coded 'Lagos, Nigeria' the customer had never
+    // entered; with nothing left, ask them to choose instead of inventing one.
+    const fallback = remaining[0] || 'Select Location';
+    setSelectedAddress(fallback);
+    safeSetItem('storeflow_address', fallback);
   };
 
   const requestGPSLocation = () => {
@@ -1929,8 +1937,11 @@ function App() {
         (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-          const mockAddr = `GRA Phase II (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-          selectAddressAndSave(mockAddr);
+          // This used to prefix the real coordinates with "GRA Phase II" — a
+          // specific Nigerian neighbourhood — no matter where the customer
+          // actually was, so "Use Current Location" saved a delivery address
+          // naming a place they had never been.
+          selectAddressAndSave(`Current location (${lat.toFixed(5)}, ${lng.toFixed(5)})`);
         },
         () => {
           alert('GPS access denied. Please type address manually.');
@@ -3871,124 +3882,14 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
 
       {/* ─── 4. Location Selector Screen ─── */}
       {screen === 'location' && (
-        <div className="flex-1 p-6 max-w-md md:max-w-2xl lg:max-w-3xl mx-auto w-full flex flex-col justify-between">
-          <header className="flex items-center gap-3 mb-6">
-            <button onClick={() => navigateToScreen('home')} className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center cursor-pointer active-scale text-[#1A1C1E] shadow-sm">
-              <span className="material-symbols-outlined text-lg">arrow_back</span>
-            </button>
-            <h1 className="text-base font-black text-[#1A1C1E] tracking-tight">Delivery Address</h1>
-          </header>
-
-          <main className="flex-1 space-y-6">
-            {/* Search Input - almost invisible/native design */}
-            <div className="relative w-full h-13 bg-gray-100 dark:bg-zinc-900 border border-transparent dark:border-zinc-850 rounded-2xl flex items-center px-4 transition-all">
-              <span className="material-symbols-outlined text-gray-400 dark:text-gray-500 mr-2.5 text-lg">search</span>
-              <input
-                type="text"
-                value={newAddressInput}
-                onChange={e => setNewAddressInput(e.target.value)}
-                className="bg-transparent border-none focus:ring-0 focus:outline-none w-full text-xs outline-none text-[#1A1C1E] dark:text-gray-100 placeholder:text-gray-450 dark:placeholder:text-gray-500 py-3 font-semibold"
-                placeholder={editingAddress ? "Edit address..." : "Enter new address..."}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && newAddressInput.trim()) {
-                    addNewAddress();
-                  }
-                }}
-              />
-              {newAddressInput.trim() && (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {editingAddress && (
-                    <button
-                      onClick={() => {
-                        setNewAddressInput('');
-                        setEditingAddress(null);
-                      }}
-                      className="px-2.5 py-1.5 text-gray-400 hover:text-gray-650 font-bold text-xs cursor-pointer transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                  <button
-                    onClick={addNewAddress}
-                    className="px-3.5 py-1.5 bg-[#1A1C1E] dark:bg-[#FFD23F] text-[#FFD23F] dark:text-[#1A1C1E] font-black rounded-lg text-xs cursor-pointer active:scale-95 transition"
-                  >
-                    {editingAddress ? 'Save' : 'Add'}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* GPS inline row */}
-            <button 
-              onClick={requestGPSLocation} 
-              className="w-full py-3.5 bg-white dark:bg-[#18191b] border border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/30 rounded-2xl flex items-center justify-center gap-2 text-xs font-black cursor-pointer active-scale text-[#1A1C1E] dark:text-gray-200 shadow-sm transition-colors"
-            >
-              <span className="material-symbols-outlined text-[#FFD23F] text-lg font-bold">my_location</span>
-              <span>Use Current Location (GPS)</span>
-            </button>
-
-            {/* Saved Addresses list - unified divide list */}
-            <div className="space-y-2">
-              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-wider px-1">Saved Addresses</h3>
-              <div className="bg-white dark:bg-[#18191b] border border-gray-100 dark:border-zinc-800 rounded-3xl overflow-hidden divide-y divide-gray-100/50 dark:divide-zinc-800/50 shadow-sm">
-                {savedAddresses.length === 0 && (
-                  <p className="py-8 px-5 text-center text-xs font-semibold text-gray-400 dark:text-zinc-500">
-                    No saved addresses yet. Add one below so checkout can fill it in for you.
-                  </p>
-                )}
-                {savedAddresses.map(addr => (
-                  <div
-                    key={addr}
-                    className="w-full flex items-center justify-between transition-colors hover:bg-gray-50/50 dark:hover:bg-zinc-800/20 group"
-                  >
-                    {/* Selectable click area */}
-                    <div
-                      onClick={() => selectAddressAndSave(addr)}
-                      className="flex-1 flex items-center gap-3 py-4 px-5 cursor-pointer min-w-0"
-                    >
-                      <span className="material-symbols-outlined text-gray-400 dark:text-gray-550 text-lg">place</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-[#1A1C1E] dark:text-gray-200 truncate">{addr}</p>
-                      </div>
-                    </div>
-
-                    {/* Edit & Delete Action Buttons */}
-                    <div className="flex items-center gap-1 pr-3 shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNewAddressInput(addr);
-                          setEditingAddress(addr);
-                        }}
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-[#1A1C1E] dark:hover:text-[#FFD23F] cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
-                        title="Edit Address"
-                      >
-                        <span className="material-symbols-outlined text-base">edit</span>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const updated = savedAddresses.filter(a => a !== addr);
-                          setSavedAddresses(updated);
-                          localStorage.setItem('storeflow_saved_addresses', JSON.stringify(updated));
-                          if (selectedAddress === addr) {
-                            const fallback = updated[0] || 'Lagos, Nigeria';
-                            setSelectedAddress(fallback);
-                            localStorage.setItem('storeflow_selected_address', fallback);
-                          }
-                        }}
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-650 dark:hover:text-red-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
-                        title="Delete Address"
-                      >
-                        <span className="material-symbols-outlined text-base">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </main>
-        </div>
+        <LocationScreen
+          savedAddresses={savedAddresses}
+          onBack={() => navigateToScreen('home')}
+          onSelect={selectAddressAndSave}
+          onDelete={deleteAddress}
+          onSaveList={saveAddressList}
+          onUseGPS={requestGPSLocation}
+        />
       )}
 
       {/* ─── 5. Home / Discover Screen ─── */}
