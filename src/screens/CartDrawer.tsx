@@ -53,6 +53,7 @@ interface CartDrawerProps {
 
   // ── Submission — owned by App, called from here ────────────────────────
   orderSubmitting: boolean;
+  orderingBlockedReason: string | null;
   submitOrder: (overrides?: any) => void;
   applyItsMeToCheckout: () => void;
   applySameAsBeforeAndSubmit: () => void;
@@ -101,6 +102,7 @@ export default function CartDrawer(props: CartDrawerProps) {
     setPaymentMethod,
     normalizeNigerianPhone,
     orderSubmitting,
+    orderingBlockedReason,
     submitOrder,
     applyItsMeToCheckout,
     applySameAsBeforeAndSubmit,
@@ -447,13 +449,21 @@ export default function CartDrawer(props: CartDrawerProps) {
               ))}
             </div>
 
+            {orderingBlockedReason && (
+              <p className="mb-3 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                {orderingBlockedReason}
+              </p>
+            )}
             <button
               onClick={() => submitOrder()}
-              className="w-full bg-[#1A1C1E] hover:bg-black text-[#FFD23F] py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md active:scale-98 transition-all cursor-pointer"
+              disabled={orderSubmitting || !!orderingBlockedReason || cart.length === 0}
+              className="w-full bg-[#1A1C1E] hover:bg-black text-[#FFD23F] py-4 rounded-full font-black uppercase tracking-wider text-xs shadow-md active:scale-98 transition-all cursor-pointer disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
             >
-              {redeemLoyalty && loyaltyBalance?.enabled && loyaltyBalance.points >= loyaltyBalance.redeemThreshold
-                ? `Place Order (₦${Math.max(0, total - loyaltyBalance.redeemValueNaira).toLocaleString()})`
-                : `Place Order (₦${total.toLocaleString()})`}
+              {orderSubmitting
+                ? 'Sending order…'
+                : redeemLoyalty && loyaltyBalance?.enabled && loyaltyBalance.points >= loyaltyBalance.redeemThreshold
+                  ? `Place Order (₦${Math.max(0, total - loyaltyBalance.redeemValueNaira).toLocaleString()})`
+                  : `Place Order (₦${total.toLocaleString()})`}
             </button>
           </div>
         )}

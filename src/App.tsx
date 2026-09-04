@@ -292,6 +292,25 @@ function App() {
     return 'Open';
   }, [isStoreOpenState, store]);
 
+  /**
+   * Whether this store is taking orders through the app at all.
+   *
+   * `onlineOrdersEnabled` is written by the merchant app onto every store and
+   * was read nowhere here, so a merchant who switched online ordering off
+   * still received orders. Being closed for the day is deliberately NOT part
+   * of this: the storefront already tells customers "orders will be processed
+   * when the store opens", so ordering ahead is intended.
+   */
+  const orderingBlockedReason = useMemo(() => {
+    if (store?.subscription_status === 'inactive' || store?.subscription_status === 'cancelled') {
+      return 'This store is not active on StoreFlow right now.';
+    }
+    if (store?.data?.marketplaceSettings?.onlineOrdersEnabled === false) {
+      return 'This store has turned off online ordering. Contact them directly to place an order.';
+    }
+    return null;
+  }, [store]);
+
   const paymentMethodsList = useMemo(() => {
     const ms = store?.data?.marketplaceSettings;
     const list = [];
@@ -443,6 +462,7 @@ function App() {
     if (trackedOrder) safeSetJSON('storeflow_tracking_order_summary', trackedOrder);
   }, [trackedOrder]);
 
+  const submitInFlightRef = useRef(false);
   const [orderCopied, setOrderCopied] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
@@ -2044,6 +2064,27 @@ function App() {
     deliveryAddress?: string; deliveryLandmark?: string; paymentMethod?: 'cash' | 'transfer' | 'opay';
     specialInstructions?: string;
   }) => {
+    // Re-entrancy guard. The Place Order button had no disabled state, and a
+    // disabled attribute alone would not have been enough: three taps in the
+    // same tick all run before React re-renders, so all three passed the
+    // orderSubmitting check and three separate orders reached the merchant —
+    // three orders to prepare, and stock decremented three times. A ref is
+    // updated synchronously, so the second tap is stopped here regardless of
+    // render timing. It guards every caller, not just the button.
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    try {
+      return await runSubmitOrder(overrides);
+    } finally {
+      submitInFlightRef.current = false;
+    }
+  };
+
+  const runSubmitOrder = async (overrides?: {
+    customerName?: string; customerPhone?: string; deliveryType?: 'pickup' | 'delivery';
+    deliveryAddress?: string; deliveryLandmark?: string; paymentMethod?: 'cash' | 'transfer' | 'opay';
+    specialInstructions?: string;
+  }) => {
     // Using local "final" values instead of reading straight from state means
     // callers (like "Same as Before") can pass overrides and submit
     // immediately, without waiting on a React re-render to commit first —
@@ -3480,6 +3521,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
           setPaymentMethod={setPaymentMethod}
           normalizeNigerianPhone={normalizeNigerianPhone}
           orderSubmitting={orderSubmitting}
+          orderingBlockedReason={orderingBlockedReason}
           submitOrder={submitOrder}
           applyItsMeToCheckout={applyItsMeToCheckout}
           applySameAsBeforeAndSubmit={applySameAsBeforeAndSubmit}

@@ -92,4 +92,21 @@ const live = readFile('src/App.tsx') + readFile('src/components/LaundryStorefron
 assert.ok(!/\.from\('orders'\)\s*\.insert/.test(live),
   'orders must never be inserted directly, bypassing the atomic RPC');
 
+// ── One tap, one order ──────────────────────────────────────────────────────
+// Three taps on Place Order used to send three separate orders: the button had
+// no disabled state, and a disabled attribute alone is not enough because
+// clicks in the same tick all run before React re-renders. The guard has to be
+// a ref, checked synchronously at the top of submitOrder.
+assert.match(src, /if \(submitInFlightRef\.current\) return;[\s\S]{0,40}submitInFlightRef\.current = true;/,
+  'submitOrder must refuse to run while a submission is already in flight');
+assert.match(src, /submitInFlightRef\.current = false;/,
+  'the in-flight guard must be released when submission finishes');
+assert.match(readFile('src/screens/CartDrawer.tsx'),
+  /disabled=\{orderSubmitting \|\| !!orderingBlockedReason \|\| cart\.length === 0\}/,
+  'the Place Order button must be disabled while submitting or when ordering is blocked');
+
+// ── A merchant can switch online ordering off ───────────────────────────────
+assert.match(src, /marketplaceSettings\?\.onlineOrdersEnabled === false/,
+  'onlineOrdersEnabled must block checkout — the merchant app writes it on every store');
+
 console.log('Order submission contract checks passed.');
