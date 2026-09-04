@@ -787,10 +787,15 @@ export default function StoreScreen(props: StoreScreenProps) {
                     const isPopular = p.status === 'popular';
                     const isFavorited = favorites.includes(p.id);
 
-                    // Mock discount if comparing prices
-                    const hasDiscount = p.id.charCodeAt(0) % 4 === 0;
-                    const originalPrice = hasDiscount ? getPrice(p) * 1.25 : getPrice(p);
-                    const discountPct = 20;
+                    // A "-20% off" badge and a struck-through "was" price used to
+                    // be shown here for every product whose id happened to start
+                    // with a character code divisible by four — about a quarter of
+                    // every store's catalogue. The "original" price was simply the
+                    // real price multiplied by 1.25, so it was a figure no customer
+                    // had ever been charged. There is no price-comparison data in
+                    // this app to make such a claim true, and a fictitious "was"
+                    // price is exactly the kind of comparison consumer-protection
+                    // rules exist to stop. Removed outright.
 
                     return (
                       <div
@@ -817,9 +822,6 @@ export default function StoreScreen(props: StoreScreenProps) {
                               <span className="bg-indigo-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Popular</span>
                             )}
 
-                            {hasDiscount && !isOutOfStock && (
-                              <span className="bg-rose-500 text-white font-black text-[8px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">-{discountPct}%</span>
-                            )}
                           </div>
 
                           {/* Favorite heart icon */}
@@ -865,9 +867,6 @@ export default function StoreScreen(props: StoreScreenProps) {
                               ₦{getPrice(p).toLocaleString()}
                               {p.unit && p.unit !== 'pcs' && <span className="text-[9px] font-semibold text-gray-400">/{p.unit}</span>}
                             </span>
-                            {hasDiscount && (
-                              <span className="text-[10px] text-gray-400 line-through font-medium mt-0.5">₦{Math.round(originalPrice).toLocaleString()}</span>
-                            )}
                           </div>
                           {isOutOfStock ? (
                             <span className="text-[9px] font-black text-rose-500 uppercase">Sold Out</span>
