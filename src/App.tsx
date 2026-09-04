@@ -322,7 +322,13 @@ function App() {
     // have transferred real money to an account that isn't the store's.
     // A payment route with no destination is now simply not offered.
     const walletNumber = ms?.walletNumber || ms?.opayNumber || store?.phone || '';
-    const bankAccountNumber = ms?.bankAccountNumber || '';
+    // The merchant app shipped '1234567890' as a default account number, so
+    // stores that saved their settings without editing published an account
+    // belonging to nobody. It is a sequential dummy rather than a valid NUBAN,
+    // so treating it as "not configured" is safe, and it stops a customer
+    // transferring money into it before that merchant corrects their settings.
+    const rawBankAccount = String(ms?.bankAccountNumber || '').trim();
+    const bankAccountNumber = rawBankAccount === '1234567890' ? '' : rawBankAccount;
 
     if (!ms) {
       return [{ key: 'cash', icon: 'payments', label: 'Cash on Pickup / Delivery', sub: 'Pay in cash or POS on arrival' }];
