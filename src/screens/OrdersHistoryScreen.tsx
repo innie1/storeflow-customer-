@@ -1,5 +1,5 @@
 import type { Order, Store } from '../types';
-import { isLogoImageUrl } from '../lib/storeIdentity';
+import StoreBrandMark from '../components/StoreBrandMark';
 
 /** The customer's past and in-flight orders. */
 export default function OrdersHistoryScreen({
@@ -118,11 +118,7 @@ export default function OrdersHistoryScreen({
                 <div className="flex justify-between items-start border-b border-gray-100 pb-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-                      {isLogoImageUrl(cardStore?.logo) ? (
-                        <img loading="lazy" decoding="async" src={cardStore!.logo} className="w-full h-full object-cover" alt="" />
-                      ) : (
-                        <span className="text-sm">🏪</span>
-                      )}
+                      <StoreBrandMark store={cardStore} />
                     </div>
                     <div className="text-left min-w-0">
                       <h4 className="font-extrabold text-sm text-[#1A1C1E] truncate max-w-[160px]">{storeNameText}</h4>

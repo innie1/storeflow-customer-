@@ -5300,18 +5300,14 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
                 <div className="flex items-center justify-center gap-3 py-2">
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
-                      {isLogoImageUrl(currentCartStore?.logo) ? (
-                        <img loading="lazy" decoding="async" src={currentCartStore!.logo} className="w-full h-full object-cover" alt="" />
-                      ) : <span className="text-sm">🏪</span>}
+                      <StoreBrandMark store={currentCartStore} />
                     </div>
                     <span className="text-[9px] font-bold text-gray-400 max-w-[70px] truncate">{currentCartStore?.business_name}</span>
                   </div>
                   <span className="material-symbols-outlined text-gray-300 text-lg">arrow_forward</span>
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
-                      {isLogoImageUrl(newProductStore?.logo) ? (
-                        <img loading="lazy" decoding="async" src={newProductStore!.logo} className="w-full h-full object-cover" alt="" />
-                      ) : <span className="text-sm">🏪</span>}
+                      <StoreBrandMark store={newProductStore} />
                     </div>
                     <span className="text-[9px] font-bold text-gray-400 max-w-[70px] truncate">{newProductStore?.business_name}</span>
                   </div>
