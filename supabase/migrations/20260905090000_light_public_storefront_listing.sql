@@ -38,9 +38,15 @@
 -- * data.businessTemplate.offerings, data.laundryPricing — only used once a
 --   customer opens a specific store
 --
--- All of them are still returned in full by get_public_storefront(), which is
--- what runs when a customer actually opens a store. Nothing a customer looks
--- at loses any data.
+-- coverImage, offerings and laundryPricing are still returned in full by
+-- get_public_storefront(), which runs when a customer actually opens a store,
+-- so nothing a customer looks at loses any data. profile.photo is the one
+-- exception: 20260905093000 removes it there too, because nothing reads it.
+--
+-- STATUS: APPLIED to project jawfalghkftldvkopuaw.
+-- Verified live afterwards: 29 stores, 257 kB (was 5,305 kB), no base64 image
+-- in the output, no cost or wholesale price leaked, products and
+-- marketplaceSettings still present.
 --
 -- NOT CHANGED HERE
 -- ----------------
@@ -115,8 +121,7 @@ begin
           ),
 
           -- Contact details only. `photo` is a base64 data URI on some stores
-          -- and is what suspended the project; it stays in the single-store
-          -- payload, which is where a client could actually use it.
+          -- and is what suspended the project.
           'profile', jsonb_build_object(
             'phone', coalesce(s.data->'profile'->>'phone', s.phone, ''),
             'email', coalesce(s.data->'profile'->>'email', s.email, ''),
