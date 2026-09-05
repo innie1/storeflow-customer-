@@ -51,6 +51,18 @@ function readCachedStores(): Store[] {
 // the server treats the token as an extra check, not a hard requirement.
 const ACTIVE_ORDER_STATUSES = ['Pending', 'Accepted', 'Preparing', 'Ready'];
 
+/** Statuses an order can never leave, so there is nothing left to poll for. */
+const TERMINAL_ORDER_STATUSES = new Set(['Completed', 'Rejected', 'Cancelled']);
+
+/**
+ * How often the open Tracking screen re-checks a live order.
+ *
+ * Was 3s, which is 1,200 requests an hour for a status a merchant changes a
+ * handful of times across a whole order. 6s still feels immediate to someone
+ * watching the screen and halves the traffic.
+ */
+const TRACKING_POLL_MS = 6000;
+
 const SCREEN_PATHS: Record<string, string> = {
   home: '/', explore: '/explore', history: '/orders', profile: '/profile',
   tracking: '/tracking', login: '/login', location: '/location', onboarding: '/onboarding',
@@ -180,6 +192,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const storeLoadRequestRef = useRef(0);
+  /** When the store directory was last fetched, so it is not refetched on a timer. */
+  const lastStoresLoadRef = useRef(0);
+  /** True once the tracked order reaches a status it can never leave. */
+  const settledRef = useRef(false);
   const activeStoreRef = useRef<any>(null);
   const initialRouteHandledRef = useRef(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -750,25 +766,36 @@ function App() {
     checkSession();
   }, []);
 
-  // Keep the full stores list fresh in the background (Home "Your Stores" / Explore)
-  // without interrupting whatever the user is doing.
+  // Keep the full stores list fresh (Home "Your Stores" / Explore).
+  //
+  // This used to re-download the whole 100-store directory every 60 seconds,
+  // in every open tab, whatever screen the customer was on — and separately on
+  // every INSERT/UPDATE/DELETE anywhere in the `stores` table, so one merchant
+  // saving a setting made every connected customer refetch all 100 records.
+  // That was the single largest source of egress on the project, and none of it
+  // was information a customer was waiting for: a shop directory does not
+  // change minute to minute.
+  //
+  // It now refreshes when the app opens, and again when the customer comes back
+  // to it after a while. Opening a store still fetches that store directly, so
+  // nothing a customer actually looks at is staler than before.
   useEffect(() => {
-    const channelInstance = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const storesChannel = supabase
-      .channel(`stores-list-updates-${channelInstance}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stores' }, () => {
-        loadStoresData();
-      })
-      .subscribe();
+    const REFRESH_AFTER_MS = 10 * 60 * 1000;
 
-    // Safety-net poll in case realtime is unavailable on the network
-    const pollId = setInterval(() => {
-      if (navigator.onLine) loadStoresData();
-    }, 60000);
+    const refreshIfStale = () => {
+      if (!navigator.onLine || document.hidden) return;
+      if (Date.now() - lastStoresLoadRef.current < REFRESH_AFTER_MS) return;
+      loadStoresData();
+    };
+
+    // A slow tick rather than a fetch timer: it only reaches the network when
+    // the list is actually old and the app is actually on screen.
+    const pollId = setInterval(refreshIfStale, 60000);
+    document.addEventListener('visibilitychange', refreshIfStale);
 
     return () => {
-      supabase.removeChannel(storesChannel);
       clearInterval(pollId);
+      document.removeEventListener('visibilitychange', refreshIfStale);
     };
   }, []);
 
@@ -803,26 +830,32 @@ function App() {
     // they sat on the Home screen. Nothing about a Completed order from last
     // week changes, so the fast cadence is now reserved for orders that are
     // genuinely still moving; everything else falls back to a slow refresh.
-    // The Tracking screen keeps its own separate 3s poll for the open order.
-    const FAST_MS = 10000;
-    const IDLE_MS = 60000;
-    const HIDDEN_MS = 60000;
+    // The Tracking screen keeps its own separate poll for the open order.
+    //
+    // Hidden means stopped, not slowed. A backgrounded tab kept fetching once
+    // a minute for nobody, and the visibilitychange handler below already
+    // re-fetches the moment the customer comes back, so that traffic bought
+    // nothing.
+    const FAST_MS = 15000;
+    const IDLE_MS = 120000;
 
     let pollId: ReturnType<typeof setInterval> | null = null;
     let currentInterval = 0;
 
     const desiredInterval = () => {
-      if (document.hidden) return HIDDEN_MS;
+      if (document.hidden) return 0;
       return hasActiveOrdersRef.current ? FAST_MS : IDLE_MS;
     };
 
     const startSmartPolling = () => {
       const interval = desiredInterval();
       if (pollId && interval === currentInterval) return;
-      if (pollId) clearInterval(pollId);
+      if (pollId) { clearInterval(pollId); pollId = null; }
       currentInterval = interval;
+      // Zero means hidden: hold no timer at all until the app is looked at.
+      if (interval === 0) return;
       pollId = setInterval(() => {
-        if (navigator.onLine) loadOrdersHistory();
+        if (navigator.onLine && !document.hidden) loadOrdersHistory();
         // Re-evaluate cadence as orders start and finish.
         if (desiredInterval() !== currentInterval) startSmartPolling();
       }, interval);
@@ -976,6 +1009,9 @@ function App() {
   // ─── Fetch Stores & Dynamic Products ────────────────────────────────────────
 
   const loadStoresData = async () => {
+    // Stamped before the request, so a slow or failed call cannot let the
+    // staleness check fire again immediately and pile up requests.
+    lastStoresLoadRef.current = Date.now();
     try {
       const { stores: data, error } = await listPublicStorefronts();
       if (error) throw error;
@@ -1319,15 +1355,23 @@ function App() {
 
   // ─── Order status tracking ──────────────────────────────────────────────
   //
-  // Fast polls status every 3s while on the Tracking screen and triggers
-  // notifications & history updates on status change (e.g. Accepted,
+  // Polls the open order while the Tracking screen is actually being watched,
+  // and triggers notifications & history updates on status change (Accepted,
   // Preparing, Ready, Completed, Rejected, Changes Requested).
+  //
+  // This used to poll every 3 seconds unconditionally — 1,200 requests an hour,
+  // continuing while the phone was in the customer's pocket, and continuing
+  // after the order was already Completed or Cancelled and could not change
+  // again. It now stops when the screen is hidden and stops for good once the
+  // order reaches a final state.
   useEffect(() => {
     if (!orderId || screen !== 'tracking' || orderId.startsWith('pending-') || orderId.startsWith('offline-')) return;
     const accessToken = getOrderAccessToken(orderId);
     const rawPhone = currentUser?.phone || customerPhone || localStorage.getItem('storeflow_saved_checkout_phone');
     if (!accessToken && !rawPhone) return;
     const lookupPhone = normalizeNigerianPhone(rawPhone) || rawPhone;
+
+    settledRef.current = false;
 
     const fetchStatus = () => {
       const statusRequest = accessToken
@@ -1340,6 +1384,8 @@ function App() {
 
             // Fire notification if merchant updated order status
             checkAndNotifyOrderStatus(orderId, orderNumber || '', newStatus);
+
+            if (TERMINAL_ORDER_STATUSES.has(newStatus)) settledRef.current = true;
 
             setOrderStatus(newStatus);
             setOrderStatusHistory(data.status_history || []);
@@ -1355,11 +1401,32 @@ function App() {
     };
 
     fetchStatus();
-    const pollId = setInterval(() => {
-      if (navigator.onLine) fetchStatus();
-    }, 3000);
 
-    return () => clearInterval(pollId);
+    let pollId: ReturnType<typeof setInterval> | null = null;
+    const stop = () => { if (pollId) { clearInterval(pollId); pollId = null; } };
+    const start = () => {
+      if (pollId || document.hidden || settledRef.current) return;
+      pollId = setInterval(() => {
+        // A finished order cannot change again — stop asking.
+        if (settledRef.current) { stop(); return; }
+        if (navigator.onLine && !document.hidden) fetchStatus();
+      }, TRACKING_POLL_MS);
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) { stop(); return; }
+      // Catch up once on return, then resume the cadence.
+      if (navigator.onLine && !settledRef.current) fetchStatus();
+      start();
+    };
+
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [orderId, screen, currentUser?.phone, customerPhone, orderNumber, checkAndNotifyOrderStatus, normalizeNigerianPhone]);
 
   // Guest order lookup — "Track an Order" with no local history required.
