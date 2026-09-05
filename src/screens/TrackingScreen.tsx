@@ -1,11 +1,13 @@
 import StoreBrandMark from '../components/StoreBrandMark';
 import type { TrackedOrder } from '../types';
+import { orderFailureIcon, orderFailureTitle, type OrderFailureKind } from '../utils/orderErrors';
 
 export interface TrackingOrderView {
   number: string;
   status: string;
   submitting: boolean;
   submitError: string | null;
+  submitErrorKind?: OrderFailureKind;
   statusHistory: Array<{ status: string; at: string }>;
   processingStage: string | null;
   summary: TrackedOrder | null;
@@ -174,11 +176,16 @@ export default function TrackingScreen({
           </div>
         </section>
 
+        {/* The heading used to be "Order queued" with a no-signal icon for
+            every failure — so a rejected order, or the platform being down,
+            was reported to the customer as though it were waiting to send. */}
         {order.submitError && (
           <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 p-4 rounded-2xl text-xs space-y-1.5 shadow-sm">
             <h4 className="font-extrabold text-sm flex items-center gap-2">
-              <span className="material-symbols-outlined text-base font-bold">wifi_off</span>
-              Order queued
+              <span className="material-symbols-outlined text-base font-bold">
+                {orderFailureIcon(order.submitErrorKind || 'service')}
+              </span>
+              {orderFailureTitle(order.submitErrorKind || 'service')}
             </h4>
             <p className="leading-relaxed font-medium">{order.submitError}</p>
           </div>

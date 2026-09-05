@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../supabase';
+import { describeActionFailure } from '../utils/orderErrors';
 
 /**
  * Rate a store, and read what other customers said.
@@ -84,7 +85,7 @@ export default function StoreReviewsModal({
       alert(`Thank you for rating this store ${stars} stars!`);
     } catch (err: any) {
       console.error('Failed to submit rating:', err);
-      alert('Failed to submit rating: ' + (err.message || err));
+      alert(describeActionFailure(err, 'submit your rating'));
     } finally {
       setSubmitting(false);
     }

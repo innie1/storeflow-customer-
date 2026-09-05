@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
 import { parseRoute, parseQRCode } from './router';
 import { listPublicStorefronts, matchesPublicStoreReference, resolvePublicStore } from './utils/storeResolver';
+import { describeActionFailure, describeOrderFailure, type OrderFailureKind } from './utils/orderErrors';
 import { subscribeUserToPush, clearNotificationsForOrder, clearAllStoreFlowNotifications } from './utils/pushNotifications';
 import { safeGetItem, safeSetItem, safeGetJSON, safeSetJSON } from './utils/safeStorage';
 import { computeOrderPricing } from './utils/orderPricing';
@@ -488,6 +489,7 @@ function App() {
   const [orderCopied, setOrderCopied] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderSubmitError, setOrderSubmitError] = useState<string | null>(null);
+  const [orderSubmitKind, setOrderSubmitKind] = useState<OrderFailureKind>('service');
   const [orderStatusHistory, setOrderStatusHistory] = useState<{ status: string; at: string }[]>([]);
   const [processingStage, setProcessingStage] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -2389,21 +2391,21 @@ function App() {
       console.error('Order placement failed:', e);
       setOrderSubmitting(false);
 
-      // Distinguish genuine network failures (queue for retry) from
-      // business-logic / database errors (tell the user immediately).
-      const msg = `${e?.name || ''} ${e?.message || ''}`.toLowerCase();
-      const isNetwork = !navigator.onLine || msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch') || msg.includes('timeout') || msg.includes('offline');
+      // What the customer is told is decided in one place — see
+      // describeOrderFailure. This used to print the server's message
+      // verbatim, which meant a suspended Supabase project told shoppers to
+      // "upgrade their plan or remove spend caps".
+      const failure = describeOrderFailure(e);
+      setOrderSubmitKind(failure.kind);
+      setOrderSubmitError(failure.message);
 
-      if (isNetwork) {
+      // Only an offline order is worth keeping: it is the only failure where
+      // sending the same thing again later will succeed. A rejected order
+      // would fail identically, and a service outage may last long enough
+      // that quietly placing the order afterwards would surprise the
+      // customer.
+      if (failure.kind === 'offline') {
         queueOrderForOfflineSync(orderPayload, itemsPayload);
-        setOrderSubmitError('You appear to be offline — your order has been saved and will be sent automatically when connectivity returns.');
-      } else {
-        // Server rejected the order (e.g. product out of stock, price
-        // changed, validation error). Don't silently queue — the same
-        // error will repeat on retry. Tell the customer what happened.
-        const friendlyMsg = (e?.message || 'Something went wrong placing your order.')
-          .replace(/^(Error|Exception):\s*/i, '');
-        setOrderSubmitError(`⚠️ ${friendlyMsg} — please go back to your cart and try again.`);
       }
       loadOrdersHistory();
     }
@@ -2714,7 +2716,7 @@ function App() {
       loadOrdersHistory();
       alert('Proposal approved! The merchant has been notified.');
     } catch (e: any) {
-      alert('Failed to approve proposal: ' + (e.message || 'Please try again.'));
+      alert(describeActionFailure(e, 'approve those changes'));
     } finally {
       setLoading(false);
     }
@@ -3426,6 +3428,7 @@ const storefrontNoun = serviceBusiness ? 'Services' : 'Products';
             status: orderStatus,
             submitting: orderSubmitting,
             submitError: orderSubmitError,
+            submitErrorKind: orderSubmitKind,
             statusHistory: orderStatusHistory,
             processingStage,
             summary: trackedOrder,

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node scripts/test-store-specific-service-flow.mjs && node scripts/test-store-routing-scanner.mjs && node scripts/test-store-catalog-isolation.mjs && node scripts/test-guest-laundry-history.mjs && node scripts/test-order-pricing.mjs && node scripts/test-order-submission-contract.mjs && node scripts/test-network-efficiency.mjs",
+    "test": "node scripts/test-store-specific-service-flow.mjs && node scripts/test-store-routing-scanner.mjs && node scripts/test-store-catalog-isolation.mjs && node scripts/test-guest-laundry-history.mjs && node scripts/test-order-pricing.mjs && node scripts/test-order-submission-contract.mjs && node scripts/test-network-efficiency.mjs && node scripts/test-order-error-messages.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
