@@ -373,21 +373,41 @@ function App() {
     return list;
   }, [store]);
 
-  const isRetailEnabled = useMemo(() => {
-    if (!store?.data || !store.data.managerSettings) return true;
-    const settings = store.data.managerSettings;
-    return settings.retailPricingEnabled !== false;
+  /**
+   * Which prices this shop wants shown.
+   *
+   * The merchant sets one thing — a pricing mode of retail, wholesale or both
+   * — and it arrives on marketplaceSettings, from the storefront RPC and the
+   * directory listing alike. This read managerSettings.retailPricingEnabled
+   * instead, which is a merchant-side mirror of the same setting and is not in
+   * either payload: it never arrived, so every shop looked like "both" and the
+   * merchant's choice did nothing.
+   *
+   * The mirror is still honoured where it happens to be present, so a store
+   * that carries one keeps working.
+   */
+  const pricingMode = useMemo(() => {
+    const mode = store?.data?.marketplaceSettings?.pricingMode;
+    return mode === 'retail' || mode === 'wholesale' || mode === 'both' ? mode : null;
   }, [store]);
 
+  const isRetailEnabled = useMemo(() => {
+    if (pricingMode) return pricingMode !== 'wholesale';
+    const settings = store?.data?.managerSettings;
+    if (settings?.retailPricingEnabled === false) return false;
+    return true;
+  }, [store, pricingMode]);
+
   const isWholesaleEnabled = useMemo(() => {
-    if (store?.data?.managerSettings) {
-      const settings = store.data.managerSettings;
-      if (settings.wholesalePricingEnabled === false) return false;
-      if (settings.wholesalePricingEnabled === true) return true;
-    }
+    if (pricingMode) return pricingMode !== 'retail';
+    const settings = store?.data?.managerSettings;
+    if (settings?.wholesalePricingEnabled === false) return false;
+    if (settings?.wholesalePricingEnabled === true) return true;
     if (store?.retailType === 'provision_wholesale') return true;
+    // Nothing said either way: offer wholesale only if there is a distinct
+    // wholesale price to offer.
     return products.some(p => p.wholesale_price !== p.retail_price);
-  }, [store, products]);
+  }, [store, products, pricingMode]);
 
   // Sync pricing modes
   useEffect(() => {
