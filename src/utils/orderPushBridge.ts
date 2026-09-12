@@ -3,21 +3,25 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 /**
  * Notify the merchant after a customer order has been committed.
  *
- * This is deliberately fire-and-forget: the order database transaction is the
- * source of truth and must not be turned into a failed order just because a
- * push service is unavailable. The merchant also has Supabase Realtime and
- * the notifications table as delivery paths.
+ * Guest customers do not have a Supabase Auth session, so the order access
+ * token is the authority for this notification request. The Edge Function
+ * independently verifies the token against the order before it sends anything.
+ *
+ * This remains deliberately fire-and-forget: the committed order is the source
+ * of truth and must not become a failed checkout because push is unavailable.
  */
 export async function notifyMerchantOfNewOrder(
   supabase: SupabaseClient,
   orderId: string,
+  accessToken: string,
 ): Promise<void> {
-  if (!orderId) return;
+  if (!orderId || !accessToken) return;
 
   try {
     const { error } = await supabase.functions.invoke('send-order-push', {
       body: {
         order_id: orderId,
+        access_token: accessToken,
         initiated_by: 'customer',
       },
     });
