@@ -108,6 +108,33 @@ function wrapChannel(channel: any): any {
   });
 }
 
+/**
+ * Older screens call the Edge Function directly. Add the locally-held order
+ * token at the single Supabase boundary so guest cancellation/new-order pushes
+ * stay authorized without making every UI component know about credentials.
+ */
+function wrapFunctionsClient(functionsClient: any): any {
+  if (!functionsClient || typeof functionsClient !== 'object') return functionsClient;
+  return new Proxy(functionsClient, {
+    get(target, property, receiver) {
+      if (property !== 'invoke') return Reflect.get(target, property, receiver);
+      const originalInvoke = Reflect.get(target, property, target);
+      return (functionName: string, options?: any) => {
+        if (functionName !== 'send-order-push') {
+          return originalInvoke.call(target, functionName, options);
+        }
+        const body = options?.body && typeof options.body === 'object' ? options.body : {};
+        const orderId = String(body.order_id || '');
+        const accessToken = String(body.access_token || getOrderAccessToken(orderId) || '');
+        return originalInvoke.call(target, functionName, {
+          ...(options || {}),
+          body: accessToken ? { ...body, access_token: accessToken } : body,
+        });
+      };
+    },
+  });
+}
+
 export const supabase = new Proxy(baseSupabase, {
   get(target, property, receiver) {
     if (property === 'from') {
@@ -117,6 +144,9 @@ export const supabase = new Proxy(baseSupabase, {
     if (property === 'channel') {
       const originalChannel = Reflect.get(target, property, target) as (name: string) => any;
       return (name: string) => wrapChannel(originalChannel.call(target, name));
+    }
+    if (property === 'functions') {
+      return wrapFunctionsClient(Reflect.get(target, property, target));
     }
     if (property !== 'rpc') return Reflect.get(target, property, receiver);
 
@@ -144,7 +174,7 @@ export const supabase = new Proxy(baseSupabase, {
             return { ...result, data: null, error: { message: 'Secure checkout did not return order credentials.', code: 'INVALID_ORDER_RESPONSE' } };
           }
           saveOrderAccessToken(orderId, token);
-          void notifyMerchantOfNewOrder(target, orderId);
+          void notifyMerchantOfNewOrder(target, orderId, token);
           // App.tsx expects the historical UUID-only return value.
           return { ...result, data: orderId };
         });
@@ -185,6 +215,17 @@ export const supabase = new Proxy(baseSupabase, {
         const token = getOrderAccessToken(orderId);
         if (!orderId || !token) return localRpcResult(null, missingTokenError()) as any;
         return originalRpc('get_order_loyalty_redemption', { p_order_id: orderId, p_access_token: token });
+      }
+
+      // A rating now needs proof that this device owns a completed order from
+      // the store. The typed/customer phone is deliberately ignored.
+      if (fn === 'submit_store_rating') {
+        return originalRpc('submit_store_rating_verified', {
+          p_store_id: params.p_store_id,
+          p_credentials: getStoredOrderCredentials(),
+          p_rating: params.p_rating,
+          p_tags: params.p_tags ?? [],
+        });
       }
 
       return originalRpc(...args);
