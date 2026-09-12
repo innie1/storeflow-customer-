@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { notifyMerchantOfNewOrder } from './utils/orderPushBridge';
 import { getOrderAccessToken, getStoredOrderCredentials, saveOrderAccessToken } from './lib/orderTokens';
 
 const SUPABASE_URL = "https://jawfalghkftldvkopuaw.supabase.co";
@@ -109,9 +108,10 @@ function wrapChannel(channel: any): any {
 }
 
 /**
- * Older screens call the Edge Function directly. Add the locally-held order
- * token at the single Supabase boundary so guest cancellation/new-order pushes
- * stay authorized without making every UI component know about credentials.
+ * Order push delivery is now owned by orders-table triggers. Some older UI
+ * paths still invoke `send-order-push` after a successful mutation; swallow
+ * those calls locally so the browser is never a push authority and old screens
+ * do not show a false error while they are being retired.
  */
 function wrapFunctionsClient(functionsClient: any): any {
   if (!functionsClient || typeof functionsClient !== 'object') return functionsClient;
@@ -120,16 +120,10 @@ function wrapFunctionsClient(functionsClient: any): any {
       if (property !== 'invoke') return Reflect.get(target, property, receiver);
       const originalInvoke = Reflect.get(target, property, target);
       return (functionName: string, options?: any) => {
-        if (functionName !== 'send-order-push') {
-          return originalInvoke.call(target, functionName, options);
+        if (functionName === 'send-order-push') {
+          return Promise.resolve({ data: { queued_by: 'database_trigger' }, error: null });
         }
-        const body = options?.body && typeof options.body === 'object' ? options.body : {};
-        const orderId = String(body.order_id || '');
-        const accessToken = String(body.access_token || getOrderAccessToken(orderId) || '');
-        return originalInvoke.call(target, functionName, {
-          ...(options || {}),
-          body: accessToken ? { ...body, access_token: accessToken } : body,
-        });
+        return originalInvoke.call(target, functionName, options);
       };
     },
   });
@@ -174,7 +168,7 @@ export const supabase = new Proxy(baseSupabase, {
             return { ...result, data: null, error: { message: 'Secure checkout did not return order credentials.', code: 'INVALID_ORDER_RESPONSE' } };
           }
           saveOrderAccessToken(orderId, token);
-          void notifyMerchantOfNewOrder(target, orderId, token);
+          // The database INSERT trigger dispatches the merchant push.
           // App.tsx expects the historical UUID-only return value.
           return { ...result, data: orderId };
         });
