@@ -1,42 +1,28 @@
 import { supabase } from '../supabase';
+import { getStoredOrderCredentials } from '../lib/orderTokens';
 
 // Default public VAPID key (matching deployed server keypair, or loaded from environment variable)
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BPynrw1Xha05EzgzG_YEMdVyRGsuSlG62pPzLxprxWumTfVetPfAe5kyBM_yLbH_PDId9QjVwdoElfUDtljmGTQ';
 
-/**
- * Utility to convert base64 URL VAPID key to Uint8Array required by pushManager.subscribe
- */
+/** Utility to convert base64 URL VAPID key to Uint8Array required by PushManager. */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
   return outputArray;
 }
 
-/**
- * Check if the browser supports Service Workers & Push Notifications
- */
 export function isPushNotificationSupported(): boolean {
-  return (
-    'serviceWorker' in navigator &&
-    'PushManager' in window &&
-    'Notification' in window
-  );
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
-/**
- * Request notification permission from the user
- */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (!isPushNotificationSupported()) {
     console.warn('[Push] Push notifications are not supported in this browser.');
     return 'denied';
   }
-
   try {
     const permission = await Notification.requestPermission();
     console.log('[Push] User notification permission result:', permission);
@@ -48,9 +34,11 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 /**
- * Register push subscription with the browser's PushManager and save subscription to Supabase
+ * Register this browser endpoint for every order token currently held on the
+ * device. The optional legacy identifier is accepted so older call sites do not
+ * break, but phone/name is never used as authorization or stored by this path.
  */
-export async function subscribeUserToPush(customerIdentifier?: string): Promise<boolean> {
+export async function subscribeUserToPush(_legacyCustomerIdentifier?: string): Promise<boolean> {
   if (!isPushNotificationSupported()) return false;
 
   try {
@@ -63,10 +51,9 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
     const registration = await navigator.serviceWorker.ready;
     let subscription = await registration.pushManager.getSubscription();
 
-    // If an old subscription existed under a different VAPID key, clear it once so the new valid key can take over
     if (subscription && !localStorage.getItem('storeflow_vapid_v2_active')) {
       try {
-        console.log('[Push] Clearing outdated push subscription to register real server VAPID key...');
+        console.log('[Push] Clearing outdated push subscription to register current VAPID key...');
         await subscription.unsubscribe();
         subscription = null;
         localStorage.setItem('storeflow_vapid_v2_active', 'true');
@@ -75,7 +62,6 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
       }
     }
 
-    // If no existing subscription, create a new one with real VAPID key
     if (!subscription) {
       const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
       subscription = await registration.pushManager.subscribe({
@@ -83,61 +69,53 @@ export async function subscribeUserToPush(customerIdentifier?: string): Promise<
         applicationServerKey: convertedVapidKey as unknown as BufferSource,
       });
       localStorage.setItem('storeflow_vapid_v2_active', 'true');
-      console.log('[Push] Successfully created real Web Push Subscription:', subscription);
-    } else {
-      console.log('[Push] Found active Web Push Subscription:', subscription);
+      console.log('[Push] Successfully created Web Push subscription.');
     }
 
-    // Save PushSubscription details to customer_push_subscriptions so backend can send push messages even when offline/closed
     const subscriptionJson = subscription.toJSON();
     const endpoint = subscription.endpoint;
     const p256dh = subscriptionJson.keys?.p256dh || '';
     const auth = subscriptionJson.keys?.auth || '';
+    const credentials = getStoredOrderCredentials();
 
-    const targetPhone = customerIdentifier || localStorage.getItem('storeflow_customer_phone') || localStorage.getItem('storeflow_saved_checkout_phone') || localStorage.getItem('storeflow_last_order_phone');
-    if (customerIdentifier && customerIdentifier.replace(/\D/g, '').length >= 10) {
-      localStorage.setItem('storeflow_customer_phone', customerIdentifier);
+    if (!endpoint || !p256dh || !auth) {
+      console.warn('[Push] Browser returned an incomplete subscription.');
+      return false;
     }
 
-    if (endpoint && targetPhone) {
-      let identifier = targetPhone;
-      const cleaned = identifier.replace(/\D/g, '');
-      if (cleaned.length >= 10) {
-        if (cleaned.startsWith('234') && cleaned.length === 13) identifier = '+' + cleaned;
-        else if (cleaned.startsWith('0') && cleaned.length === 11) identifier = '+234' + cleaned.substring(1);
-        else if (cleaned.length === 10) identifier = '+234' + cleaned;
-      }
-
-      // NOTE: this table no longer accepts direct public writes (RLS locked down
-      // to close a subscription-hijack hole — anyone could previously overwrite
-      // any other customer's endpoint/keys). Same upsert-on-endpoint behavior,
-      // now done server-side via a SECURITY DEFINER function.
-      const { error } = await supabase.rpc('upsert_customer_push_subscription', {
-        p_customer_phone: identifier,
-        p_endpoint: endpoint,
-        p_p256dh: p256dh,
-        p_auth: auth,
-      });
-
-      if (error) {
-        console.warn('[Push] Supabase table `customer_push_subscriptions` error:', error.message);
-      } else {
-        console.log('[Push] Successfully saved push subscription to Supabase `customer_push_subscriptions` table for:', identifier);
-      }
+    if (credentials.length === 0) {
+      // Permission/subscription can exist before the first order. There is no
+      // customer identity to bind until secure checkout hands this device a
+      // private order token.
+      console.log('[Push] Browser subscribed; no local order token to bind yet.');
+      return true;
     }
 
-    return true;
+    const results = await Promise.all(
+      credentials.map(async credential => {
+        const { error } = await supabase.rpc('upsert_customer_order_push_subscription', {
+          p_order_id: credential.order_id,
+          p_access_token: credential.access_token,
+          p_endpoint: endpoint,
+          p_p256dh: p256dh,
+          p_auth: auth,
+        });
+        if (error) {
+          console.warn('[Push] Could not bind subscription to order:', credential.order_id, error.message);
+          return false;
+        }
+        return true;
+      })
+    );
+
+    return results.some(Boolean);
   } catch (error) {
     console.error('[Push] Failed to register push subscription:', error);
     return false;
   }
 }
 
-// ─── Notification Clearing Helpers ───────────────────────────────────────
-
-/**
- * Clear system tray notifications for a specific order (e.g. when viewing its tracking screen)
- */
+/** Clear system tray notifications for a specific order. */
 export async function clearNotificationsForOrder(orderId: string): Promise<void> {
   if (!isPushNotificationSupported()) return;
   try {
@@ -148,9 +126,7 @@ export async function clearNotificationsForOrder(orderId: string): Promise<void>
   }
 }
 
-/**
- * Clear all StoreFlow notifications from system tray (e.g. on app becoming visible)
- */
+/** Clear all StoreFlow notifications from the system tray. */
 export async function clearAllStoreFlowNotifications(): Promise<void> {
   if (!isPushNotificationSupported()) return;
   try {

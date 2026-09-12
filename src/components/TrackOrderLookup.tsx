@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { supabase } from '../supabase';
-import { saveOrderAccessToken } from '../lib/orderTokens';
 
 /**
- * Look up an order without an account, by phone number or order code.
+ * Read-only guest tracking from any device.
  *
- * This is what lets someone track an order from a different device to the one
- * that placed it. The search mode, the field, the error and the candidate list
- * are all local to the sheet — they used to be six pieces of state on the root
- * App component.
+ * No account is required. We ask for both the order code and the phone number
+ * used at checkout so an order code by itself cannot enumerate customer data.
+ * This route never returns or recreates the private order token; cancel/approve
+ * actions still require the original device token.
  */
 export default function TrackOrderLookup({
   store,
@@ -19,51 +18,36 @@ export default function TrackOrderLookup({
   onClose: () => void;
   onOpenOrder: (order: any) => void;
 }) {
-  const [mode, setMode] = useState<'phone' | 'code'>('phone');
-  const [value, setValue] = useState('');
+  const [phone, setPhone] = useState('');
+  const [orderCode, setOrderCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<any[]>([]);
 
-  const switchMode = (next: 'phone' | 'code') => {
-    setMode(next);
-    setError('');
-    setResults([]);
-  };
+  const canSearch = phone.replace(/\D/g, '').length >= 10 && orderCode.trim().length > 0;
 
   const run = async () => {
-    const query = value.trim();
     setError('');
-    if (!query) return;
+    if (!canSearch) return;
     if (!store?.id) {
       setError("Couldn't identify this store — try rescanning the QR code.");
       return;
     }
+
     setLoading(true);
     try {
-      if (mode === 'phone') {
-        const normalized = query.replace(/\D/g, '');
-        const { data, error: rpcError } = await supabase.rpc('get_customer_orders', { p_customer_phone: normalized });
-        if (rpcError) throw rpcError;
-        const matches = (data || []).filter((o: any) => o.store_id === store.id);
-        // Keep the tokens so this device can track these orders from now on.
-        for (const o of matches) {
-          if (o.id && o.access_token) saveOrderAccessToken(o.id, o.access_token);
-        }
-        if (matches.length === 0) setError('No orders found for that phone number at this store.');
-        else if (matches.length === 1) onOpenOrder(matches[0]);
-        else setResults(matches);
+      const { data, error: rpcError } = await supabase.rpc('get_guest_order_by_code', {
+        p_store_id: store.id,
+        p_order_number: orderCode.trim().toUpperCase(),
+        p_customer_phone: phone.trim(),
+      });
+      if (rpcError) throw rpcError;
+      if (!data) {
+        setError('No order matched that phone number and order code at this store.');
       } else {
-        const { data, error: rpcError } = await supabase.rpc('get_order_by_number', {
-          p_store_id: store.id,
-          p_order_number: query.toUpperCase(),
-        });
-        if (rpcError) throw rpcError;
-        if (!data) setError('No order found with that code at this store.');
-        else onOpenOrder(data);
+        onOpenOrder(data);
       }
     } catch {
-      setError("Couldn't look that up right now — check your connection and try again.");
+      setError("Couldn't look that up right now — check the details and try again.");
     } finally {
       setLoading(false);
     }
@@ -85,55 +69,40 @@ export default function TrackOrderLookup({
           </button>
         </div>
         <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
-          No account needed — just your phone number or order code.
+          No account needed — enter the phone number used at checkout and your order code.
         </p>
 
-        <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-xl p-1 mb-3">
-          {(['phone', 'code'] as const).map(m => (
-            <button
-              key={m}
-              onClick={() => switchMode(m)}
-              className={`flex-1 py-2 rounded-lg text-xs font-black transition ${
-                mode === m ? 'bg-white dark:bg-zinc-900 shadow-sm text-[#1A1C1E] dark:text-zinc-100' : 'text-gray-400'
-              }`}
-            >
-              {m === 'phone' ? 'Phone Number' : 'Order Code'}
-            </button>
-          ))}
+        <div className="space-y-3">
+          <input
+            value={phone}
+            onChange={e => setPhone(e.target.value.replace(/[^0-9+]/g, ''))}
+            placeholder="Phone number, e.g. 08012345678"
+            inputMode="tel"
+            aria-label="Phone number used at checkout"
+            autoFocus
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 text-sm font-bold placeholder:font-medium placeholder:text-gray-300 focus:outline-none focus:border-[#1A1C1E]"
+          />
+
+          <input
+            value={orderCode}
+            onChange={e => setOrderCode(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && canSearch && !loading) run(); }}
+            placeholder="Order code, e.g. SF-4821"
+            inputMode="text"
+            aria-label="Order code"
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 text-sm font-bold placeholder:font-medium placeholder:text-gray-300 focus:outline-none focus:border-[#1A1C1E]"
+          />
         </div>
 
-        <input
-          value={value}
-          onChange={e => setValue(mode === 'phone' ? e.target.value.replace(/[^0-9+]/g, '') : e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && value.trim() && !loading) run(); }}
-          placeholder={mode === 'phone' ? 'e.g. 08012345678' : 'e.g. SF-4821'}
-          inputMode={mode === 'phone' ? 'tel' : 'text'}
-          aria-label={mode === 'phone' ? 'Phone number' : 'Order code'}
-          autoFocus
-          className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 text-sm font-bold placeholder:font-medium placeholder:text-gray-300 focus:outline-none focus:border-[#1A1C1E]"
-        />
+        <p className="text-[10px] text-gray-400 dark:text-zinc-500 font-semibold mt-2 leading-relaxed">
+          Tracking from another device is read-only. Cancelling or approving changes still requires the private order key saved on the device that placed the order.
+        </p>
 
         {error && <p className="text-xs text-red-500 font-semibold mt-2">{error}</p>}
 
-        {results.length > 0 && (
-          <div className="mt-3 space-y-2">
-            <p className="text-[11px] text-gray-500 dark:text-zinc-400 font-bold">Multiple orders found — pick one:</p>
-            {results.map(o => (
-              <button
-                key={o.id}
-                onClick={() => onOpenOrder(o)}
-                className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-950 text-left"
-              >
-                <span className="text-xs font-black text-[#1A1C1E] dark:text-zinc-100">#{o.order_number}</span>
-                <span className="text-[11px] text-gray-400 font-bold">{o.status}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
         <button
           onClick={run}
-          disabled={!value.trim() || loading}
+          disabled={!canSearch || loading}
           className="w-full mt-4 py-3.5 rounded-xl bg-[#1A1C1E] text-white font-black text-xs uppercase tracking-wide disabled:opacity-40"
         >
           {loading ? 'Looking up…' : 'Track Order'}

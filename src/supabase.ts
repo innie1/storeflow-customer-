@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { notifyMerchantOfNewOrder } from './utils/orderPushBridge';
 import { getOrderAccessToken, getStoredOrderCredentials, saveOrderAccessToken } from './lib/orderTokens';
 
 const SUPABASE_URL = "https://jawfalghkftldvkopuaw.supabase.co";
@@ -108,6 +107,28 @@ function wrapChannel(channel: any): any {
   });
 }
 
+/**
+ * Order push delivery is now owned by orders-table triggers. Some older UI
+ * paths still invoke `send-order-push` after a successful mutation; swallow
+ * those calls locally so the browser is never a push authority and old screens
+ * do not show a false error while they are being retired.
+ */
+function wrapFunctionsClient(functionsClient: any): any {
+  if (!functionsClient || typeof functionsClient !== 'object') return functionsClient;
+  return new Proxy(functionsClient, {
+    get(target, property, receiver) {
+      if (property !== 'invoke') return Reflect.get(target, property, receiver);
+      const originalInvoke = Reflect.get(target, property, target);
+      return (functionName: string, options?: any) => {
+        if (functionName === 'send-order-push') {
+          return Promise.resolve({ data: { queued_by: 'database_trigger' }, error: null });
+        }
+        return originalInvoke.call(target, functionName, options);
+      };
+    },
+  });
+}
+
 export const supabase = new Proxy(baseSupabase, {
   get(target, property, receiver) {
     if (property === 'from') {
@@ -117,6 +138,9 @@ export const supabase = new Proxy(baseSupabase, {
     if (property === 'channel') {
       const originalChannel = Reflect.get(target, property, target) as (name: string) => any;
       return (name: string) => wrapChannel(originalChannel.call(target, name));
+    }
+    if (property === 'functions') {
+      return wrapFunctionsClient(Reflect.get(target, property, target));
     }
     if (property !== 'rpc') return Reflect.get(target, property, receiver);
 
@@ -144,7 +168,7 @@ export const supabase = new Proxy(baseSupabase, {
             return { ...result, data: null, error: { message: 'Secure checkout did not return order credentials.', code: 'INVALID_ORDER_RESPONSE' } };
           }
           saveOrderAccessToken(orderId, token);
-          void notifyMerchantOfNewOrder(target, orderId);
+          // The database INSERT trigger dispatches the merchant push.
           // App.tsx expects the historical UUID-only return value.
           return { ...result, data: orderId };
         });
@@ -185,6 +209,17 @@ export const supabase = new Proxy(baseSupabase, {
         const token = getOrderAccessToken(orderId);
         if (!orderId || !token) return localRpcResult(null, missingTokenError()) as any;
         return originalRpc('get_order_loyalty_redemption', { p_order_id: orderId, p_access_token: token });
+      }
+
+      // A rating now needs proof that this device owns a completed order from
+      // the store. The typed/customer phone is deliberately ignored.
+      if (fn === 'submit_store_rating') {
+        return originalRpc('submit_store_rating_verified', {
+          p_store_id: params.p_store_id,
+          p_credentials: getStoredOrderCredentials(),
+          p_rating: params.p_rating,
+          p_tags: params.p_tags ?? [],
+        });
       }
 
       return originalRpc(...args);
