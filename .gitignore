@@ -23,3 +23,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase CLI working files (version checks, linked project), as in the merchant repo
+supabase/.temp/
