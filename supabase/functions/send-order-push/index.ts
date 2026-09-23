@@ -187,6 +187,10 @@ Deno.serve(async (req: Request) => {
         url: "/?tab=orders",
         orderId: order.id,
         orderNumber: order.order_number || "",
+        // Which shop this is about. One phone can be reached for more than one
+        // now, and each keeps its own notification switches; without this the
+        // phone judges the push by whichever shop happens to be open.
+        store_id: order.store_id,
         priority: "critical",
       });
 
