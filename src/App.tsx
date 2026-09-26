@@ -115,12 +115,19 @@ async function resolveStoreProducts(storeData: any): Promise<any[]> {
   }
 
   if (prods.length === 0) {
-  const { data: prodData, error: prodErr } = await supabase
+    /*
+     * Only the columns a visitor may read. `is_service` is not one of them,
+     * and asking for it made the cloud refuse the whole request - so a shop
+     * with no products yet was shown as "Offline Mode" instead of as a shop
+     * with nothing listed. A refusal here now means "nothing extra to show",
+     * not "the shop failed to load".
+     */
+    const { data: prodData, error: prodErr } = await supabase
       .from('products')
-      .select('id, store_id, category_id, barcode, name, description, brand, selling_price, quantity, unit, image, status, is_service')
+      .select('id, store_id, category_id, barcode, name, description, brand, selling_price, quantity, unit, image, status')
       .eq('store_id', storeUuid)
       .eq('status', 'active');
-    if (prodErr) throw prodErr;
+    if (prodErr) console.warn('[StoreFlow QR] Product table not readable; using the store catalogue only:', prodErr.message);
     prods = (prodData || []).map((p: any) => ({
       ...p,
       isService: Boolean(p.isService ?? p.is_service),
@@ -1665,13 +1672,26 @@ function App() {
             await loadStoreDetails(storeData.id);
             navigateToScreen('store');
             if (parsedProductId) {
-              const { data: prodData } = await supabase
-                .from('products')
-                .select('id, store_id, category_id, barcode, sku, name, description, brand, selling_price, quantity, unit, image, status, is_service')
-                .eq('id', parsedProductId)
-                .maybeSingle();
-              if (prodData) {
-                setSelectedProduct(prodData);
+              /*
+               * A product's own QR code. The shop's catalogue was loaded just
+               * above and lives in the store record, not the products table -
+               * which is empty and was being asked for a column visitors may
+               * not read, so this never found anything. Look in what was
+               * loaded first.
+               */
+              const loaded = safeGetJSON<any[]>('storeflow_cached_products_' + storeData.id, []);
+              const fromCatalogue = loaded.find(p => String(p.id) === String(parsedProductId) || String(p.barcode || '') === String(parsedProductId));
+              if (fromCatalogue) {
+                setSelectedProduct(fromCatalogue);
+              } else {
+                const { data: prodData } = await supabase
+                  .from('products')
+                  .select('id, store_id, category_id, barcode, sku, name, description, brand, selling_price, quantity, unit, image, status')
+                  .eq('id', parsedProductId)
+                  .maybeSingle();
+                if (prodData) {
+                  setSelectedProduct(prodData);
+                }
               }
             }
             return;
@@ -1688,7 +1708,8 @@ function App() {
         setLoading(true);
         const { data: prodDb } = await supabase
           .from('products')
-          .select('id, store_id, category_id, barcode, sku, name, description, brand, selling_price, quantity, unit, image, status, is_service')
+          // Visitor-readable columns only; `is_service` would make the cloud refuse the lot.
+          .select('id, store_id, category_id, barcode, sku, name, description, brand, selling_price, quantity, unit, image, status')
           .eq('barcode', codeValue)
           .limit(1)
           .maybeSingle();
