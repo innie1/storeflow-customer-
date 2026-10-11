@@ -1496,36 +1496,12 @@ function App() {
       });
   }, [store?.id, customerPhone]);
 
-  // Real-time store updates tracking
-  useEffect(() => {
-    if (!store?.id) return;
-
-    const channelInstance = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const channel = supabase
-      .channel(`store-updates-${store.id}-${channelInstance}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        filter: `id=eq.${store.id}`,
-        schema: 'public',
-        table: 'stores'
-      }, (payload: any) => {
-        console.log('[StoreFlow Realtime] Store updated payload received:', payload);
-        if (payload.new && payload.new.id === store.id) {
-          setStore(payload.new);
-          void resolveStoreProducts(payload.new).then((prods: Product[]) => {
-            setProducts(prods);
-            const uniq = Array.from(new Set(prods.map((p: any) => p.category).filter((c: any) => !!c))) as string[];
-            setCategories(['All', ...uniq]);
-            safeSetJSON('storeflow_cached_products_' + payload.new.id, prods);
-          }).catch(error => console.warn('[StoreFlow Realtime] Catalog refresh failed:', error));
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [store?.id]);
+  // There was a live "store updated" channel here. It could never fire: the
+  // stores table is not published for Realtime, and a customer may not read
+  // a shop's row anyway (Realtime applies the same RLS as a normal read). It
+  // only held one of the project's 200 free live connections for every
+  // customer looking at a shop. The catalogue is fetched fresh whenever a
+  // shop is opened, which is what customers have always actually seen.
 
   // ─── URL Routing / Deep Links ──────────────────────────────────────────────
 

@@ -45,8 +45,8 @@ assert.match(app, /rpc\('get_customer_orders_by_tokens'/,
   'guest order history must refresh through private per-order tokens');
 assert.match(app, /saveOrderAccessToken\(String\(placed\.id\), String\(placed\.access_token\)\)/,
   'a newly placed laundry order must be remembered on this device');
-assert.match(app, /channel\(`store-updates-\$\{store\.id\}-\$\{channelInstance\}`\)/,
-  'store catalogue refreshes must use a remount-safe realtime channel');
+assert.doesNotMatch(app, /table: 'stores'/,
+  'no live channel on the stores table: it is not published and customers cannot read it, so it only uses up live connections');
 
 assert.match(migration, /join valid_credentials credential[\s\S]*credential\.access_token = o\.access_token/,
   'history RPC must only return orders whose id and private token both match');
